@@ -627,8 +627,15 @@ const UI = (function () {
           g.placeCell = cell;
           confirmPlacement();
         } else {
+          // tapping the already-ghosted tile again also confirms (fallback to the ✓ button)
+          if (g.placeCell && g.placeCell.x === cell.x && g.placeCell.y === cell.y && g.cellFree(cell.x, cell.y)) {
+            confirmPlacement();
+            return;
+          }
           dragging = true;
           g.placeCell = cell;
+          // collapse the info sheet so the map and ✓ DEPLOY are never obstructed
+          $('build-panel').classList.remove('open');
           refreshPlaceActions();
           AUDIO.sfx.click();
         }
