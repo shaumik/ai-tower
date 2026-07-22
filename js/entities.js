@@ -23,6 +23,17 @@ class Enemy {
     this.maxShield = this.traits.shield ? Math.round(this.traits.shield * hpMult) : 0;
     this.shield = this.maxShield;
     this.isBoss = !!this.traits.boss;
+    // mini-boss checkpoint unit: fattened elite with a boss bar
+    if (opts && opts.mini) {
+      this.mini = true;
+      this.elite = true;
+      this.size = Math.min(0.52, def.size * 1.4);
+      this.bounty *= 5;
+      this.armor += 3;
+      this.dmg = Math.min(8, this.dmg * 2);
+      this.isBoss = true; // boss bar + stun resistance
+      this.displayName = 'ELITE ' + def.name.toUpperCase();
+    }
 
     // position: distance along path (ground) or 0..len line (flying)
     this.dist = (opts && opts.dist) || 0;

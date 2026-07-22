@@ -391,7 +391,7 @@ const UI = (function () {
   function bossBar(e) {
     bossRef = e;
     $('boss-bar').classList.toggle('show', !!e);
-    if (e) $('boss-bar-name').textContent = e.def.name;
+    if (e) $('boss-bar-name').textContent = e.displayName || e.def.name;
   }
   setInterval(() => {
     if (bossRef && !bossRef.dead) {

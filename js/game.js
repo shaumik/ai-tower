@@ -345,8 +345,13 @@ const GAME = (function () {
     g.enemies.push(e);
     if (e.isBoss) {
       g.bossEnemy = e; UI.bossBar(e);
-      g.fx.push({ kind: 'flash', ttl: 0.3, t: 0.3, color: '#ff3d71' });
-      shake(7);
+      if (e.traits.boss) {
+        g.fx.push({ kind: 'flash', ttl: 0.3, t: 0.3, color: '#ff3d71' });
+        shake(7);
+      } else {
+        UI.phaseBanner('⚠ ' + (e.displayName || e.def.name), true);
+        shake(4);
+      }
     }
     if (!SAVE.state.seenEnemies[type] && !g.seenThisRun[type]) {
       g.seenThisRun[type] = true;
@@ -381,11 +386,17 @@ const GAME = (function () {
       for (const o of g.enemies) if (!o.dead && o !== e) alive++;
       if (alive === 0) g.slowmoT = 0.55;
     }
-    if (e.isBoss) {
+    if (e.traits.boss) {
       SAVE.addStat('bossKills', 1);
       shake(9);
       AUDIO.sfx.bossDie();
       UI.bossBar(null);
+    } else if (e.isBoss) {
+      // mini-boss down
+      shake(5);
+      AUDIO.sfx.bossDie();
+      UI.bossBar(null);
+      fxText(e.x, e.y, '+¤' + e.bounty, '#ffd166', true);
     } else {
       AUDIO.sfx.die();
     }
@@ -562,7 +573,7 @@ const GAME = (function () {
     g.spawnT += dt;
     while (g.spawnQueue.length && g.spawnQueue[0].delay <= g.spawnT) {
       const ev = g.spawnQueue.shift();
-      spawnEnemy(ev.type, ev.hpMult, { elite: ev.elite });
+      spawnEnemy(ev.type, ev.hpMult, { elite: ev.elite, mini: ev.mini });
     }
 
     // enemy aura buffs (botnet nodes)

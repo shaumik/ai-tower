@@ -3,9 +3,11 @@
 const WAVES = (function () {
 
   // HP multiplier applied to an enemy's base hp
-  function hpScale(level, wave, diffMult) {
+  function hpScale(level, wave, diffMult, totalWaves) {
+    // progress-relative: same difficulty envelope regardless of how many waves a level has
+    const p = Math.max(0, (wave - 1) / Math.max(1, (totalWaves || 20) - 1));
     const earlyGrit = 1 + 0.22 * Math.exp(-(level - 1) / 7); // early enemies are no pushovers
-    return (1 + 0.045 * (level - 1) + 0.07 * (wave - 1) + 0.0032 * (wave - 1) * (wave - 1)) * diffMult * earlyGrit;
+    return (1 + 0.045 * (level - 1) + (0.5 + 0.11 * level) * Math.pow(p, 1.5)) * diffMult * earlyGrit;
   }
   function bountyScale(level, diff) {
     // bounties grow with level to track HP inflation
@@ -19,7 +21,7 @@ const WAVES = (function () {
     const events = [];
     const isBossWave = !!(DATA.BOSS_LEVELS[level] && wave === totalWaves);
     const isEliteWave = !isBossWave && wave === totalWaves;
-    let hs = hpScale(level, wave, diffDef.hpMult);
+    let hs = hpScale(level, wave, diffDef.hpMult, totalWaves);
 
     // seeded wave event roll (never on wave 1-3 or boss waves)
     let event = null;
@@ -33,13 +35,12 @@ const WAVES = (function () {
     // threat budget for this wave (HP scaling carries most difficulty; counts grow gently)
     const rampIn = Math.min(1, 0.7 + wave * 0.15); // first waves are only slightly lighter
     const earlyBoost = 1 + 0.5 * Math.exp(-(level - 1) / 7); // early levels punch harder, fades by ~L15
-    let budget = (20 + level * 1.6) * earlyBoost * Math.pow(1.075, wave - 1) * (0.9 + 0.2 * r()) * rampIn;
+    const p = Math.max(0, (wave - 1) / Math.max(1, totalWaves - 1));
+    const growth = 1.7 + level * 0.165; // total count growth across the level
+    let budget = (20 + level * 1.6) * earlyBoost * Math.pow(growth, Math.min(p, 1)) * (0.9 + 0.2 * r()) * rampIn;
     if (ev && ev.countMult) budget *= ev.countMult;
     if (isBossWave) budget *= 0.45; // boss itself is the show
-    if (wave > totalWaves) {
-      // endless overtime: keep compounding
-      budget = (20 + level * 1.6) * Math.pow(1.075, totalWaves - 1) * Math.pow(1.16, wave - totalWaves);
-    }
+    if (wave > totalWaves) budget *= Math.pow(1.13, wave - totalWaves); // endless overtime compounds
 
     // pool of unlocked enemy types, weighted toward recent unlocks
     const pool = MAPS.unlockedEnemies(level);
@@ -68,6 +69,14 @@ const WAVES = (function () {
         t += gap * (0.85 + r() * 0.3);
       }
       t += 0.8 + r() * 0.6; // short breather between squads
+    }
+
+    // mini-boss checkpoints at ~1/3 and ~2/3 of every level
+    const mb1 = Math.round(totalWaves * 0.33), mb2 = Math.round(totalWaves * 0.66);
+    if (!isBossWave && (wave === mb1 || wave === mb2)) {
+      const bigs = pool.filter(id => DATA.ENEMIES[id].threat >= 7);
+      const type = bigs.length ? UTIL.wchoice(r, bigs, bigs.map(() => 1)) : pool[pool.length - 1];
+      events.push({ delay: t + 1.5, type, hpMult: hs * 4.2, mini: true });
     }
 
     if (isEliteWave && level >= 2) {
