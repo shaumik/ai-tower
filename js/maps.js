@@ -87,7 +87,7 @@ const MAPS = (function () {
     const blocks = placeBlocks(COLS, rows, path, r, 3 + UTIL.rint(r, 0, 3) + Math.floor(n / 15));
 
     const waves = 8 + Math.floor(n * 0.5);              // 8 → 33 waves
-    const startCash = 220 + n * 16;
+    const startCash = 165 + n * 16;
     const lives = 20;
     const def = {
       n, sector, cols: COLS, rows, path, blocks, waves, startCash, lives,

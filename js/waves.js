@@ -4,7 +4,8 @@ const WAVES = (function () {
 
   // HP multiplier applied to an enemy's base hp
   function hpScale(level, wave, diffMult) {
-    return (1 + 0.045 * (level - 1) + 0.07 * (wave - 1) + 0.0032 * (wave - 1) * (wave - 1)) * diffMult;
+    const earlyGrit = 1 + 0.22 * Math.exp(-(level - 1) / 7); // early enemies are no pushovers
+    return (1 + 0.045 * (level - 1) + 0.07 * (wave - 1) + 0.0032 * (wave - 1) * (wave - 1)) * diffMult * earlyGrit;
   }
   function bountyScale(level, diff) {
     // bounties grow with level to track HP inflation
@@ -22,7 +23,7 @@ const WAVES = (function () {
 
     // seeded wave event roll (never on wave 1-3 or boss waves)
     let event = null;
-    if (!isBossWave && wave >= 4 && r() < 0.24) {
+    if (!isBossWave && wave >= 3 && r() < 0.24) {
       const keys = Object.keys(DATA.EVENTS);
       event = keys[Math.floor(r() * keys.length)];
     }
@@ -30,8 +31,9 @@ const WAVES = (function () {
     if (ev && ev.hpMult) hs *= ev.hpMult;
 
     // threat budget for this wave (HP scaling carries most difficulty; counts grow gently)
-    const rampIn = Math.min(1, 0.55 + wave * 0.15); // first waves of a level are lighter
-    let budget = (20 + level * 1.6) * Math.pow(1.075, wave - 1) * (0.9 + 0.2 * r()) * rampIn;
+    const rampIn = Math.min(1, 0.7 + wave * 0.15); // first waves are only slightly lighter
+    const earlyBoost = 1 + 0.5 * Math.exp(-(level - 1) / 7); // early levels punch harder, fades by ~L15
+    let budget = (20 + level * 1.6) * earlyBoost * Math.pow(1.075, wave - 1) * (0.9 + 0.2 * r()) * rampIn;
     if (ev && ev.countMult) budget *= ev.countMult;
     if (isBossWave) budget *= 0.45; // boss itself is the show
     if (wave > totalWaves) {
@@ -60,15 +62,15 @@ const WAVES = (function () {
       const tr = e.traits || {};
       if (tr.stealth || tr.flying) count = Math.min(count, 3 + Math.floor(wave / 3));
       budget -= count * e.threat;
-      const gap = UTIL.clamp(0.9 / e.speed * (e.size + 0.55), 0.28, 1.15);
+      const gap = UTIL.clamp(0.9 / e.speed * (e.size + 0.55), 0.26, 0.95);
       for (let i = 0; i < count; i++) {
         events.push({ delay: t, type, hpMult: hs });
         t += gap * (0.85 + r() * 0.3);
       }
-      t += 1.4 + r(); // breather between squads
+      t += 0.8 + r() * 0.6; // short breather between squads
     }
 
-    if (isEliteWave && level >= 4) {
+    if (isEliteWave && level >= 2) {
       // final wave of a non-boss level: an elite (fattened) unit closes the show
       const bigs = pool.filter(id => DATA.ENEMIES[id].threat >= 8);
       const type = bigs.length ? UTIL.wchoice(r, bigs, bigs.map(() => 1)) : pool[pool.length - 1];
