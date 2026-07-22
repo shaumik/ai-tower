@@ -694,12 +694,33 @@ const RENDER = (function () {
     else if (g.selectedTower) {
       const tw = g.selectedTower;
       const s = tw.stats();
-      ctx.strokeStyle = 'rgba(127,220,255,0.8)'; ctx.lineWidth = 1.6;
+      const px = sx(tw.x), py = sy(tw.y);
+      // range disc
+      ctx.strokeStyle = 'rgba(127,220,255,0.85)'; ctx.lineWidth = 1.6;
       ctx.setLineDash([6, 5]);
-      ctx.beginPath(); ctx.arc(sx(tw.x), sy(tw.y), s.range * T, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(px, py, s.range * T, 0, 7); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = 'rgba(127,220,255,0.07)';
-      ctx.beginPath(); ctx.arc(sx(tw.x), sy(tw.y), s.range * T, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py, s.range * T, 0, 7); ctx.fill();
+      // pulsing glow under the selected tower
+      const pu = 1 + Math.sin(now * 0.008) * 0.1;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#7fdcff';
+      ctx.beginPath(); ctx.arc(px, py, T * 0.62 * pu, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      // animated corner brackets around the tile
+      const hb = T * 0.55 * pu, ln = T * 0.24;
+      ctx.strokeStyle = '#7fdcff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.shadowColor = '#2aa8ff'; ctx.shadowBlur = 8;
+      for (const [cx2, cy2] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const bx = px + cx2 * hb, by = py + cy2 * hb;
+        ctx.beginPath();
+        ctx.moveTo(bx - cx2 * ln, by); ctx.lineTo(bx, by); ctx.lineTo(bx, by - cy2 * ln);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // clear shake
@@ -812,6 +833,16 @@ const RENDER = (function () {
       ctx.beginPath(); ctx.arc(sx(x + 0.5), sy(y + 0.5), range, 0, 7); ctx.stroke();
       ctx.setLineDash([]);
       ctx.strokeRect(sx(x) + 1.5, sy(y) + 1.5, T - 3, T - 3);
+      // corner brackets on the candidate tile
+      const bpx = sx(x + 0.5), bpy = sy(y + 0.5);
+      const hb = T * 0.62, ln = T * 0.26;
+      ctx.lineWidth = 3; ctx.lineCap = 'round';
+      for (const [cx2, cy2] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const bx = bpx + cx2 * hb, by = bpy + cy2 * hb;
+        ctx.beginPath();
+        ctx.moveTo(bx - cx2 * ln, by); ctx.lineTo(bx, by); ctx.lineTo(bx, by - cy2 * ln);
+        ctx.stroke();
+      }
       // ghost sprite
       ctx.globalAlpha = 0.75;
       const bs = towerBaseSprite(g.placingType, 0), hs = towerHeadSprite(g.placingType, 0);

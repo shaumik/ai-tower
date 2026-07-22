@@ -302,6 +302,7 @@ const UI = (function () {
       sw.classList.add('hidden');
     }
     refreshBuildBarState();
+    refreshPlaceActions();
   }
 
   function hurtFlash() {
@@ -361,8 +362,8 @@ const UI = (function () {
       item.appendChild(UTIL.h('div', 'bb-name', t.name));
       item.onclick = () => {
         if (GAME.phase !== 'build') { toast('DEPLOY ONLY BETWEEN WAVES', 'warn'); AUDIO.sfx.error(); return; }
-        if (GAME.placingType === id) { GAME.placingType = null; GAME.placeCell = null; }
-        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); openBuildInfo(id); }
+        if (GAME.placingType === id) { cancelPlacement(); }
+        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); openBuildInfo(id); refreshPlaceActions(); }
         refreshBuildBarState();
         AUDIO.sfx.click();
       };
@@ -397,7 +398,10 @@ const UI = (function () {
     body.appendChild(head);
     body.appendChild(UTIL.h('div', 'tp-upnext', t.desc));
     body.appendChild(UTIL.h('div', 'tp-stats', statChips(l0)));
-    body.appendChild(UTIL.h('div', 'tp-upnext', 'Tap a highlighted tile to position, tap again to deploy.'));
+    body.appendChild(UTIL.h('div', 'tp-upnext', 'Tap or drag on the grid to position, then hit ✓ DEPLOY.'));
+    const x = UTIL.h('button', 'sheet-close', '✕');
+    x.onclick = cancelPlacement;
+    body.appendChild(x);
     $('build-panel').classList.add('open');
   }
 
@@ -441,6 +445,9 @@ const UI = (function () {
     hd.appendChild(UTIL.h('div', 'tp-tier', 'TIER ' + UTIL.ROMAN[tw.tier] + ' · ' + tw.kills + ' KILLS'));
     head.appendChild(hd);
     body.appendChild(head);
+    const x = UTIL.h('button', 'sheet-close', '✕');
+    x.onclick = closeSheets;
+    body.appendChild(x);
     body.appendChild(UTIL.h('div', 'tp-stats', statChips(tw.def.levels[tw.tier])));
 
     if (tw.tier < 3) {
@@ -480,6 +487,7 @@ const UI = (function () {
     $('tower-panel').classList.remove('open');
     $('build-panel').classList.remove('open');
     if (GAME.selectedTower) GAME.selectedTower = null;
+    if (!GAME.placingType) $('place-actions').classList.remove('show');
   }
 
   // ================================================================ END / PAUSE
@@ -545,13 +553,58 @@ const UI = (function () {
   }
 
   // ================================================================ CANVAS INPUT
+  // Touch flow: tap/drag positions the ghost, big ✓ DEPLOY button confirms.
+  // Mouse flow: hover previews, click places instantly.
+  function refreshPlaceActions() {
+    const g = GAME;
+    const box = $('place-actions');
+    const active = !!(g.active && g.placingType && g.placeCell && g.phase === 'build');
+    box.classList.toggle('show', !!(g.active && g.placingType && g.phase === 'build'));
+    if (!g.placingType) return;
+    const ok = $('btn-place-ok');
+    const cost = g.towerCost(g.placingType);
+    const valid = active && g.cellFree(g.placeCell.x, g.placeCell.y) && g.cash >= cost;
+    ok.disabled = !valid;
+    ok.textContent = g.placeCell
+      ? (valid ? '✓ DEPLOY  ¤' + cost : (g.placeCell && !g.cellFree(g.placeCell.x, g.placeCell.y) ? 'BLOCKED TILE' : 'NEED ¤' + cost))
+      : 'TAP THE GRID TO POSITION';
+  }
+
+  function cancelPlacement() {
+    GAME.placingType = null;
+    GAME.placeCell = null;
+    closeSheets();
+    refreshBuildBarState();
+    refreshPlaceActions();
+  }
+
+  function confirmPlacement() {
+    const g = GAME;
+    if (!g.placingType || !g.placeCell) return;
+    if (g.placeTower(g.placingType, g.placeCell.x, g.placeCell.y)) {
+      g.placeCell = null;
+      // keep placing while affordable for rapid multi-build
+      if (g.cash < g.towerCost(g.placingType)) cancelPlacement();
+      else { refreshBuildBarState(); refreshPlaceActions(); }
+    }
+  }
+
   function bindCanvas(canvas) {
-    let lastTouchCell = null;
-    canvas.addEventListener('pointermove', ev => {
-      if (ev.pointerType !== 'mouse' || !GAME.active || !GAME.placingType) return;
+    let dragging = false;
+    const updateGhost = ev => {
       const c = RENDER.screenToCell(ev.clientX, ev.clientY);
-      GAME.placeCell = c;
+      const g = GAME;
+      if (c.x >= 0 && c.y >= 0 && c.x < g.level.cols && c.y < g.level.rows) {
+        g.placeCell = c;
+        refreshPlaceActions();
+      }
+    };
+    canvas.addEventListener('pointermove', ev => {
+      if (!GAME.active || !GAME.placingType) return;
+      if (ev.pointerType === 'mouse' || dragging) updateGhost(ev);
     });
+    canvas.addEventListener('pointerup', () => { dragging = false; });
+    canvas.addEventListener('pointercancel', () => { dragging = false; });
     canvas.addEventListener('pointerdown', ev => {
       if (!GAME.active) return;
       AUDIO.unlock();
@@ -560,25 +613,27 @@ const UI = (function () {
 
       if (g.placingType) {
         const inGrid = cell.x >= 0 && cell.y >= 0 && cell.x < g.level.cols && cell.y < g.level.rows;
-        if (!inGrid) { g.placingType = null; g.placeCell = null; closeSheets(); refreshBuildBarState(); return; }
-        const confirm = ev.pointerType === 'mouse' ||
-          (g.placeCell && g.placeCell.x === cell.x && g.placeCell.y === cell.y);
-        if (confirm && g.cellFree(cell.x, cell.y)) {
-          if (g.placeTower(g.placingType, cell.x, cell.y)) {
-            // keep placing if affordable (rapid multi-build), else exit placement
-            if (g.cash < g.towerCost(g.placingType)) { g.placingType = null; closeSheets(); }
-            g.placeCell = null;
-            refreshBuildBarState();
-          }
-        } else {
+        if (!inGrid) { cancelPlacement(); return; }
+        if (ev.pointerType === 'mouse') {
+          // desktop: click places directly at the hovered cell
           g.placeCell = cell;
+          confirmPlacement();
+        } else {
+          dragging = true;
+          g.placeCell = cell;
+          refreshPlaceActions();
+          AUDIO.sfx.click();
         }
         return;
       }
 
       const tw = g.towerAt(cell.x, cell.y);
-      if (tw) { openTowerPanel(tw); AUDIO.sfx.click(); }
-      else { closeSheets(); }
+      if (tw) {
+        if (g.selectedTower === tw) { closeSheets(); }       // tap again = deselect
+        else { openTowerPanel(tw); AUDIO.sfx.click(); }
+      } else {
+        closeSheets();
+      }
     });
   }
 
@@ -604,6 +659,8 @@ const UI = (function () {
     };
 
     // game controls
+    $('btn-place-ok').onclick = () => { AUDIO.unlock(); confirmPlacement(); };
+    $('btn-place-cancel').onclick = () => { cancelPlacement(); AUDIO.sfx.click(); };
     $('btn-start-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
     $('btn-speed').onclick = () => { $('btn-speed').textContent = GAME.cycleSpeed() + '×'; AUDIO.sfx.click(); };
     $('btn-pause').onclick = () => togglePause(true);

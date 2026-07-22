@@ -10,6 +10,13 @@
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });
+    // when an updated SW takes control, reload once to pick up new assets
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshed) return;
+      refreshed = true;
+      if (!GAME.active) location.reload(); // never yank a level out from under the player
+    });
   }
 
   // Block iOS double-tap zoom on the playfield (buttons stay tappable at speed)
