@@ -1,0 +1,628 @@
+/* NEURAL SIEGE — DOM UI: screens, HUD, sheets, input */
+'use strict';
+const UI = (function () {
+  const $ = UTIL.el;
+  let curScreen = 'screen-menu';
+  let selLevel = 1, selDiff = 'standard';
+  let bannerTimer = null;
+  let bossRef = null;
+
+  // ================================================================ SCREENS
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    $(id).classList.add('active');
+    curScreen = id;
+    AUDIO.sfx.click();
+  }
+
+  function refreshMenu() {
+    const st = SAVE.state;
+    $('menu-stats').innerHTML =
+      '◈ ' + st.cores + ' CORES &nbsp;·&nbsp; ★ ' + st.stats.starsTotal + '/150' +
+      '<br>' + UTIL.fmt(st.stats.kills) + ' THREATS NEUTRALIZED';
+  }
+
+  // ================================================================ LEVEL SELECT
+  let curSector = 0;
+  function openLevels() {
+    // jump to the sector containing the furthest unlocked level
+    let furthest = 1;
+    for (let i = 1; i <= 50; i++) if (SAVE.isUnlocked(i)) furthest = i;
+    curSector = Math.min(4, Math.floor((furthest - 1) / 10));
+    selLevel = furthest;
+    buildSectorTabs();
+    buildLevelGrid();
+    $('levels-cores').textContent = '◈ ' + SAVE.state.cores;
+    show('screen-levels');
+  }
+
+  function buildSectorTabs() {
+    const wrap = $('sector-tabs');
+    wrap.innerHTML = '';
+    DATA.SECTORS.forEach((s, i) => {
+      const unlocked = i === 0 || SAVE.isUnlocked(i * 10 + 1);
+      const b = UTIL.h('button', 'stab' + (i === curSector ? ' active' : '') + (unlocked ? '' : ' locked'), s.tag + ' · ' + s.name);
+      if (unlocked) b.onclick = () => { curSector = i; buildSectorTabs(); buildLevelGrid(); };
+      wrap.appendChild(b);
+    });
+  }
+
+  function buildLevelGrid() {
+    const grid = $('level-grid');
+    grid.innerHTML = '';
+    const lo = curSector * 10 + 1, hi = lo + 9;
+    let firstSelectable = null;
+    for (let n = lo; n <= hi; n++) {
+      const unlocked = SAVE.isUnlocked(n);
+      const stars = SAVE.bestStars(n);
+      const boss = !!DATA.BOSS_LEVELS[n];
+      const node = UTIL.h('div', 'lvl-node' + (unlocked ? '' : ' locked') + (boss ? ' boss' : '') + (stars ? ' done' : ''));
+      node.appendChild(UTIL.h('div', 'n', boss ? '☠' : String(n)));
+      node.appendChild(UTIL.h('div', 'stars', stars ? '★'.repeat(stars) : (unlocked ? '·' : '🔒')));
+      if (unlocked) {
+        node.onclick = () => { selLevel = n; markSelected(); renderLevelDetail(); AUDIO.sfx.click(); };
+        if (!firstSelectable) firstSelectable = n;
+      }
+      node.dataset.n = n;
+      grid.appendChild(node);
+    }
+    if (selLevel < lo || selLevel > hi || !SAVE.isUnlocked(selLevel)) selLevel = firstSelectable || lo;
+    markSelected();
+    renderLevelDetail();
+  }
+  function markSelected() {
+    document.querySelectorAll('.lvl-node').forEach(nd => {
+      nd.classList.toggle('selected', Number(nd.dataset.n) === selLevel);
+    });
+  }
+
+  function renderLevelDetail() {
+    const box = $('level-detail');
+    if (!SAVE.isUnlocked(selLevel)) { box.innerHTML = '<div class="ld-sub">LOCKED</div>'; return; }
+    const lv = MAPS.level(selLevel);
+    const wonStd = SAVE.isWon(selLevel, 'standard');
+    const wonHard = SAVE.isWon(selLevel, 'hard');
+    if (selDiff === 'hard' && !wonStd) selDiff = 'standard';
+    if (selDiff === 'insane' && !wonHard) selDiff = 'standard';
+
+    const newT = MAPS.newThreatsAt(selLevel).map(id => DATA.ENEMIES[id].name);
+    const newTw = MAPS.newTowersAt(selLevel).map(id => DATA.TOWERS[id].name);
+    let flags = '';
+    if (DATA.BOSS_LEVELS[selLevel]) flags += '☠ BOSS: ' + DATA.ENEMIES[DATA.BOSS_LEVELS[selLevel]].name + '  ';
+    if (newT.length) flags += '⚠ New threat: ' + newT.join(', ') + '  ';
+    if (newTw.length) flags += '✚ Unlocks: ' + newTw.join(', ');
+
+    box.innerHTML = '';
+    box.appendChild(UTIL.h('div', 'ld-title', 'NODE ' + (selLevel < 10 ? '0' : '') + selLevel + ' — ' + lv.name));
+    box.appendChild(UTIL.h('div', 'ld-sub', lv.waves + ' WAVES · ' + DATA.SECTORS[lv.sector].name +
+      (SAVE.levelRec(selLevel).endlessBest ? ' · ENDLESS BEST: W' + SAVE.levelRec(selLevel).endlessBest : '')));
+    box.appendChild(UTIL.h('div', 'ld-flags', flags));
+
+    const diffRow = UTIL.h('div', 'ld-row');
+    DATA.DIFFS.forEach(d => {
+      const locked = (d.id === 'hard' && !wonStd) || (d.id === 'insane' && !wonHard);
+      const stars = SAVE.starsFor(selLevel, d.id);
+      const b = UTIL.h('button', 'diff-btn' + (selDiff === d.id ? ' active' : '') + (locked ? ' locked' : ''),
+        d.name + '<br><span style="color:#ffd166">' + (stars ? '★'.repeat(stars) : '&nbsp;') + '</span>');
+      if (!locked) b.onclick = () => { selDiff = d.id; renderLevelDetail(); AUDIO.sfx.click(); };
+      diffRow.appendChild(b);
+    });
+    box.appendChild(diffRow);
+
+    const row = UTIL.h('div', 'ld-row');
+    row.style.marginTop = '8px';
+    const start = UTIL.h('button', 'btn btn-primary', '▶ DEPLOY');
+    start.onclick = () => { AUDIO.unlock(); GAME.start(selLevel, selDiff, false); };
+    row.appendChild(start);
+    if (SAVE.bestStars(selLevel) > 0) {
+      const endless = UTIL.h('button', 'btn', '∞ ENDLESS');
+      endless.onclick = () => { AUDIO.unlock(); GAME.start(selLevel, selDiff, true); };
+      row.appendChild(endless);
+    }
+    box.appendChild(row);
+  }
+
+  // ================================================================ RESEARCH
+  function openResearch() {
+    renderResearch();
+    show('screen-research');
+  }
+  function renderResearch() {
+    $('research-cores').textContent = '◈ ' + SAVE.state.cores;
+    const list = $('research-list');
+    list.innerHTML = '';
+    for (const def of DATA.RESEARCH) {
+      const lvl = SAVE.researchLevel(def.id);
+      const maxed = lvl >= def.max;
+      const cost = maxed ? null : def.costs[lvl];
+      const item = UTIL.h('div', 'res-item');
+      item.appendChild(UTIL.h('div', 'res-ico', def.ico));
+      const mid = UTIL.h('div', 'res-mid');
+      mid.appendChild(UTIL.h('div', 'res-name', def.name));
+      mid.appendChild(UTIL.h('div', 'res-desc', def.desc.replace('{v}', String(def.per * Math.max(1, lvl + (maxed ? 0 : 1)))) +
+        (lvl > 0 ? ' <b style="color:#7fdcff">(now: ' + def.per * lvl + ')</b>' : '')));
+      mid.appendChild(UTIL.h('div', 'res-pips', '●'.repeat(lvl) + '○'.repeat(def.max - lvl)));
+      item.appendChild(mid);
+      const buyWrap = UTIL.h('div', 'res-buy');
+      const b = UTIL.h('button', 'btn' + (maxed ? '' : ' btn-primary'), maxed ? 'MAX' : '◈ ' + cost);
+      b.disabled = maxed || SAVE.state.cores < cost;
+      if (!maxed) b.onclick = () => {
+        if (SAVE.buyResearch(def.id)) { AUDIO.sfx.upgrade(); renderResearch(); }
+        else AUDIO.sfx.error();
+      };
+      buyWrap.appendChild(b);
+      item.appendChild(buyWrap);
+      list.appendChild(item);
+    }
+  }
+
+  // ================================================================ CODEX
+  let codexTab = 'threats';
+  function openCodex() { renderCodex(); show('screen-codex'); }
+  function renderCodex() {
+    document.querySelectorAll('.ctab').forEach(t => t.classList.toggle('active', t.dataset.ctab === codexTab));
+    const list = $('codex-list');
+    list.innerHTML = '';
+    if (codexTab === 'threats') {
+      const ids = Object.keys(DATA.ENEMIES);
+      for (const id of ids) {
+        const e = DATA.ENEMIES[id];
+        const seen = SAVE.state.seenEnemies[id];
+        const item = UTIL.h('div', 'cdx-item' + (seen ? '' : ' locked'));
+        const sp = UTIL.h('div', 'cdx-sprite');
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 88;
+        if (seen) RENDER.paintEnemyIcon(cv, id);
+        sp.appendChild(cv);
+        item.appendChild(sp);
+        const mid = UTIL.h('div');
+        mid.appendChild(UTIL.h('div', 'cdx-name', seen ? e.name : '???'));
+        const tags = [];
+        const tr = e.traits || {};
+        if (tr.boss) tags.push('BOSS');
+        if (tr.flying) tags.push('AIRBORNE');
+        if (tr.stealth) tags.push('STEALTH');
+        if (tr.armor) tags.push('ARMORED');
+        if (tr.shield) tags.push('SHIELDED');
+        if (tr.regen) tags.push('REGEN');
+        if (tr.slowImmune) tags.push('SLOW-IMMUNE');
+        if (tr.split || tr.spawnOnDeath) tags.push('SPAWNER');
+        if (tr.teleport) tags.push('BLINKS');
+        if (tr.aura) tags.push('BUFFER');
+        mid.appendChild(UTIL.h('div', 'cdx-tags', seen ? tags.join(' · ') : 'ENCOUNTER TO DECRYPT'));
+        mid.appendChild(UTIL.h('div', 'cdx-desc', seen ? e.lore : 'No data. Encounter this entity in the field.'));
+        if (seen) mid.appendChild(UTIL.h('div', 'cdx-stats',
+          'HP ' + e.hp + ' · SPEED ' + e.speed + ' · BOUNTY ' + e.bounty + ' · CORE DMG ' + e.dmg));
+        item.appendChild(mid);
+        list.appendChild(item);
+      }
+    } else {
+      for (const id of DATA.TOWER_ORDER) {
+        const t = DATA.TOWERS[id];
+        const item = UTIL.h('div', 'cdx-item');
+        const sp = UTIL.h('div', 'cdx-sprite');
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 88;
+        RENDER.paintTowerIcon(cv, id, 0);
+        sp.appendChild(cv);
+        item.appendChild(sp);
+        const mid = UTIL.h('div');
+        mid.appendChild(UTIL.h('div', 'cdx-name', t.name));
+        mid.appendChild(UTIL.h('div', 'cdx-tags', 'UNLOCKS AT NODE ' + t.unlock + (t.air ? ' · TARGETS AIR' : ' · GROUND ONLY')));
+        mid.appendChild(UTIL.h('div', 'cdx-desc', t.desc));
+        const l0 = t.levels[0];
+        mid.appendChild(UTIL.h('div', 'cdx-stats', 'COST ' + l0.cost +
+          (l0.dmg ? ' · DMG ' + l0.dmg : '') + (l0.rate ? ' · RATE ' + l0.rate + '/s' : '') + ' · RANGE ' + l0.range));
+        item.appendChild(mid);
+        list.appendChild(item);
+      }
+    }
+  }
+
+  // ================================================================ ACHIEVEMENTS
+  function openAch() {
+    const list = $('ach-list');
+    list.innerHTML = '';
+    let got = 0;
+    for (const a of DATA.ACHIEVEMENTS) {
+      const done = !!SAVE.state.achievements[a.id];
+      if (done) got++;
+      const cur = Math.min(SAVE.state.stats[a.stat] || 0, a.goal);
+      const item = UTIL.h('div', 'cdx-item' + (done ? '' : ' locked'));
+      item.appendChild(UTIL.h('div', 'res-ico', done ? '🏆' : '○'));
+      const mid = UTIL.h('div');
+      mid.appendChild(UTIL.h('div', 'cdx-name', a.name));
+      mid.appendChild(UTIL.h('div', 'cdx-desc', a.desc));
+      mid.appendChild(UTIL.h('div', 'cdx-stats', done ? 'COMPLETE' : UTIL.fmt(cur) + ' / ' + UTIL.fmt(a.goal)));
+      item.appendChild(mid);
+      list.appendChild(item);
+    }
+    $('ach-count').textContent = got + '/' + DATA.ACHIEVEMENTS.length;
+    show('screen-achievements');
+  }
+
+  // ================================================================ SETTINGS
+  function openSettings() {
+    const list = $('settings-list');
+    list.innerHTML = '';
+    const rows = [
+      ['sfx', 'Sound Effects', 'Weapon fire, explosions, UI'],
+      ['music', 'Ambient Music', 'Generative synth score'],
+      ['shake', 'Screen Shake', 'Impact feedback'],
+      ['autostart', 'Auto-Start Waves', 'Next wave begins 3s after deploy phase starts'],
+    ];
+    for (const [key, label, sub] of rows) {
+      const row = UTIL.h('div', 'set-row');
+      const left = UTIL.h('div');
+      left.appendChild(UTIL.h('div', 'set-label', label));
+      left.appendChild(UTIL.h('div', 'set-sub', sub));
+      row.appendChild(left);
+      const tg = UTIL.h('div', 'toggle' + (SAVE.state.settings[key] ? ' on' : ''));
+      tg.onclick = () => {
+        SAVE.state.settings[key] = !SAVE.state.settings[key];
+        SAVE.persist();
+        tg.classList.toggle('on', SAVE.state.settings[key]);
+        AUDIO.applySettings();
+        AUDIO.sfx.click();
+      };
+      row.appendChild(tg);
+      list.appendChild(row);
+    }
+    $('version-label').textContent = DATA.VERSION;
+    show('screen-settings');
+  }
+
+  // ================================================================ GAME HUD
+  function enterGame() {
+    show('screen-game');
+    buildBuildBar();
+    closeSheets();
+    $('pause-overlay').classList.remove('show');
+    $('end-overlay').classList.remove('show');
+    bossBar(null);
+  }
+
+  function updateHUD() {
+    const g = GAME;
+    if (!g.active) return;
+    $('hud-lives-v').textContent = g.lives;
+    $('hud-cash-v').textContent = UTIL.fmt(g.cash);
+    const wl = g.endless && g.wave > g.totalWaves ? 'W' + g.wave + ' ∞' : g.wave + '/' + g.totalWaves;
+    $('hud-wave-v').textContent = wl;
+    $('btn-speed').textContent = g.speed + '×';
+    const sw = $('btn-start-wave');
+    if (g.phase === 'build') {
+      sw.classList.remove('hidden');
+      const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff);
+      sw.innerHTML = '▶ START WAVE ' + g.wave +
+        '<br><span style="font-size:10px;font-weight:400;opacity:.75">' +
+        prev.slice(0, 3).map(p => p.count + '× ' + DATA.ENEMIES[p.type].name).join(', ') +
+        (prev.length > 3 ? ' +' : '') + '</span>';
+    } else {
+      sw.classList.add('hidden');
+    }
+    refreshBuildBarState();
+  }
+
+  function hurtFlash() {
+    const elv = $('hud-lives');
+    elv.classList.remove('hurt');
+    void elv.offsetWidth;
+    elv.classList.add('hurt');
+  }
+
+  function phaseBanner(text, threat) {
+    const b = $('phase-banner');
+    b.textContent = text;
+    b.classList.toggle('threat', !!threat);
+    b.classList.add('show');
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => b.classList.remove('show'), 2600);
+  }
+
+  function toast(msg, kind) {
+    const zone = $('toast-zone');
+    while (zone.children.length >= 3) zone.removeChild(zone.firstChild);
+    const t = UTIL.h('div', 'toast' + (kind ? ' ' + kind : ''), msg);
+    zone.appendChild(t);
+    setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 2700);
+  }
+
+  function bossBar(e) {
+    bossRef = e;
+    $('boss-bar').classList.toggle('show', !!e);
+    if (e) $('boss-bar-name').textContent = e.def.name;
+  }
+  setInterval(() => {
+    if (bossRef && !bossRef.dead) {
+      $('boss-bar-fill').style.width = Math.max(0, bossRef.hp / bossRef.maxHp * 100) + '%';
+    } else if (bossRef) bossBar(null);
+  }, 120);
+
+  function checkAchToasts() {
+    const fresh = SAVE.checkAchievements();
+    for (const a of fresh) toast('🏆 ' + a.name.toUpperCase(), 'warn');
+  }
+
+  // ================================================================ BUILD BAR
+  function buildBuildBar() {
+    const bar = $('build-bar');
+    bar.innerHTML = '';
+    const unlocked = MAPS.unlockedTowers(GAME.levelN);
+    for (const id of unlocked) {
+      const t = DATA.TOWERS[id];
+      const item = UTIL.h('div', 'bb-item');
+      item.dataset.type = id;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 72;
+      RENDER.paintTowerIcon(cv, id, 0);
+      item.appendChild(cv);
+      item.appendChild(UTIL.h('div', 'bb-cost', '¤' + GAME.towerCost(id)));
+      item.appendChild(UTIL.h('div', 'bb-name', t.name));
+      item.onclick = () => {
+        if (GAME.phase !== 'build') { toast('DEPLOY ONLY BETWEEN WAVES', 'warn'); AUDIO.sfx.error(); return; }
+        if (GAME.placingType === id) { GAME.placingType = null; GAME.placeCell = null; }
+        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); openBuildInfo(id); }
+        refreshBuildBarState();
+        AUDIO.sfx.click();
+      };
+      bar.appendChild(item);
+    }
+    refreshBuildBarState();
+  }
+
+  function refreshBuildBarState() {
+    const g = GAME;
+    document.querySelectorAll('.bb-item').forEach(item => {
+      const id = item.dataset.type;
+      item.classList.toggle('selected', g.placingType === id);
+      item.classList.toggle('poor', g.cash < g.towerCost(id));
+      item.classList.toggle('disabled', g.phase !== 'build');
+    });
+  }
+
+  function openBuildInfo(id) {
+    const t = DATA.TOWERS[id];
+    const l0 = t.levels[0];
+    const body = $('build-panel-body');
+    body.innerHTML = '';
+    const head = UTIL.h('div', 'tp-head');
+    const cv = document.createElement('canvas'); cv.width = cv.height = 92;
+    RENDER.paintTowerIcon(cv, id, 0);
+    head.appendChild(cv);
+    const hd = UTIL.h('div');
+    hd.appendChild(UTIL.h('div', 'tp-title', t.name + ' — ¤' + GAME.towerCost(id)));
+    hd.appendChild(UTIL.h('div', 'tp-tier', t.air ? 'TARGETS GROUND + AIR' : 'GROUND ONLY'));
+    head.appendChild(hd);
+    body.appendChild(head);
+    body.appendChild(UTIL.h('div', 'tp-upnext', t.desc));
+    body.appendChild(UTIL.h('div', 'tp-stats', statChips(l0)));
+    body.appendChild(UTIL.h('div', 'tp-upnext', 'Tap a highlighted tile to position, tap again to deploy.'));
+    $('build-panel').classList.add('open');
+  }
+
+  function statChips(lv) {
+    const bits = [];
+    if (lv.dmg) bits.push('DMG <b>' + Math.round(lv.dmg) + '</b>');
+    if (lv.rate) bits.push('RATE <b>' + (Math.round(lv.rate * 100) / 100) + '/s</b>');
+    bits.push('RANGE <b>' + lv.range + '</b>');
+    if (lv.slow) bits.push('SLOW <b>' + Math.round(lv.slow * 100) + '%</b>');
+    if (lv.splash) bits.push('SPLASH <b>' + lv.splash + '</b>');
+    if (lv.chains) bits.push('CHAINS <b>' + lv.chains + '</b>');
+    if (lv.stun) bits.push('STUN <b>' + lv.stun + 's</b>');
+    if (lv.income) bits.push('INCOME <b>¤' + lv.income + '/wave</b>');
+    if (lv.buffDmg) bits.push('BUFF <b>+' + Math.round(lv.buffDmg * 100) + '% DMG</b>');
+    if (lv.buffRate) bits.push('BUFF <b>+' + Math.round(lv.buffRate * 100) + '% RATE</b>');
+    return bits.map(b => '<span>' + b + '</span>').join('');
+  }
+
+  // ================================================================ TOWER PANEL
+  const MODES = ['first', 'last', 'strong', 'close'];
+  function openTowerPanel(tw) {
+    GAME.selectedTower = tw;
+    GAME.placingType = null; GAME.placeCell = null;
+    refreshBuildBarState();
+    renderTowerPanel();
+    $('build-panel').classList.remove('open');
+    $('tower-panel').classList.add('open');
+  }
+
+  function renderTowerPanel() {
+    const tw = GAME.selectedTower;
+    if (!tw) return;
+    const body = $('tower-panel-body');
+    body.innerHTML = '';
+    const head = UTIL.h('div', 'tp-head');
+    const cv = document.createElement('canvas'); cv.width = cv.height = 92;
+    RENDER.paintTowerIcon(cv, tw.type, tw.tier);
+    head.appendChild(cv);
+    const hd = UTIL.h('div');
+    hd.appendChild(UTIL.h('div', 'tp-title', tw.def.name));
+    hd.appendChild(UTIL.h('div', 'tp-tier', 'TIER ' + UTIL.ROMAN[tw.tier] + ' · ' + tw.kills + ' KILLS'));
+    head.appendChild(hd);
+    body.appendChild(head);
+    body.appendChild(UTIL.h('div', 'tp-stats', statChips(tw.def.levels[tw.tier])));
+
+    if (tw.tier < 3) {
+      const nxt = tw.def.levels[tw.tier + 1];
+      body.appendChild(UTIL.h('div', 'tp-upnext', '⬆ TIER ' + UTIL.ROMAN[tw.tier + 1] + ': ' + statChips(nxt)));
+    }
+
+    const row = UTIL.h('div', 'tp-actions');
+    const upCost = tw.upgradeCost();
+    const up = UTIL.h('button', 'btn btn-primary', upCost === null ? 'MAX TIER' : '⬆ UPGRADE ¤' + upCost);
+    up.disabled = upCost === null || GAME.cash < upCost || GAME.phase !== 'build';
+    up.onclick = () => { if (GAME.upgradeTower(tw)) renderTowerPanel(); };
+    row.appendChild(up);
+
+    if (tw.def.kind !== 'income' && tw.def.kind !== 'buffaura' && tw.def.kind !== 'slowaura' && tw.def.kind !== 'field' && tw.def.kind !== 'emp') {
+      const tgt = UTIL.h('button', 'btn', '◎ ' + tw.targetMode.toUpperCase());
+      tgt.onclick = () => {
+        tw.targetMode = MODES[(MODES.indexOf(tw.targetMode) + 1) % MODES.length];
+        tgt.textContent = '◎ ' + tw.targetMode.toUpperCase();
+        AUDIO.sfx.click();
+      };
+      row.appendChild(tgt);
+    }
+
+    const refund = tw.fresh ? tw.invested : tw.sellValue();
+    const sell = UTIL.h('button', 'btn btn-danger', '✕ ¤' + refund);
+    sell.disabled = GAME.phase !== 'build';
+    sell.onclick = () => { if (GAME.sellTower(tw)) closeSheets(); };
+    row.appendChild(sell);
+    body.appendChild(row);
+    if (GAME.phase !== 'build') {
+      body.appendChild(UTIL.h('div', 'tp-upnext', '⏳ Wave in progress — modifications locked until deploy phase.'));
+    }
+  }
+
+  function closeSheets() {
+    $('tower-panel').classList.remove('open');
+    $('build-panel').classList.remove('open');
+    if (GAME.selectedTower) GAME.selectedTower = null;
+  }
+
+  // ================================================================ END / PAUSE
+  function showEnd(won, stars, cores) {
+    const card = $('end-card');
+    card.innerHTML = '';
+    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'NODE SECURED' : 'CORE BREACHED'));
+    if (won) {
+      card.appendChild(UTIL.h('div', 'end-stars', '★'.repeat(stars) + '<span style="opacity:.25">' + '★'.repeat(3 - stars) + '</span>'));
+      card.appendChild(UTIL.h('div', 'end-line',
+        'Integrity ' + GAME.lives + '/' + GAME.maxLives + ' · ' + GAME.stats.kills + ' kills' +
+        '<br>DATA CORES EARNED: <b>+' + cores + ' ◈</b>'));
+    } else {
+      card.appendChild(UTIL.h('div', 'end-line',
+        'Survived to wave ' + GAME.wave + ' of ' + GAME.totalWaves +
+        '<br>' + GAME.stats.kills + ' threats neutralized.'));
+    }
+    if (won) {
+      if (!GAME.endless) {
+        const cont = UTIL.h('button', 'btn', '∞ CONTINUE ENDLESS');
+        cont.onclick = () => {
+          $('end-overlay').classList.remove('show');
+          GAME.endless = true;
+          GAME.phase = 'build';
+          phaseBanner('OVERTIME — THREATS COMPOUND. NO RETREAT.', true);
+          updateHUD();
+        };
+        card.appendChild(cont);
+      }
+      if (GAME.levelN < 50 && !GAME.endless) {
+        const nxt = UTIL.h('button', 'btn btn-primary', '▶ NEXT NODE');
+        nxt.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(GAME.levelN + 1, GAME.diff, false); };
+        card.appendChild(nxt);
+      }
+    } else {
+      const rty = UTIL.h('button', 'btn btn-primary', '↻ RETRY NODE');
+      rty.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(GAME.levelN, GAME.diff, GAME.endless); };
+      card.appendChild(rty);
+    }
+    const back = UTIL.h('button', 'btn', 'NODE SELECT');
+    back.onclick = () => { $('end-overlay').classList.remove('show'); GAME.quit(); refreshMenu(); openLevels(); };
+    card.appendChild(back);
+    $('end-overlay').classList.add('show');
+  }
+
+  function togglePause(on) {
+    GAME.paused = on;
+    $('pause-overlay').classList.toggle('show', on);
+    if (on) renderPauseToggles();
+  }
+  function renderPauseToggles() {
+    const box = $('pause-toggles');
+    box.innerHTML = '';
+    [['sfx', '♪ SFX'], ['music', '♫ MUSIC'], ['shake', '✷ SHAKE']].forEach(([k, label]) => {
+      const s = UTIL.h('span', SAVE.state.settings[k] ? '' : 'off', label);
+      s.onclick = () => {
+        SAVE.state.settings[k] = !SAVE.state.settings[k];
+        SAVE.persist(); AUDIO.applySettings();
+        s.classList.toggle('off', !SAVE.state.settings[k]);
+      };
+      box.appendChild(s);
+    });
+  }
+
+  // ================================================================ CANVAS INPUT
+  function bindCanvas(canvas) {
+    let lastTouchCell = null;
+    canvas.addEventListener('pointermove', ev => {
+      if (ev.pointerType !== 'mouse' || !GAME.active || !GAME.placingType) return;
+      const c = RENDER.screenToCell(ev.clientX, ev.clientY);
+      GAME.placeCell = c;
+    });
+    canvas.addEventListener('pointerdown', ev => {
+      if (!GAME.active) return;
+      AUDIO.unlock();
+      const cell = RENDER.screenToCell(ev.clientX, ev.clientY);
+      const g = GAME;
+
+      if (g.placingType) {
+        const inGrid = cell.x >= 0 && cell.y >= 0 && cell.x < g.level.cols && cell.y < g.level.rows;
+        if (!inGrid) { g.placingType = null; g.placeCell = null; closeSheets(); refreshBuildBarState(); return; }
+        const confirm = ev.pointerType === 'mouse' ||
+          (g.placeCell && g.placeCell.x === cell.x && g.placeCell.y === cell.y);
+        if (confirm && g.cellFree(cell.x, cell.y)) {
+          if (g.placeTower(g.placingType, cell.x, cell.y)) {
+            // keep placing if affordable (rapid multi-build), else exit placement
+            if (g.cash < g.towerCost(g.placingType)) { g.placingType = null; closeSheets(); }
+            g.placeCell = null;
+            refreshBuildBarState();
+          }
+        } else {
+          g.placeCell = cell;
+        }
+        return;
+      }
+
+      const tw = g.towerAt(cell.x, cell.y);
+      if (tw) { openTowerPanel(tw); AUDIO.sfx.click(); }
+      else { closeSheets(); }
+    });
+  }
+
+  // ================================================================ WIRING
+  function init() {
+    $('btn-play').onclick = () => { AUDIO.unlock(); openLevels(); };
+    $('btn-research').onclick = () => { AUDIO.unlock(); openResearch(); };
+    $('btn-codex').onclick = () => { AUDIO.unlock(); openCodex(); };
+    $('btn-achievements').onclick = () => { AUDIO.unlock(); openAch(); };
+    $('btn-settings').onclick = () => { AUDIO.unlock(); openSettings(); };
+    document.querySelectorAll('.btn-back').forEach(b => {
+      b.onclick = () => { refreshMenu(); show(b.dataset.back); };
+    });
+    document.querySelectorAll('.ctab').forEach(t => {
+      t.onclick = () => { codexTab = t.dataset.ctab; renderCodex(); };
+    });
+
+    // wipe with confirm
+    let wipeArmed = false;
+    $('btn-wipe').onclick = () => {
+      if (!wipeArmed) { wipeArmed = true; $('btn-wipe').textContent = 'TAP AGAIN TO CONFIRM WIPE'; setTimeout(() => { wipeArmed = false; $('btn-wipe').textContent = 'WIPE SAVE DATA'; }, 2500); return; }
+      SAVE.wipe(); refreshMenu(); show('screen-menu');
+    };
+
+    // game controls
+    $('btn-start-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
+    $('btn-speed').onclick = () => { $('btn-speed').textContent = GAME.cycleSpeed() + '×'; AUDIO.sfx.click(); };
+    $('btn-pause').onclick = () => togglePause(true);
+    $('btn-resume').onclick = () => togglePause(false);
+    $('btn-restart').onclick = () => { togglePause(false); GAME.start(GAME.levelN, GAME.diff, GAME.endless); };
+    $('btn-quit').onclick = () => { togglePause(false); GAME.quit(); refreshMenu(); openLevels(); };
+
+    bindCanvas(UTIL.el('game-canvas'));
+    refreshMenu();
+
+    window.addEventListener('resize', () => { if (GAME.active) RENDER.resize(GAME); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && GAME.active && GAME.phase === 'combat') togglePause(true);
+    });
+  }
+
+  return {
+    init, show, refreshMenu, openLevels,
+    enterGame, updateHUD, phaseBanner, toast, bossBar, hurtFlash,
+    closeSheets, showEnd, checkAchToasts,
+  };
+})();
