@@ -211,11 +211,18 @@ button { font-family:inherit; }
 
 #place-actions {
   position:absolute; left:10px; right:10px; bottom:158px; z-index:16; /* above sheets, always tappable */
-  display:none; gap:10px;
+  display:none; flex-direction:column; gap:8px;
+  background:rgba(8,14,26,.96); border:1px solid #1e3a5f; border-radius:16px;
+  padding:10px; box-shadow:0 6px 24px rgba(0,0,0,.55);
 }
 #place-actions.show { display:flex; }
-#place-actions .btn { margin:0; padding:15px 8px; font-size:15px; }
-#btn-place-cancel { flex:0 0 64px; }
+#place-info { display:flex; align-items:center; gap:10px; min-height:36px; }
+#place-info canvas { width:36px; height:36px; flex-shrink:0; }
+.pi-name { font-size:13px; font-weight:800; white-space:nowrap; }
+.pi-stats { font-size:10.5px; color:#7fa8c9; line-height:1.35; }
+.pa-buttons { display:flex; gap:8px; }
+.pa-buttons .btn { margin:0; padding:13px 8px; font-size:14px; }
+#btn-place-cancel { flex:0 0 60px; }
 #btn-place-ok { flex:1; letter-spacing:2px; box-shadow:0 0 22px rgba(33,150,216,.55); }
 #btn-place-ok:disabled { opacity:.45; }
 

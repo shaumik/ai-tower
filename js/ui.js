@@ -363,7 +363,7 @@ const UI = (function () {
       item.onclick = () => {
         if (GAME.phase !== 'build') { toast('DEPLOY ONLY BETWEEN WAVES', 'warn'); AUDIO.sfx.error(); return; }
         if (GAME.placingType === id) { cancelPlacement(); }
-        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); openBuildInfo(id); refreshPlaceActions(); }
+        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); renderPlaceInfo(id); refreshPlaceActions(); }
         refreshBuildBarState();
         AUDIO.sfx.click();
       };
@@ -382,27 +382,29 @@ const UI = (function () {
     });
   }
 
-  function openBuildInfo(id) {
+  // Compact info inside the single placement bar (no sheet during placement)
+  function renderPlaceInfo(id) {
     const t = DATA.TOWERS[id];
     const l0 = t.levels[0];
-    const body = $('build-panel-body');
-    body.innerHTML = '';
-    const head = UTIL.h('div', 'tp-head');
-    const cv = document.createElement('canvas'); cv.width = cv.height = 92;
+    const box = $('place-info');
+    box.innerHTML = '';
+    const cv = document.createElement('canvas'); cv.width = cv.height = 72;
     RENDER.paintTowerIcon(cv, id, 0);
-    head.appendChild(cv);
-    const hd = UTIL.h('div');
-    hd.appendChild(UTIL.h('div', 'tp-title', 'DEPLOYING: ' + t.name + ' — ¤' + GAME.towerCost(id)));
-    hd.appendChild(UTIL.h('div', 'tp-tier', t.air ? 'TARGETS GROUND + AIR' : 'GROUND ONLY'));
-    head.appendChild(hd);
-    body.appendChild(head);
-    body.appendChild(UTIL.h('div', 'tp-upnext', t.desc));
-    body.appendChild(UTIL.h('div', 'tp-stats', statChips(l0)));
-    body.appendChild(UTIL.h('div', 'tp-upnext', 'Tap or drag on the grid to position, then hit ✓ DEPLOY. Misplaced? Selling before the wave starts refunds 100%.'));
-    const x = UTIL.h('button', 'sheet-close', '✕');
-    x.onclick = cancelPlacement;
-    body.appendChild(x);
-    $('build-panel').classList.add('open');
+    box.appendChild(cv);
+    const mid = UTIL.h('div');
+    mid.appendChild(UTIL.h('div', 'pi-name', t.name + ' — ¤' + GAME.towerCost(id)));
+    const bits = [];
+    if (l0.dmg) bits.push('DMG ' + l0.dmg);
+    if (l0.rate) bits.push(Math.round(l0.rate * 100) / 100 + '/s');
+    bits.push('RNG ' + l0.range);
+    if (l0.slow) bits.push('SLOW ' + Math.round(l0.slow * 100) + '%');
+    if (l0.splash) bits.push('SPLASH ' + l0.splash);
+    if (l0.chains) bits.push('CHAIN ×' + l0.chains);
+    if (l0.income) bits.push('+¤' + l0.income + '/wave');
+    if (l0.buffDmg) bits.push('+' + Math.round(l0.buffDmg * 100) + '% DMG aura');
+    bits.push(t.air ? 'hits air' : 'ground only');
+    mid.appendChild(UTIL.h('div', 'pi-stats', bits.join(' · ')));
+    box.appendChild(mid);
   }
 
   function statChips(lv) {
@@ -570,7 +572,7 @@ const UI = (function () {
     ok.disabled = !valid;
     ok.textContent = g.placeCell
       ? (valid ? '✓ DEPLOY  ¤' + cost : (g.placeCell && !g.cellFree(g.placeCell.x, g.placeCell.y) ? 'BLOCKED TILE' : 'NEED ¤' + cost))
-      : 'TAP THE GRID TO POSITION';
+      : 'TAP THE GRID…';
   }
 
   function cancelPlacement() {
@@ -634,8 +636,6 @@ const UI = (function () {
           }
           dragging = true;
           g.placeCell = cell;
-          // collapse the info sheet so the map and ✓ DEPLOY are never obstructed
-          $('build-panel').classList.remove('open');
           refreshPlaceActions();
           AUDIO.sfx.click();
         }
