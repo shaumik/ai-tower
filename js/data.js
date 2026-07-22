@@ -20,8 +20,8 @@ const DATA = (function () {
   // ------------------------------------------------------------------
   const DIFFS = [
     { id: 'standard', name: 'STANDARD', hpMult: 1.0,  bountyMult: 1.0,  coreMult: 1 },
-    { id: 'hard',     name: 'HARD',     hpMult: 1.5,  bountyMult: 0.92, coreMult: 2 },
-    { id: 'insane',   name: 'INSANE',   hpMult: 2.25, bountyMult: 0.85, coreMult: 4 },
+    { id: 'hard',     name: 'HARD',     hpMult: 1.4,  bountyMult: 0.92, coreMult: 2 },
+    { id: 'insane',   name: 'INSANE',   hpMult: 1.95, bountyMult: 0.85, coreMult: 4 },
   ];
 
   // ------------------------------------------------------------------
@@ -35,8 +35,8 @@ const DATA = (function () {
       levels: [
         { cost: 45,  dmg: 8,  rate: 1.2,  range: 2.5 },
         { cost: 60,  dmg: 15, rate: 1.35, range: 2.7 },
-        { cost: 95,  dmg: 27, rate: 1.5,  range: 2.9 },
-        { cost: 150, dmg: 48, rate: 1.7,  range: 3.2 },
+        { cost: 95,  dmg: 30, rate: 1.5,  range: 2.9 },
+        { cost: 150, dmg: 56, rate: 1.7,  range: 3.2 },
       ],
     },
     scanner: {
@@ -45,8 +45,8 @@ const DATA = (function () {
       levels: [
         { cost: 70,  dmg: 3,  rate: 3.5, range: 2.3 },
         { cost: 70,  dmg: 5,  rate: 3.8, range: 2.5 },
-        { cost: 110, dmg: 9,  rate: 4.2, range: 2.8 },
-        { cost: 170, dmg: 15, rate: 4.6, range: 3.1 },
+        { cost: 110, dmg: 10, rate: 4.2, range: 2.8 },
+        { cost: 170, dmg: 17, rate: 4.6, range: 3.1 },
       ],
     },
     tarpit: {
@@ -55,8 +55,8 @@ const DATA = (function () {
       levels: [
         { cost: 80,  dmg: 4,  rate: 2, range: 1.7, slow: 0.25 },
         { cost: 60,  dmg: 7,  rate: 2, range: 1.9, slow: 0.30 },
-        { cost: 90,  dmg: 11, rate: 2, range: 2.1, slow: 0.35 },
-        { cost: 140, dmg: 17, rate: 2, range: 2.4, slow: 0.42 },
+        { cost: 90,  dmg: 13, rate: 2, range: 2.1, slow: 0.35 },
+        { cost: 140, dmg: 20, rate: 2, range: 2.4, slow: 0.42 },
       ],
     },
     mortar: {
@@ -65,8 +65,8 @@ const DATA = (function () {
       levels: [
         { cost: 130, dmg: 26,  rate: 0.5,  range: 3.4, splash: 1.15 },
         { cost: 110, dmg: 44,  rate: 0.52, range: 3.7, splash: 1.30 },
-        { cost: 170, dmg: 74,  rate: 0.55, range: 4.0, splash: 1.45 },
-        { cost: 260, dmg: 120, rate: 0.6,  range: 4.3, splash: 1.65 },
+        { cost: 170, dmg: 82,  rate: 0.55, range: 4.0, splash: 1.45 },
+        { cost: 260, dmg: 138, rate: 0.6,  range: 4.3, splash: 1.65 },
       ],
     },
     throttle: {
@@ -95,8 +95,8 @@ const DATA = (function () {
       levels: [
         { cost: 120, dmg: 12, rate: 0.9,  range: 2.4, chains: 3 },
         { cost: 100, dmg: 20, rate: 1.0,  range: 2.6, chains: 4 },
-        { cost: 160, dmg: 34, rate: 1.1,  range: 2.8, chains: 5 },
-        { cost: 250, dmg: 55, rate: 1.25, range: 3.0, chains: 6 },
+        { cost: 160, dmg: 38, rate: 1.1,  range: 2.8, chains: 5 },
+        { cost: 250, dmg: 64, rate: 1.25, range: 3.0, chains: 6 },
       ],
     },
     sniper: {
@@ -105,8 +105,8 @@ const DATA = (function () {
       levels: [
         { cost: 160, dmg: 55,  rate: 0.38, range: 5.5 },
         { cost: 140, dmg: 105, rate: 0.42, range: 6.5 },
-        { cost: 230, dmg: 190, rate: 0.46, range: 7.5 },
-        { cost: 360, dmg: 340, rate: 0.50, range: 9.0 },
+        { cost: 230, dmg: 215, rate: 0.46, range: 7.5 },
+        { cost: 360, dmg: 390, rate: 0.50, range: 9.0 },
       ],
     },
     overclock: {
@@ -125,8 +125,8 @@ const DATA = (function () {
       levels: [
         { cost: 210, dmg: 18, rate: 0, range: 3.0 },
         { cost: 180, dmg: 30, rate: 0, range: 3.2 },
-        { cost: 280, dmg: 50, rate: 0, range: 3.4 },
-        { cost: 430, dmg: 85, rate: 0, range: 3.6 },
+        { cost: 280, dmg: 56, rate: 0, range: 3.4 },
+        { cost: 430, dmg: 98, rate: 0, range: 3.6 },
       ],
     },
     emp: {

@@ -545,6 +545,28 @@ const RENDER = (function () {
     const pulse = 1 + Math.sin(now * 0.004) * 0.08;
     drawCore(sx(end.x + 0.5), sy(end.y + 0.5), T * 0.42 * pulse, g.lives / g.maxLives, now);
 
+    // air corridor (fliers ignore the path) — shown during deploy once fliers exist
+    if (g.phase === 'build' && g.levelN >= 7) {
+      const a0 = lv.path[0];
+      ctx.save();
+      ctx.globalAlpha = 0.28;
+      ctx.strokeStyle = '#4dd0e1';
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([3, 7]);
+      ctx.beginPath();
+      ctx.moveTo(sx(a0.x + 0.5), sy(0));
+      ctx.lineTo(sx(end.x + 0.5), sy(end.y + 0.5));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // little wing glyph at the top of the lane
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#4dd0e1';
+      ctx.font = Math.round(T * 0.32) + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('✈', sx(a0.x + 0.5), sy(0.35));
+      ctx.restore();
+    }
+
     // aura zones (throttle / tarpit / overclock) for placed towers — subtle
     for (const tw of g.towers) {
       const k = tw.def.kind;

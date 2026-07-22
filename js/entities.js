@@ -19,7 +19,7 @@ class Enemy {
     this.size = def.size * (opts && opts.elite ? 1.25 : 1);
     this.elite = !!(opts && opts.elite);
     this.flying = !!this.traits.flying;
-    this.armor = (this.traits.armor || 0) * Math.sqrt(hpMult);
+    this.armor = this.traits.armor || 0; // flat: armor is a mechanic to counter, not a curve
     this.maxShield = this.traits.shield ? Math.round(this.traits.shield * hpMult) : 0;
     this.shield = this.maxShield;
     this.isBoss = !!this.traits.boss;

@@ -4,11 +4,11 @@ const WAVES = (function () {
 
   // HP multiplier applied to an enemy's base hp
   function hpScale(level, wave, diffMult) {
-    return (1 + 0.06 * (level - 1) + 0.07 * (wave - 1) + 0.004 * (wave - 1) * (wave - 1)) * diffMult;
+    return (1 + 0.045 * (level - 1) + 0.07 * (wave - 1) + 0.0032 * (wave - 1) * (wave - 1)) * diffMult;
   }
   function bountyScale(level, diff) {
     // bounties grow with level to track HP inflation
-    return (1 + 0.012 * level) * diff.bountyMult;
+    return (1 + 0.018 * level) * diff.bountyMult;
   }
 
   // Build the spawn schedule for one wave: array of {delay, type, hpMult, banner}
@@ -22,18 +22,18 @@ const WAVES = (function () {
 
     // threat budget for this wave (HP scaling carries most difficulty; counts grow gently)
     const rampIn = Math.min(1, 0.55 + wave * 0.15); // first waves of a level are lighter
-    let budget = (18 + level * 2.2) * Math.pow(1.075, wave - 1) * (0.9 + 0.2 * r()) * rampIn;
+    let budget = (20 + level * 1.6) * Math.pow(1.075, wave - 1) * (0.9 + 0.2 * r()) * rampIn;
     if (isBossWave) budget *= 0.45; // boss itself is the show
     if (wave > totalWaves) {
       // endless overtime: keep compounding
-      budget = (18 + level * 2.2) * Math.pow(1.075, totalWaves - 1) * Math.pow(1.16, wave - totalWaves);
+      budget = (20 + level * 1.6) * Math.pow(1.075, totalWaves - 1) * Math.pow(1.16, wave - totalWaves);
     }
 
     // pool of unlocked enemy types, weighted toward recent unlocks
     const pool = MAPS.unlockedEnemies(level);
     const weights = pool.map(id => {
       const e = DATA.ENEMIES[id];
-      let w = 1 + 3.2 * Math.exp(-(level - e.unlock) / 6);
+      let w = 1 + 2.4 * Math.exp(-(level - e.unlock) / 6);
       if (e.threat > budget * 0.65) w *= 0.15; // don't blow whole budget on one unit
       return w;
     });
@@ -46,6 +46,9 @@ const WAVES = (function () {
       const share = budget * (0.25 + r() * 0.4);
       let count = Math.max(1, Math.min(26, Math.round(share / e.threat)));
       if (type === 'swarmling') count = Math.min(34, count * 2);
+      // specialists (stealth/flying) arrive as squads, never as the whole wave
+      const tr = e.traits || {};
+      if (tr.stealth || tr.flying) count = Math.min(count, 3 + Math.floor(wave / 3));
       budget -= count * e.threat;
       const gap = UTIL.clamp(0.9 / e.speed * (e.size + 0.55), 0.28, 1.15);
       for (let i = 0; i < count; i++) {
@@ -90,7 +93,7 @@ const WAVES = (function () {
   }
 
   function waveEndBonus(level, wave) {
-    return 24 + level * 2 + wave * 4;
+    return 24 + level * 3 + wave * 4;
   }
 
   return { build, preview, waveEndBonus, hpScale };

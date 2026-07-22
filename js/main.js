@@ -12,11 +12,11 @@
     });
   }
 
-  // Block iOS double-tap zoom inside the game
+  // Block iOS double-tap zoom on the playfield (buttons stay tappable at speed)
   let lastTouch = 0;
   document.addEventListener('touchend', e => {
     const now = Date.now();
-    if (now - lastTouch < 350) e.preventDefault();
+    if (now - lastTouch < 350 && e.target && e.target.id === 'game-canvas') e.preventDefault();
     lastTouch = now;
   }, { passive: false });
 

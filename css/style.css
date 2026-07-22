@@ -249,6 +249,7 @@ button { font-family:inherit; }
 .tp-actions { display:flex; gap:8px; }
 .tp-actions .btn { margin:0; padding:11px 6px; font-size:12px; }
 .tp-upnext { font-size:11px; color:#7fdcff; margin:0 0 8px; line-height:1.4; }
+.tp-upnext span { margin-right:10px; }
 
 /* ---------- Overlays ---------- */
 .overlay {
