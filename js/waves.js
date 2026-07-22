@@ -18,11 +18,21 @@ const WAVES = (function () {
     const events = [];
     const isBossWave = !!(DATA.BOSS_LEVELS[level] && wave === totalWaves);
     const isEliteWave = !isBossWave && wave === totalWaves;
-    const hs = hpScale(level, wave, diffDef.hpMult);
+    let hs = hpScale(level, wave, diffDef.hpMult);
+
+    // seeded wave event roll (never on wave 1-3 or boss waves)
+    let event = null;
+    if (!isBossWave && wave >= 4 && r() < 0.24) {
+      const keys = Object.keys(DATA.EVENTS);
+      event = keys[Math.floor(r() * keys.length)];
+    }
+    const ev = event ? DATA.EVENTS[event] : null;
+    if (ev && ev.hpMult) hs *= ev.hpMult;
 
     // threat budget for this wave (HP scaling carries most difficulty; counts grow gently)
     const rampIn = Math.min(1, 0.55 + wave * 0.15); // first waves of a level are lighter
     let budget = (20 + level * 1.6) * Math.pow(1.075, wave - 1) * (0.9 + 0.2 * r()) * rampIn;
+    if (ev && ev.countMult) budget *= ev.countMult;
     if (isBossWave) budget *= 0.45; // boss itself is the show
     if (wave > totalWaves) {
       // endless overtime: keep compounding
@@ -77,10 +87,14 @@ const WAVES = (function () {
       events.push({ delay: t + 2, type: bossId, hpMult: diffDef.hpMult * Math.pow(1.5, (wave - totalWaves) / 10), banner: DATA.ENEMIES[bossId].name });
     }
 
-    return { events, bounty: bountyScale(level, diffDef) };
+    return {
+      events,
+      bounty: bountyScale(level, diffDef) * (ev && ev.bounty ? ev.bounty : 1),
+      event,
+    };
   }
 
-  // Preview: which types appear in a wave (for the wave preview UI)
+  // Preview: which types appear in a wave + any wave event (for the UI)
   function preview(level, wave, totalWaves, diff) {
     const w = build(level, wave, totalWaves, diff);
     const seen = {};
@@ -89,7 +103,7 @@ const WAVES = (function () {
       if (!seen[ev.type]) { seen[ev.type] = 0; list.push(ev.type); }
       seen[ev.type]++;
     }
-    return list.map(type => ({ type, count: seen[type] }));
+    return { list: list.map(type => ({ type, count: seen[type] })), event: w.event };
   }
 
   function waveEndBonus(level, wave) {

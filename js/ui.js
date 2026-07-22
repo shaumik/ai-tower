@@ -250,6 +250,7 @@ const UI = (function () {
       ['music', 'Ambient Music', 'Generative synth score'],
       ['shake', 'Screen Shake', 'Impact feedback'],
       ['autostart', 'Auto-Start Waves', 'Next wave begins 3s after deploy phase starts'],
+      ['autocast', 'Auto-Cast Abilities', 'AI fires Orbital Strike / Surge / Patch for you (full AFK mode)'],
     ];
     for (const [key, label, sub] of rows) {
       const row = UTIL.h('div', 'set-row');
@@ -276,9 +277,11 @@ const UI = (function () {
   function enterGame() {
     show('screen-game');
     buildBuildBar();
+    buildAbilityBar();
     closeSheets();
     $('pause-overlay').classList.remove('show');
     $('end-overlay').classList.remove('show');
+    $('chip-overlay').classList.remove('show');
     bossBar(null);
   }
 
@@ -294,15 +297,71 @@ const UI = (function () {
     if (g.phase === 'build') {
       sw.classList.remove('hidden');
       const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff);
+      const rush = g.rushT > 0 && g.rushBase > 0 ? Math.ceil(g.rushBase * (g.rushT / 22)) : 0;
+      const evTag = prev.event ? ' <span style="color:#ffd166">' + DATA.EVENTS[prev.event].ico + ' ' + DATA.EVENTS[prev.event].name + '</span>' : '';
       sw.innerHTML = '▶ START WAVE ' + g.wave +
+        (rush > 0 ? ' <span style="color:#ffd166">+¤' + rush + '</span>' : '') + evTag +
         '<br><span style="font-size:10px;font-weight:400;opacity:.75">' +
-        prev.slice(0, 3).map(p => p.count + '× ' + DATA.ENEMIES[p.type].name).join(', ') +
-        (prev.length > 3 ? ' +' : '') + '</span>';
+        prev.list.slice(0, 3).map(p => p.count + '× ' + DATA.ENEMIES[p.type].name).join(', ') +
+        (prev.list.length > 3 ? ' +' : '') +
+        (prev.event ? ' · ' + DATA.EVENTS[prev.event].desc : '') + '</span>';
     } else {
       sw.classList.add('hidden');
     }
     refreshBuildBarState();
     refreshPlaceActions();
+    refreshAbilities();
+  }
+
+  // ================================================================ ABILITIES
+  function buildAbilityBar() {
+    const wrap = $('ability-btns');
+    wrap.innerHTML = '';
+    const unlocked = Object.keys(DATA.ABILITIES).filter(k => GAME.levelN >= DATA.ABILITIES[k].unlock);
+    $('ability-bar').classList.toggle('show', unlocked.length > 0);
+    for (const key of unlocked) {
+      const a = DATA.ABILITIES[key];
+      const b = UTIL.h('button', 'ab-btn', a.ico + '<span class="ab-cost">' + GAME.abilityCost(key) + '</span>');
+      b.dataset.ab = key;
+      b.title = a.name + ' — ' + a.desc;
+      b.onclick = () => { AUDIO.unlock(); GAME.castAbility(key); };
+      wrap.appendChild(b);
+    }
+    refreshAbilities();
+  }
+
+  function refreshAbilities() {
+    const g = GAME;
+    if (!g.active) return;
+    $('energy-fill').style.height = Math.round(g.energy) + '%';
+    document.querySelectorAll('.ab-btn').forEach(b => {
+      const key = b.dataset.ab;
+      const ready = g.abilityReady(key);
+      b.disabled = !ready;
+      b.classList.toggle('ready', ready);
+      b.classList.toggle('armed', g.abilityTarget === 'strike' && key === 'strike');
+    });
+  }
+
+  // ================================================================ CHIP PICKER
+  function showChipPicker(choices) {
+    if (!choices || !choices.length) return;
+    const card = $('chip-card');
+    card.innerHTML = '';
+    card.appendChild(UTIL.h('h2', '', '◈ PROTOCOL CHIP'));
+    card.appendChild(UTIL.h('div', 'chip-sub', 'Pick one boost for this deployment.'));
+    for (const c of choices) {
+      const b = UTIL.h('button', 'chip-opt',
+        '<span class="ci">' + c.ico + '</span><span><span class="cn">' + c.name + '</span><br><span class="cd">' + c.desc + '</span></span>');
+      b.onclick = () => {
+        GAME.pickChip(c.id);
+        $('chip-overlay').classList.remove('show');
+        toast('CHIP INSTALLED: ' + c.name.toUpperCase(), 'warn');
+        AUDIO.sfx.upgrade();
+      };
+      card.appendChild(b);
+    }
+    $('chip-overlay').classList.add('show');
   }
 
   function hurtFlash() {
@@ -338,7 +397,21 @@ const UI = (function () {
     if (bossRef && !bossRef.dead) {
       $('boss-bar-fill').style.width = Math.max(0, bossRef.hp / bossRef.maxHp * 100) + '%';
     } else if (bossRef) bossBar(null);
+    // live tickers: combo, energy, rush countdown
+    const g = GAME;
+    if (!g.active) return;
+    const ci = $('combo-ind');
+    if (g.combo >= 5 && g.phase === 'combat') {
+      ci.textContent = '×' + g.combo + ' COMBO';
+      ci.classList.add('show');
+      ci.style.transform = 'scale(' + Math.min(1.5, 1 + g.combo * 0.01) + ')';
+    } else ci.classList.remove('show');
+    if (g.phase === 'combat') refreshAbilities();
   }, 120);
+  // rush bonus countdown on the start button (cheap, only during build)
+  setInterval(() => {
+    if (GAME.active && GAME.phase === 'build' && GAME.rushT > 0) updateHUD();
+  }, 1000);
 
   function checkAchToasts() {
     const fresh = SAVE.checkAchievements();
@@ -443,8 +516,10 @@ const UI = (function () {
     RENDER.paintTowerIcon(cv, tw.type, tw.tier);
     head.appendChild(cv);
     const hd = UTIL.h('div');
-    hd.appendChild(UTIL.h('div', 'tp-title', tw.def.name));
-    hd.appendChild(UTIL.h('div', 'tp-tier', 'TIER ' + UTIL.ROMAN[tw.tier] + ' · ' + tw.kills + ' KILLS'));
+    const branchName = (tw.tier === 3 && tw.branch !== null && DATA.BRANCHES[tw.type])
+      ? DATA.BRANCHES[tw.type][tw.branch].name : null;
+    hd.appendChild(UTIL.h('div', 'tp-title', branchName || tw.def.name));
+    hd.appendChild(UTIL.h('div', 'tp-tier', 'TIER ' + UTIL.ROMAN[tw.tier] + (branchName ? ' ★' : '') + ' · ' + tw.kills + ' KILLS'));
     head.appendChild(hd);
     body.appendChild(head);
     const x = UTIL.h('button', 'sheet-close', '✕');
@@ -452,17 +527,35 @@ const UI = (function () {
     body.appendChild(x);
     body.appendChild(UTIL.h('div', 'tp-stats', statChips(tw.def.levels[tw.tier])));
 
-    if (tw.tier < 3) {
+    const upCost = tw.upgradeCost();
+    const isBranchPoint = tw.tier === 2 && DATA.BRANCHES[tw.type];
+
+    if (tw.tier < 3 && !isBranchPoint) {
       const nxt = tw.def.levels[tw.tier + 1];
       body.appendChild(UTIL.h('div', 'tp-upnext', '⬆ TIER ' + UTIL.ROMAN[tw.tier + 1] + ': ' + statChips(nxt)));
     }
 
+    // final upgrade forks: choose a specialization
+    if (isBranchPoint) {
+      body.appendChild(UTIL.h('div', 'tp-upnext', '⬆ TIER IV — choose a specialization (¤' + upCost + '):'));
+      const brow = UTIL.h('div', 'branch-row');
+      DATA.BRANCHES[tw.type].forEach((br, idx) => {
+        const b = UTIL.h('button', 'branch-btn',
+          '<div class="bn">' + br.ico + ' ' + br.name.toUpperCase() + '</div><div class="bd">' + br.desc + '</div>');
+        b.disabled = GAME.cash < upCost || GAME.phase !== 'build';
+        b.onclick = () => { if (GAME.upgradeTower(tw, idx)) renderTowerPanel(); };
+        brow.appendChild(b);
+      });
+      body.appendChild(brow);
+    }
+
     const row = UTIL.h('div', 'tp-actions');
-    const upCost = tw.upgradeCost();
-    const up = UTIL.h('button', 'btn btn-primary', upCost === null ? 'MAX TIER' : '⬆ UPGRADE ¤' + upCost);
-    up.disabled = upCost === null || GAME.cash < upCost || GAME.phase !== 'build';
-    up.onclick = () => { if (GAME.upgradeTower(tw)) renderTowerPanel(); };
-    row.appendChild(up);
+    if (!isBranchPoint) {
+      const up = UTIL.h('button', 'btn btn-primary', upCost === null ? 'MAX TIER' : '⬆ UPGRADE ¤' + upCost);
+      up.disabled = upCost === null || GAME.cash < upCost || GAME.phase !== 'build';
+      up.onclick = () => { if (GAME.upgradeTower(tw)) renderTowerPanel(); };
+      row.appendChild(up);
+    }
 
     if (tw.def.kind !== 'income' && tw.def.kind !== 'buffaura' && tw.def.kind !== 'slowaura' && tw.def.kind !== 'field' && tw.def.kind !== 'emp') {
       const tgt = UTIL.h('button', 'btn', '◎ ' + tw.targetMode.toUpperCase());
@@ -621,6 +714,13 @@ const UI = (function () {
       const cell = RENDER.screenToCell(ev.clientX, ev.clientY);
       const g = GAME;
 
+      // orbital strike targeting takes priority over everything
+      if (g.abilityTarget === 'strike') {
+        const w = RENDER.screenToWorld(ev.clientX, ev.clientY);
+        g.doStrike(w.x, w.y);
+        return;
+      }
+
       if (g.placingType) {
         const inGrid = cell.x >= 0 && cell.y >= 0 && cell.x < g.level.cols && cell.y < g.level.rows;
         if (!inGrid) { cancelPlacement(); return; }
@@ -696,5 +796,6 @@ const UI = (function () {
     init, show, refreshMenu, openLevels,
     enterGame, updateHUD, phaseBanner, toast, bossBar, hurtFlash,
     closeSheets, showEnd, checkAchToasts,
+    showChipPicker, refreshAbilities,
   };
 })();

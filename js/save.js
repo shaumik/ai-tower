@@ -10,7 +10,7 @@ const SAVE = (function () {
     research: {},
     achievements: {},
     seenEnemies: {},
-    settings: { sfx: true, music: true, shake: true, autostart: false },
+    settings: { sfx: true, music: true, shake: true, autostart: false, autocast: false },
     stats: {
       kills: 0, wavesCleared: 0, towersBuilt: 0, upgradesBought: 0, maxCash: 0,
       perfectWins: 0, bossKills: 0, insaneWins: 0, maxTier: 0, leaks: 0,

@@ -2,7 +2,7 @@
 'use strict';
 const DATA = (function () {
 
-  const VERSION = '1.1.3';
+  const VERSION = '1.2.0';
 
   // ------------------------------------------------------------------
   // SECTORS — 5 campaigns of 10 levels
@@ -284,5 +284,82 @@ const DATA = (function () {
     { id: 'waves500',     name: 'Wave Function',      desc: 'Clear 500 waves (lifetime).',                   stat: 'wavesCleared', goal: 500 },
   ];
 
-  return { VERSION, SECTORS, DIFFS, TOWERS, TOWER_ORDER, ENEMIES, BOSS_LEVELS, RESEARCH, ACHIEVEMENTS };
+  // ------------------------------------------------------------------
+  // WAVE EVENTS — seeded modifiers that break wave monotony
+  // ------------------------------------------------------------------
+  const EVENTS = {
+    storm:    { name: 'DATA STORM',  ico: '⚡', desc: '+35% enemy speed · ×2 bounty',      speed: 1.35, bounty: 2.0 },
+    goldrush: { name: 'GOLD RUSH',   ico: '¤', desc: '×1.6 bounty this wave',              bounty: 1.6 },
+    swarm:    { name: 'SWARM SURGE', ico: '≋', desc: '+60% enemies · −40% HP each',        countMult: 1.6, hpMult: 0.6 },
+    regen:    { name: 'REGEN FIELD', ico: '✚', desc: 'Enemies regenerate · ×1.4 bounty',   regen: 4, bounty: 1.4 },
+    blackout: { name: 'BLACKOUT',    ico: '◌', desc: 'One tower offline · ×1.35 bounty',   blackout: 1, bounty: 1.35 },
+    frenzy:   { name: 'KILL FRENZY', ico: '☠', desc: 'Combo bonus ×3 this wave',           comboMult: 3 },
+  };
+
+  // ------------------------------------------------------------------
+  // CHARGE ABILITIES — powered by kills, usable any time (auto-cast optional)
+  // ------------------------------------------------------------------
+  const ABILITIES = {
+    strike: { name: 'ORBITAL STRIKE', ico: '✸', cost: 30, unlock: 4,
+      desc: 'Tap anywhere: massive damage + stun in a blast zone.' },
+    surge:  { name: 'OVERCLOCK SURGE', ico: '⚡', cost: 45, unlock: 8,
+      desc: 'All towers +80% damage, +30% fire rate for 6s.' },
+    patch:  { name: 'EMERGENCY PATCH', ico: '✚', cost: 60, unlock: 12,
+      desc: 'Instantly restore 4 Core Integrity.' },
+  };
+
+  // ------------------------------------------------------------------
+  // PROTOCOL CHIPS — pick 1 of 3 at level start, lasts the level
+  // ------------------------------------------------------------------
+  const CHIPS = [
+    { id: 'ap_rounds',  ico: '➶', name: 'AP Rounds',        desc: 'Sentry & Scanner damage +30%' },
+    { id: 'storm_coil', ico: '⌁', name: 'Storm Protocol',   desc: 'Pulse Coils chain to +2 extra targets' },
+    { id: 'napalm',     ico: '🔥', name: 'Napalm Payload',   desc: 'Mortar shells leave a burning field' },
+    { id: 'cryo',       ico: '❄', name: 'Cryo Injection',   desc: 'All slows 12% stronger' },
+    { id: 'bounty',     ico: '◎', name: 'Bounty Hunter',    desc: '+20% credits per kill' },
+    { id: 'interest',   ico: '％', name: 'Yield Farming',    desc: '+3% of held credits every wave' },
+    { id: 'fab',        ico: '▽', name: 'Rapid Fab',        desc: 'Towers 12% cheaper' },
+    { id: 'deadeye',    ico: '✜', name: 'Deadeye Firmware', desc: 'Critical hit chance +12%' },
+    { id: 'longshot',   ico: '⌖', name: 'Longshot Optics',  desc: 'Kernel Snipers +1.5 range' },
+    { id: 'overvolt',   ico: '⚡', name: 'Overvolt',         desc: 'All towers +10% fire rate' },
+    { id: 'warchest',   ico: '¤', name: 'War Chest',        desc: '+180 starting credits' },
+    { id: 'plating',    ico: '⬢', name: 'Reactive Plating', desc: '+6 Core Integrity now' },
+    { id: 'medic',      ico: '✚', name: 'Self-Repair',      desc: 'Restore 1 Integrity every wave cleared' },
+    { id: 'capacitor',  ico: '◍', name: 'Capacitor Bank',   desc: 'Abilities cost 30% less energy' },
+    { id: 'harvest',    ico: '⌂', name: 'Harvest Boost',    desc: 'Compute Farms +40% income' },
+  ];
+
+  // ------------------------------------------------------------------
+  // TIER-UP SPECIALIZATIONS — final upgrade forks into one of two paths
+  // mods multiply the tier-IV stats; flags add behavior
+  // ------------------------------------------------------------------
+  const BRANCHES = {
+    sentry:      [{ name: 'Gatling Array', ico: '≡', desc: 'Fire rate ×1.9, damage ×0.7',        mods: { rate: 1.9, dmg: 0.7 } },
+                  { name: 'Railgun',       ico: '⟶', desc: 'Damage ×2.1, pierces armor, slow',   mods: { dmg: 2.1, rate: 0.55, pierce: true } }],
+    scanner:     [{ name: 'Overscan',      ico: '◉', desc: 'Range ×1.4 — huge reveal umbrella',  mods: { range: 1.4 } },
+                  { name: 'Burst Array',   ico: '⋙', desc: 'Fire rate ×1.6',                     mods: { rate: 1.6 } }],
+    tarpit:      [{ name: 'Acid Pit',      ico: '☣', desc: 'Damage ×2',                          mods: { dmg: 2 } },
+                  { name: 'Superglue',     ico: '⊚', desc: 'Slow +15%, range ×1.2',              mods: { slowAdd: 0.15, range: 1.2 } }],
+    mortar:      [{ name: 'Napalm Shells', ico: '🔥', desc: 'Shells leave a burning field',       mods: { burn: true } },
+                  { name: 'Cluster Bomb',  ico: '✳', desc: 'Splash ×1.35, damage ×1.15',         mods: { splash: 1.35, dmg: 1.15 } }],
+    throttle:    [{ name: 'Stasis Field',  ico: '⧖', desc: 'Slow +12%',                          mods: { slowAdd: 0.12 } },
+                  { name: 'Wide Choke',    ico: '◯', desc: 'Range ×1.4',                         mods: { range: 1.4 } }],
+    farm:        [{ name: 'Bull Market',   ico: '↗', desc: 'Income ×1.5',                        mods: { income: 1.5 } },
+                  { name: 'Hedge Fund',    ico: '⊞', desc: 'Income ×1.2 and +2% interest',       mods: { income: 1.2, interest: 2 } }],
+    pulse:       [{ name: 'Chain Storm',   ico: '⌁', desc: '+3 chain targets',                   mods: { chainsAdd: 3 } },
+                  { name: 'Amplifier',     ico: '△', desc: 'Damage ×1.7',                        mods: { dmg: 1.7 } }],
+    sniper:      [{ name: 'Antimatter',    ico: '✦', desc: 'Damage ×1.8',                        mods: { dmg: 1.8 } },
+                  { name: 'Spotter Net',   ico: '⌖', desc: 'Fire rate ×1.7',                     mods: { rate: 1.7 } }],
+    overclock:   [{ name: 'Frenzy Core',   ico: '⚡', desc: 'Rate buff +25%',                     mods: { buffRateAdd: 0.25 } },
+                  { name: 'Power Core',    ico: '▲', desc: 'Damage buff +30%',                   mods: { buffDmgAdd: 0.30 } }],
+    lance:       [{ name: 'Focus Crystal', ico: '◆', desc: 'Beam ramps to ×3.5 damage',          mods: { rampMax: 3.5 } },
+                  { name: 'Wide Lens',     ico: '◇', desc: 'Range ×1.3, damage ×1.15',           mods: { range: 1.3, dmg: 1.15 } }],
+    emp:         [{ name: 'Ion Cascade',   ico: '✺', desc: 'Stun +0.6s',                         mods: { stunAdd: 0.6 } },
+                  { name: 'Pulsar',        ico: '◉', desc: 'Pulses 40% more often',              mods: { rate: 1.4 } }],
+    singularity: [{ name: 'Event Horizon', ico: '●', desc: 'Splash ×1.5',                        mods: { splash: 1.5 } },
+                  { name: 'Overmass',      ico: '◉', desc: 'Damage ×1.6',                        mods: { dmg: 1.6 } }],
+  };
+
+  return { VERSION, SECTORS, DIFFS, TOWERS, TOWER_ORDER, ENEMIES, BOSS_LEVELS, RESEARCH, ACHIEVEMENTS,
+           EVENTS, ABILITIES, CHIPS, BRANCHES };
 })();

@@ -38,12 +38,29 @@ const RENDER = (function () {
   function screenToCell(px, py) {
     return { x: Math.floor((px - OX) / T), y: Math.floor((py - OY) / T) };
   }
+  function screenToWorld(px, py) {
+    return { x: (px - OX) / T, y: (py - OY) / T };
+  }
+
+  // ambient drifting motes, rebuilt per level
+  let ambient = [];
+  function buildAmbient(lv) {
+    const r = UTIL.rng(lv.n * 977);
+    ambient = [];
+    for (let i = 0; i < 34; i++) {
+      ambient.push({
+        x: r() * lv.cols, y: r() * lv.rows,
+        s: 0.02 + r() * 0.05, size: 0.5 + r() * 1.6, a: 0.06 + r() * 0.12,
+      });
+    }
+  }
 
   // ================================================================ MAP LAYER
   function buildMap(game) {
     const lv = game.level;
     const sec = DATA.SECTORS[lv.sector];
     const w = Math.round(T * lv.cols * dpr), h = Math.round(T * lv.rows * dpr);
+    buildAmbient(lv);
     mapLayer = document.createElement('canvas');
     mapLayer.width = w; mapLayer.height = h;
     const c = mapLayer.getContext('2d');
@@ -378,15 +395,33 @@ const RENDER = (function () {
   function enemySprite(type) {
     const def = DATA.ENEMIES[type];
     const px = Math.max(20, T * def.size * 2.6);
-    return makeSprite('e_' + type + '_' + Math.round(px), px, c => drawEnemyShape(c, def.shape, def.color));
+    return makeSprite('e_' + type + '_' + Math.round(px), px, c => {
+      // drop shadow pass for depth, then the neon body
+      c.save();
+      c.translate(2.5, 3.5);
+      c.globalAlpha = 0.5;
+      drawEnemyShape(c, def.shape, '#000000');
+      c.restore();
+      c.globalAlpha = 1;
+      drawEnemyShape(c, def.shape, def.color);
+    });
   }
 
   // ---- tower drawing: base + head, in 100x100 space ----
   function drawTowerBase(c, def, tier) {
-    // platform
+    // platform with depth: shadow, gradient body, lit top edge
+    c.save();
+    c.translate(2, 3); c.globalAlpha = 0.45; c.fillStyle = '#000';
+    roundRect(c, -40, -40, 80, 80, 16); c.fill();
+    c.restore(); c.globalAlpha = 1;
     c.lineWidth = 4;
-    c.fillStyle = '#0d1526'; c.strokeStyle = 'rgba(140,190,255,0.35)';
+    const grd = c.createRadialGradient(0, -22, 8, 0, 6, 62);
+    grd.addColorStop(0, '#1c2c4e');
+    grd.addColorStop(1, '#0a1220');
+    c.fillStyle = grd; c.strokeStyle = 'rgba(140,190,255,0.35)';
     roundRect(c, -40, -40, 80, 80, 16); c.fill(); c.stroke();
+    c.strokeStyle = 'rgba(210,240,255,0.28)'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(-26, -38); c.lineTo(26, -38); c.stroke();
     neon(c, def.color, 8);
     c.globalAlpha = 0.6; c.lineWidth = 2.5;
     roundRect(c, -33, -33, 66, 66, 12); c.stroke();
@@ -526,6 +561,37 @@ const RENDER = (function () {
     // map
     if (mapLayer) ctx.drawImage(mapLayer, OX, OY, T * lv.cols, T * lv.rows);
 
+    // ambient drifting motes
+    ctx.globalCompositeOperation = 'lighter';
+    for (const m of ambient) {
+      const yy = (m.y + now * 0.0001 * (1 + m.s * 20)) % lv.rows;
+      ctx.globalAlpha = m.a * (0.7 + 0.3 * Math.sin(now * 0.001 + m.x * 7));
+      ctx.fillStyle = '#9fd4ff';
+      ctx.fillRect(sx(m.x), sy(yy), m.size, m.size);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+    // burning ground (napalm)
+    for (const b of g.burns) {
+      const flick = 0.75 + Math.sin(now * 0.02 + b.x * 13) * 0.25;
+      ctx.globalAlpha = 0.16 * flick * Math.min(1, b.t);
+      ctx.fillStyle = '#ff8a5c';
+      ctx.beginPath(); ctx.arc(sx(b.x), sy(b.y), b.r * T, 0, 7); ctx.fill();
+      ctx.globalAlpha = 0.35 * flick * Math.min(1, b.t);
+      ctx.strokeStyle = '#ffc14d'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(sx(b.x), sy(b.y), b.r * T * (0.75 + 0.15 * flick), 0, 7); ctx.stroke();
+      ctx.globalAlpha = 1;
+      if (Math.random() < 0.25 && g.particles.length < 280) {
+        const a = Math.random() * Math.PI * 2, rr = Math.random() * b.r;
+        g.particles.push({
+          x: b.x + Math.cos(a) * rr, y: b.y + Math.sin(a) * rr,
+          vx: 0, vy: -0.8 - Math.random(), life: 0.4, maxLife: 0.4,
+          size: 2 + Math.random() * 2, color: '#ffb74d',
+        });
+      }
+    }
+
     // animated data flow along path
     const flowN = Math.min(14, Math.floor(g.pathLen / 2));
     ctx.globalCompositeOperation = 'lighter';
@@ -590,10 +656,31 @@ const RENDER = (function () {
       ctx.drawImage(bs, px - sz / 2, py - sz / 2, sz, sz);
       ctx.save();
       ctx.translate(px, py);
-      if (DIRECTIONAL[tw.def.kind]) ctx.rotate(tw.aim);
-      else if (tw.def.kind === 'orb' || tw.def.kind === 'emp') ctx.rotate(tw.anim * 0.6);
+      if (DIRECTIONAL[tw.def.kind]) {
+        ctx.rotate(tw.aim);
+        if (tw.recoil > 0.02) ctx.translate(-tw.recoil * T * 0.09, 0); // recoil kick
+      } else if (tw.def.kind === 'orb' || tw.def.kind === 'emp') ctx.rotate(tw.anim * 0.6);
       ctx.drawImage(hs, -sz / 2, -sz / 2, sz, sz);
+      // muzzle flash
+      if (tw.flashT > 0 && DIRECTIONAL[tw.def.kind]) {
+        ctx.globalCompositeOperation = 'lighter';
+        const fr = T * (0.10 + tw.flashT * 1.3);
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(T * 0.4, 0, fr * 0.5, 0, 7); ctx.fill();
+        ctx.globalAlpha = 0.6; ctx.fillStyle = tw.def.color;
+        ctx.beginPath(); ctx.arc(T * 0.4, 0, fr, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
       ctx.restore();
+      // blackout marker
+      if (tw.disabledT > 0) {
+        ctx.fillStyle = 'rgba(5,7,13,0.62)';
+        ctx.beginPath(); ctx.arc(px, py, sz * 0.48, 0, 7); ctx.fill();
+        ctx.strokeStyle = '#ff3d71'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(px, py, sz * 0.3, 0, 7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px - sz * 0.21, py + sz * 0.21); ctx.lineTo(px + sz * 0.21, py - sz * 0.21); ctx.stroke();
+      }
       // beam draw
       if (tw.def.kind === 'beam' && tw.beamTarget && !tw.beamTarget.dead) {
         const t = tw.beamTarget;
@@ -676,9 +763,17 @@ const RENDER = (function () {
         ctx.globalAlpha = a * 0.55;
         ctx.fillStyle = f.color;
         ctx.beginPath(); ctx.arc(sx(f.x), sy(f.y), rr * T, 0, 7); ctx.fill();
+        ctx.globalAlpha = a * 0.85;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(sx(f.x), sy(f.y), rr * T * 0.38, 0, 7); ctx.fill();
         ctx.globalAlpha = a;
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6;
-        ctx.beginPath(); ctx.arc(sx(f.x), sy(f.y), rr * T * 1.1, 0, 7); ctx.stroke();
+        ctx.beginPath(); ctx.arc(sx(f.x), sy(f.y), rr * T * 1.15, 0, 7); ctx.stroke();
+      } else if (f.kind === 'flash') {
+        // full-screen pulse (boss spawn)
+        ctx.globalAlpha = a * 0.28;
+        ctx.fillStyle = f.color || '#fff';
+        ctx.fillRect(-20, -20, W + 40, H + 40);
       }
     }
     for (const p of g.particles) {
@@ -688,6 +783,19 @@ const RENDER = (function () {
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+
+    // damage / event text pops
+    for (const tx of g.texts) {
+      const a = UTIL.clamp(tx.t / tx.ttl, 0, 1);
+      ctx.globalAlpha = a;
+      ctx.font = '800 ' + Math.round(T * (tx.big ? 0.42 : 0.3)) + 'px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 3;
+      ctx.strokeText(tx.txt, sx(tx.x), sy(tx.y));
+      ctx.fillStyle = tx.color;
+      ctx.fillText(tx.txt, sx(tx.x), sy(tx.y));
+      ctx.globalAlpha = 1;
+    }
 
     // selection / placement
     if (g.placingType) drawPlacement(g);
@@ -721,6 +829,31 @@ const RENDER = (function () {
         ctx.stroke();
       }
       ctx.shadowBlur = 0;
+    }
+
+    // core-hit red vignette
+    if (g.hurtT > 0) {
+      const a = Math.min(1, g.hurtT * 2.2);
+      const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.72);
+      vg.addColorStop(0, 'rgba(255,30,70,0)');
+      vg.addColorStop(1, 'rgba(255,30,70,' + (0.34 * a).toFixed(3) + ')');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // orbital strike targeting hint
+    if (g.abilityTarget === 'strike') {
+      const pu = 1 + Math.sin(now * 0.012) * 0.12;
+      ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2;
+      ctx.setLineDash([8, 8]);
+      ctx.strokeRect(OX + 2, OY + 2, T * lv.cols - 4, T * lv.rows - 4);
+      ctx.setLineDash([]);
+      ctx.font = '800 ' + Math.round(14 * pu) + 'px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd166';
+      ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.lineWidth = 4;
+      ctx.strokeText('☄ TAP TO TARGET ORBITAL STRIKE', W / 2, OY + T * 1.1);
+      ctx.fillText('☄ TAP TO TARGET ORBITAL STRIKE', W / 2, OY + T * 1.1);
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // clear shake
@@ -765,6 +898,14 @@ const RENDER = (function () {
     let alpha = 1;
     if (e.stealthed) alpha = 0.15 + Math.sin(now * 0.006 + e.anim) * 0.05;
     else if (e.traits.stealth || e.traits.phaser) alpha = 0.7;
+    // engine trail for fliers and speeders
+    if (!e.stealthed && (e.flying || e.baseSpeed > 2) && Math.random() < 0.35 && e.g.particles.length < 280) {
+      e.g.particles.push({
+        x: e.x - Math.cos(e.angle) * e.size, y: e.y - Math.sin(e.angle) * e.size,
+        vx: -Math.cos(e.angle) * 0.6, vy: -Math.sin(e.angle) * 0.6,
+        life: 0.3, maxLife: 0.3, size: 2.4, color: e.def.color,
+      });
+    }
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(px, py);
@@ -774,6 +915,15 @@ const RENDER = (function () {
     const sc = 1 + Math.sin(e.anim * 5) * 0.04;
     ctx.drawImage(spr, -dim / 2 * sc, -dim / 2 * sc, dim * sc, dim * sc);
     ctx.restore();
+    // boss menace ring
+    if (e.isBoss && !e.stealthed) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.35 + Math.sin(now * 0.006) * 0.15;
+      ctx.strokeStyle = e.def.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py, dim * 0.72, now * 0.002, now * 0.002 + 4.4); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
 
     // elite crown
     if (e.elite) {
@@ -853,5 +1003,5 @@ const RENDER = (function () {
     }
   }
 
-  return { setup, resize, frame, screenToCell, paintTowerIcon, paintEnemyIcon, get T() { return T; } };
+  return { setup, resize, frame, screenToCell, screenToWorld, paintTowerIcon, paintEnemyIcon, get T() { return T; } };
 })();

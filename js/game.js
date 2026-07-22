@@ -18,6 +18,14 @@ const GAME = (function () {
     stats: { kills: 0, leaked: 0, built: 0 },
     seenThisRun: {},
     time: 0,
+    // fun systems
+    energy: 30, surgeT: 0, abilityTarget: null,
+    chips: [], chipChoices: [],
+    combo: 0, comboT: 0, comboPeak: 0, waveLeaks: 0,
+    rushBase: 0, rushT: 0,
+    burns: [], texts: [],
+    curEvent: null, evSpeedMult: 1, evRegen: 0, evComboMult: 1,
+    slowmoT: 0, endDelay: 0, hurtT: 0, autoT2: 0,
   };
 
   let rafId = null, lastT = 0;
@@ -44,6 +52,25 @@ const GAME = (function () {
     g.stats = { kills: 0, leaked: 0, built: 0 };
     g.seenThisRun = {};
     g.time = 0;
+    g.energy = 30; g.surgeT = 0; g.abilityTarget = null;
+    g.chips = []; g.chipChoices = [];
+    g.combo = 0; g.comboT = 0; g.comboPeak = 0; g.waveLeaks = 0;
+    g.rushBase = 0; g.rushT = 0;
+    g.burns = []; g.texts = [];
+    g.curEvent = null; g.evSpeedMult = 1; g.evRegen = 0; g.evComboMult = 1;
+    g.slowmoT = 0; g.endDelay = 0; g.hurtT = 0; g.autoT2 = 0;
+
+    // offer 1-of-3 protocol chips, seeded per attempt
+    SAVE.state.stats.attempts = (SAVE.state.stats.attempts || 0) + 1;
+    SAVE.persist();
+    const cr = UTIL.rng(0xC419 + levelN * 733 + SAVE.state.stats.attempts * 97);
+    const pool = DATA.CHIPS.filter(c => c.id !== 'capacitor' || levelN >= 4); // abilities exist from L4
+    const picks = [];
+    while (picks.length < 3 && picks.length < pool.length) {
+      const c = pool[Math.floor(cr() * pool.length)];
+      if (!picks.includes(c)) picks.push(c);
+    }
+    g.chipChoices = picks;
     g.pathLen = g.level.path.length - 1;
     for (const b of g.level.blocks) g.grid[b.x + ',' + b.y] = 'block';
     for (const p of g.level.path) g.grid[p.x + ',' + p.y] = 'path';
@@ -53,6 +80,7 @@ const GAME = (function () {
     UI.enterGame();
     UI.updateHUD();
     UI.phaseBanner('DEPLOY PHASE — WAVE 1 INCOMING', false);
+    UI.showChipPicker(g.chipChoices);
 
     // new tower unlocks at this level
     const newT = MAPS.newTowersAt(levelN);
@@ -88,9 +116,20 @@ const GAME = (function () {
     };
   }
 
+  // ================================================================ CHIPS
+  function chipHas(id) { return g.chips.indexOf(id) >= 0; }
+  function pickChip(id) {
+    g.chips.push(id);
+    if (id === 'warchest') g.cash += 180;
+    if (id === 'plating') { g.maxLives += 6; g.lives += 6; }
+    UI.updateHUD();
+  }
+
   // ================================================================ ECONOMY
   function towerCost(type) {
-    return Math.round(DATA.TOWERS[type].levels[0].cost * (1 - SAVE.researchValue('discount') / 100));
+    let c = DATA.TOWERS[type].levels[0].cost * (1 - SAVE.researchValue('discount') / 100);
+    if (chipHas('fab')) c *= 0.88;
+    return Math.round(c);
   }
 
   function placeTower(type, x, y) {
@@ -113,13 +152,16 @@ const GAME = (function () {
     return true;
   }
 
-  function upgradeTower(tw) {
+  function upgradeTower(tw, branchIdx) {
     if (g.phase !== 'build') { UI.toast('CANNOT UPGRADE DURING A WAVE', 'warn'); AUDIO.sfx.error(); return false; }
     const cost = tw.upgradeCost();
     if (cost === null || g.cash < cost) { AUDIO.sfx.error(); return false; }
+    // final tier is a specialization: a branch must be chosen
+    if (tw.tier === 2 && DATA.BRANCHES[tw.type] && branchIdx === undefined) { AUDIO.sfx.error(); return false; }
     g.cash -= cost;
     tw.invested += cost;
     tw.tier++;
+    if (tw.tier === 3 && branchIdx !== undefined) tw.branch = branchIdx;
     recomputeBuffs();
     SAVE.addStat('upgradesBought', 1);
     if (tw.tier >= 3) SAVE.maxStat('maxTier', 1);
@@ -146,7 +188,7 @@ const GAME = (function () {
     for (const tw of g.towers) { tw.buffDmg = 0; tw.buffRate = 0; }
     for (const oc of g.towers) {
       if (oc.def.kind !== 'buffaura') continue;
-      const s = oc.def.levels[oc.tier];
+      const s = oc.stats(); // includes branch bonuses
       for (const tw of g.towers) {
         if (tw === oc || tw.def.kind === 'buffaura' || tw.def.kind === 'income') continue;
         if (UTIL.dist2(oc.x, oc.y, tw.x, tw.y) <= s.range * s.range) {
@@ -161,8 +203,8 @@ const GAME = (function () {
   function auraSlowAt(x, y) {
     let slow = 0;
     for (const tw of g.towers) {
-      if (tw.def.kind !== 'slowaura') continue;
-      const s = tw.def.levels[tw.tier];
+      if (tw.def.kind !== 'slowaura' || tw.disabledT > 0) continue;
+      const s = tw.stats(); // includes branch + cryo chip
       if (UTIL.dist2(tw.x, tw.y, x, y) <= s.range * s.range) slow = Math.max(slow, s.slow);
     }
     return slow;
@@ -171,27 +213,73 @@ const GAME = (function () {
   // ================================================================ WAVES
   function startWave() {
     if (g.phase !== 'build') return;
+    // rush bonus: the sooner you start, the more you bank
+    if (g.rushT > 0 && g.rushBase > 0) {
+      const bonus = Math.ceil(g.rushBase * (g.rushT / 22));
+      if (bonus > 0) { g.cash += bonus; UI.toast('RUSH BONUS +¤' + bonus, 'warn'); AUDIO.sfx.cash(); }
+    }
+    g.rushT = 0; g.rushBase = 0;
+
     const w = WAVES.build(g.levelN, g.wave, g.totalWaves, g.diff);
-    g.bountyMult = w.bounty * (1 + SAVE.researchValue('bounty') / 100);
+    g.bountyMult = w.bounty * (1 + SAVE.researchValue('bounty') / 100) * (chipHas('bounty') ? 1.2 : 1);
     g.spawnQueue = w.events.slice();
     g.spawnT = 0;
     g.phase = 'combat';
+    g.waveLeaks = 0; g.combo = 0; g.comboPeak = 0;
     for (const tw of g.towers) tw.fresh = false;
     g.placingType = null; g.placeCell = null;
+
+    // wave event
+    g.curEvent = w.event || null;
+    g.evSpeedMult = 1; g.evRegen = 0; g.evComboMult = 1;
+    if (g.curEvent) {
+      const ev = DATA.EVENTS[g.curEvent];
+      if (ev.speed) g.evSpeedMult = ev.speed;
+      if (ev.regen) g.evRegen = ev.regen;
+      if (ev.comboMult) g.evComboMult = ev.comboMult;
+      if (ev.blackout && g.towers.length) {
+        const victims = g.towers.filter(t => t.def.kind !== 'income');
+        if (victims.length) {
+          const v = victims[Math.floor(Math.random() * victims.length)];
+          v.disabledT = 9999;
+          fxRing(v.x, v.y, 0.8, '#ff3d71');
+        }
+      }
+      UI.phaseBanner(ev.ico + ' ' + ev.name + ' — ' + ev.desc, true);
+    } else {
+      UI.phaseBanner('WAVE ' + g.wave + (g.wave > g.totalWaves ? ' — OVERTIME' : ''), false);
+    }
     UI.closeSheets();
-    UI.phaseBanner('WAVE ' + g.wave + (g.wave > g.totalWaves ? ' — OVERTIME' : ''), false);
     UI.updateHUD();
     AUDIO.sfx.waveStart();
   }
 
   function endWave() {
+    // clear event effects
+    g.curEvent = null; g.evSpeedMult = 1; g.evRegen = 0; g.evComboMult = 1;
+    for (const tw of g.towers) tw.disabledT = 0;
+    g.burns = [];
+
     // payouts
     let income = WAVES.waveEndBonus(g.levelN, g.wave);
+    let interestPct = SAVE.researchValue('interest') + (chipHas('interest') ? 3 : 0);
     for (const tw of g.towers) {
-      if (tw.def.kind === 'income') income += tw.def.levels[tw.tier].income;
+      if (tw.def.kind === 'income') {
+        const s = tw.stats();
+        income += s.income;
+        interestPct += s.interest || 0;
+      }
     }
-    const interest = Math.floor(g.cash * SAVE.researchValue('interest') / 100);
+    const interest = Math.floor(g.cash * Math.min(12, interestPct) / 100);
     g.cash += income + interest;
+
+    // perfect wave grade
+    if (g.waveLeaks === 0 && g.stats.kills > 0) {
+      const perfect = 10 + g.wave * 2 + g.levelN;
+      g.cash += perfect;
+      UI.toast('★ PERFECT WAVE +¤' + perfect, 'warn');
+    }
+    if (chipHas('medic') && g.lives < g.maxLives) g.lives++;
     SAVE.addStat('cashEarned', income + interest);
     SAVE.maxStat('maxCash', g.cash);
     SAVE.addStat('wavesCleared', 1);
@@ -217,6 +305,8 @@ const GAME = (function () {
     }
 
     g.phase = 'build';
+    g.rushBase = 18 + g.wave * 5 + g.levelN * 2;
+    g.rushT = 22;
     UI.phaseBanner('WAVE CLEARED  ·  +' + UTIL.fmt(income + interest) + ' ¤  ·  DEPLOY PHASE', false);
     UI.updateHUD();
     UI.checkAchToasts();
@@ -250,8 +340,14 @@ const GAME = (function () {
   // ================================================================ SPAWN & COMBAT
   function spawnEnemy(type, hpMult, opts) {
     const e = new Enemy(g, type, hpMult, opts);
+    if (g.evSpeedMult !== 1) e.baseSpeed *= g.evSpeedMult;
+    if (g.evRegen) e.regenBonus = g.evRegen * hpMult;
     g.enemies.push(e);
-    if (e.isBoss) { g.bossEnemy = e; UI.bossBar(e); }
+    if (e.isBoss) {
+      g.bossEnemy = e; UI.bossBar(e);
+      g.fx.push({ kind: 'flash', ttl: 0.3, t: 0.3, color: '#ff3d71' });
+      shake(7);
+    }
     if (!SAVE.state.seenEnemies[type] && !g.seenThisRun[type]) {
       g.seenThisRun[type] = true;
       SAVE.markSeen(type);
@@ -265,11 +361,26 @@ const GAME = (function () {
   }
 
   function onEnemyKilled(e, source) {
-    if (e.bounty) { g.cash += e.bounty; }
+    // combo: kills in quick succession pay extra
+    g.combo++;
+    g.comboT = 1.6;
+    if (g.combo > g.comboPeak) g.comboPeak = g.combo;
+    const comboBonus = Math.min(0.5, g.combo * 0.012) * g.evComboMult;
+    if (e.bounty) { g.cash += Math.round(e.bounty * (1 + comboBonus)); }
+    // ability energy from kills
+    g.energy = Math.min(100, g.energy + 1 + (e.def.threat || 2) * 0.05);
     g.stats.kills++;
     SAVE.addStat('kills', 1);
     if (source instanceof Tower) source.kills++;
-    fxHit(e.x, e.y, e.def.color, e.isBoss ? 26 : 7);
+    // shatter burst
+    fxHit(e.x, e.y, e.def.color, e.isBoss ? 30 : 10);
+    fxRing(e.x, e.y, e.size * 1.6, e.def.color);
+    // final kill of the wave: slow-mo finish
+    if (g.phase === 'combat' && !g.spawnQueue.length) {
+      let alive = 0;
+      for (const o of g.enemies) if (!o.dead && o !== e) alive++;
+      if (alive === 0) g.slowmoT = 0.55;
+    }
     if (e.isBoss) {
       SAVE.addStat('bossKills', 1);
       shake(9);
@@ -296,6 +407,8 @@ const GAME = (function () {
   function onLeak(e) {
     g.lives -= e.dmg;
     g.stats.leaked++;
+    g.waveLeaks++;
+    g.hurtT = 0.5;
     SAVE.addStat('leaks', 1);
     if (e.traits.leech) {
       g.cash = Math.max(0, g.cash - e.traits.leech);
@@ -333,6 +446,86 @@ const GAME = (function () {
   }
   function shake(mag) { g.shakeT = 0.3; g.shakeMag = mag; }
 
+  function fxText(x, y, txt, color, big) {
+    if (g.texts.length > 24) g.texts.shift();
+    g.texts.push({ x, y, txt: String(txt), color: color || '#fff', big: !!big, t: 0.9, ttl: 0.9 });
+  }
+  function addBurn(x, y, r, dps, dur) {
+    if (g.burns.length > 12) g.burns.shift();
+    g.burns.push({ x, y, r, dps, t: dur });
+  }
+
+  // ================================================================ ABILITIES
+  function abilityCost(key) {
+    const c = DATA.ABILITIES[key].cost;
+    return Math.round(c * (chipHas('capacitor') ? 0.7 : 1));
+  }
+  function abilityReady(key) {
+    return g.levelN >= DATA.ABILITIES[key].unlock && g.energy >= abilityCost(key);
+  }
+  function castAbility(key) {
+    if (!abilityReady(key)) { AUDIO.sfx.error(); return false; }
+    if (key === 'strike') {
+      // enters targeting mode; energy spent on impact
+      g.abilityTarget = g.abilityTarget === 'strike' ? null : 'strike';
+      UI.refreshAbilities();
+      AUDIO.sfx.click();
+      return true;
+    }
+    g.energy -= abilityCost(key);
+    if (key === 'surge') {
+      g.surgeT = 6;
+      fxRing(g.level.cols / 2, g.level.rows / 2, 3, '#ffe07a');
+      UI.toast('⚡ OVERCLOCK SURGE', 'warn');
+      AUDIO.sfx.upgrade();
+      shake(4);
+    } else if (key === 'patch') {
+      g.lives = Math.min(g.maxLives, g.lives + 4);
+      UI.toast('✚ CORE PATCHED +4', 'warn');
+      AUDIO.sfx.waveClear();
+    }
+    UI.updateHUD(); UI.refreshAbilities();
+    return true;
+  }
+  function doStrike(x, y) {
+    if (!abilityReady('strike')) { g.abilityTarget = null; UI.refreshAbilities(); return; }
+    g.energy -= abilityCost('strike');
+    g.abilityTarget = null;
+    const dmg = 130 * (1 + 0.09 * g.levelN);
+    const r = 1.8;
+    for (const e of g.enemies) {
+      if (e.dead || e.y < 0) continue;
+      if (UTIL.dist2(x, y, e.x, e.y) <= (r + e.size) * (r + e.size)) {
+        e.hurt(dmg, { pierce: true, source: null });
+        if (!e.dead) e.applyStun(0.8);
+      }
+    }
+    fxBoom(x, y, r, '#ffd166');
+    fxRing(x, y, r * 1.3, '#fff');
+    fxText(x, y, 'ORBITAL STRIKE', '#ffd166', true);
+    shake(9);
+    AUDIO.sfx.bossDie();
+    UI.updateHUD(); UI.refreshAbilities();
+  }
+  function autocast() {
+    if (!SAVE.state.settings.autocast || g.phase !== 'combat') return;
+    let alive = 0;
+    for (const e of g.enemies) if (!e.dead && e.y > 0) alive++;
+    if (g.levelN >= 12 && g.lives <= g.maxLives * 0.6 && abilityReady('patch')) { castAbility('patch'); return; }
+    if (g.levelN >= 8 && alive >= 10 && abilityReady('surge') && g.surgeT <= 0) { castAbility('surge'); return; }
+    if (g.levelN >= 4 && alive >= 6 && abilityReady('strike')) {
+      // densest cluster: enemy with most neighbors within 1.5 tiles
+      let best = null, bestN = 2;
+      for (const e of g.enemies) {
+        if (e.dead || e.y < 0) continue;
+        let n = 0;
+        for (const o of g.enemies) if (!o.dead && o.y > 0 && UTIL.dist2(e.x, e.y, o.x, o.y) < 2.25) n++;
+        if (n > bestN) { bestN = n; best = e; }
+      }
+      if (best) doStrike(best.x, best.y);
+    }
+  }
+
   // ================================================================ LOOP
   function loop(now) {
     rafId = g.active ? requestAnimationFrame(loop) : null;
@@ -341,6 +534,7 @@ const GAME = (function () {
     lastT = now;
     if (!g.paused && (g.phase === 'combat' || g.phase === 'build')) {
       let simDt = dt * g.speed;
+      if (g.slowmoT > 0) { simDt *= 0.3; g.slowmoT -= dt; } // cinematic last-kill
       while (simDt > 0) {
         const step = Math.min(simDt, 1 / 30);
         update(step);
@@ -359,6 +553,7 @@ const GAME = (function () {
         g.autoT -= dt;
         if (g.autoT <= 0) { delete g.autoT; startWave(); }
       }
+      if (g.rushT > 0) g.rushT -= dt;
       tickFx(dt);
       return;
     }
@@ -413,15 +608,40 @@ const GAME = (function () {
       if (g.projectiles[i].dead) g.projectiles.splice(i, 1);
     }
 
+    // combo decay / surge timer / burn fields / autocast
+    if (g.comboT > 0) { g.comboT -= dt; if (g.comboT <= 0) g.combo = 0; }
+    if (g.surgeT > 0) g.surgeT -= dt;
+    for (let i = g.burns.length - 1; i >= 0; i--) {
+      const b = g.burns[i];
+      b.t -= dt;
+      if (b.t <= 0) { g.burns.splice(i, 1); continue; }
+      for (const e of g.enemies) {
+        if (e.dead || e.flying || e.y < 0) continue;
+        if (UTIL.dist2(b.x, b.y, e.x, e.y) <= b.r * b.r) e.hurt(b.dps * dt, { noArmor: true });
+      }
+    }
+    g.autoT2 -= dt;
+    if (g.autoT2 <= 0) { g.autoT2 = 0.8; autocast(); }
+
     tickFx(dt);
 
     if (g.phase === 'combat' && !g.spawnQueue.length && !g.enemies.length) {
-      endWave();
+      g.endDelay += dt;
+      if (g.endDelay > 0.45) { g.endDelay = 0; endWave(); }
+    } else {
+      g.endDelay = 0;
     }
   }
 
   function tickFx(dt) {
     if (g.shakeT > 0) g.shakeT -= dt;
+    if (g.hurtT > 0) g.hurtT -= dt;
+    for (let i = g.texts.length - 1; i >= 0; i--) {
+      const tx = g.texts[i];
+      tx.t -= dt;
+      tx.y -= dt * 0.6;
+      if (tx.t <= 0) g.texts.splice(i, 1);
+    }
     for (let i = g.fx.length - 1; i >= 0; i--) {
       g.fx[i].t -= dt;
       if (g.fx[i].t <= 0) g.fx.splice(i, 1);
@@ -449,7 +669,11 @@ const GAME = (function () {
   g.spawnEnemy = spawnEnemy; g.onEnemyKilled = onEnemyKilled;
   g.auraSlowAt = auraSlowAt;
   g.fxLine = fxLine; g.fxRing = fxRing; g.fxBoom = fxBoom; g.fxHit = fxHit;
+  g.fxText = fxText; g.addBurn = addBurn;
   g.shake = shake;
+  g.chipHas = chipHas; g.pickChip = pickChip;
+  g.abilityCost = abilityCost; g.abilityReady = abilityReady;
+  g.castAbility = castAbility; g.doStrike = doStrike;
   g.toast = (m, k) => UI.toast(m, k);
   return g;
 })();
