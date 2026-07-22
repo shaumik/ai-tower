@@ -392,13 +392,13 @@ const UI = (function () {
     RENDER.paintTowerIcon(cv, id, 0);
     head.appendChild(cv);
     const hd = UTIL.h('div');
-    hd.appendChild(UTIL.h('div', 'tp-title', t.name + ' — ¤' + GAME.towerCost(id)));
+    hd.appendChild(UTIL.h('div', 'tp-title', 'DEPLOYING: ' + t.name + ' — ¤' + GAME.towerCost(id)));
     hd.appendChild(UTIL.h('div', 'tp-tier', t.air ? 'TARGETS GROUND + AIR' : 'GROUND ONLY'));
     head.appendChild(hd);
     body.appendChild(head);
     body.appendChild(UTIL.h('div', 'tp-upnext', t.desc));
     body.appendChild(UTIL.h('div', 'tp-stats', statChips(l0)));
-    body.appendChild(UTIL.h('div', 'tp-upnext', 'Tap or drag on the grid to position, then hit ✓ DEPLOY.'));
+    body.appendChild(UTIL.h('div', 'tp-upnext', 'Tap or drag on the grid to position, then hit ✓ DEPLOY. Misplaced? Selling before the wave starts refunds 100%.'));
     const x = UTIL.h('button', 'sheet-close', '✕');
     x.onclick = cancelPlacement;
     body.appendChild(x);
@@ -473,10 +473,13 @@ const UI = (function () {
     }
 
     const refund = tw.fresh ? tw.invested : tw.sellValue();
-    const sell = UTIL.h('button', 'btn btn-danger', '✕ ¤' + refund);
+    const sell = UTIL.h('button', 'btn btn-danger', tw.fresh ? '↩ UNDO ¤' + refund : '✕ SELL ¤' + refund);
     sell.disabled = GAME.phase !== 'build';
     sell.onclick = () => { if (GAME.sellTower(tw)) closeSheets(); };
     row.appendChild(sell);
+    if (tw.fresh) {
+      body.appendChild(UTIL.h('div', 'tp-upnext', 'Fresh deployment — UNDO refunds the full ¤' + refund + ' until the wave starts.'));
+    }
     body.appendChild(row);
     if (GAME.phase !== 'build') {
       body.appendChild(UTIL.h('div', 'tp-upnext', '⏳ Wave in progress — modifications locked until deploy phase.'));
@@ -578,11 +581,16 @@ const UI = (function () {
     refreshPlaceActions();
   }
 
+  let undoHintShown = false;
   function confirmPlacement() {
     const g = GAME;
     if (!g.placingType || !g.placeCell) return;
     if (g.placeTower(g.placingType, g.placeCell.x, g.placeCell.y)) {
       g.placeCell = null;
+      if (!undoHintShown) {
+        undoHintShown = true;
+        toast('DEPLOYED — misplaced? Tap it → UNDO for a full refund', 'warn');
+      }
       // keep placing while affordable for rapid multi-build
       if (g.cash < g.towerCost(g.placingType)) cancelPlacement();
       else { refreshBuildBarState(); refreshPlaceActions(); }
