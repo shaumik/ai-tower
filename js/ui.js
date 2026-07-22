@@ -659,6 +659,13 @@ const UI = (function () {
     const active = !!(g.active && g.placingType && g.placeCell && g.phase === 'build');
     box.classList.toggle('show', !!(g.active && g.placingType && g.phase === 'build'));
     if (!g.placingType) return;
+    // dodge the card away from the tile being placed
+    if (g.placeCell) {
+      const p = RENDER.cellToScreen(g.placeCell.x, g.placeCell.y);
+      box.classList.toggle('top', p.y > window.innerHeight * 0.52);
+    } else {
+      box.classList.remove('top');
+    }
     const ok = $('btn-place-ok');
     const cost = g.towerCost(g.placingType);
     const valid = active && g.cellFree(g.placeCell.x, g.placeCell.y) && g.cash >= cost;

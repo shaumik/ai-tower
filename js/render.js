@@ -41,6 +41,9 @@ const RENDER = (function () {
   function screenToWorld(px, py) {
     return { x: (px - OX) / T, y: (py - OY) / T };
   }
+  function cellToScreen(cx, cy) {
+    return { x: OX + cx * T, y: OY + cy * T };
+  }
 
   // ambient drifting motes, rebuilt per level
   let ambient = [];
@@ -1003,5 +1006,5 @@ const RENDER = (function () {
     }
   }
 
-  return { setup, resize, frame, screenToCell, screenToWorld, paintTowerIcon, paintEnemyIcon, get T() { return T; } };
+  return { setup, resize, frame, screenToCell, screenToWorld, cellToScreen, paintTowerIcon, paintEnemyIcon, get T() { return T; } };
 })();

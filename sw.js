@@ -1,5 +1,5 @@
 /* NEURAL SIEGE — service worker: cache-first for full offline play */
-const CACHE = 'neural-siege-v6';
+const CACHE = 'neural-siege-v7';
 const ASSETS = [
   './',
   './index.html',
