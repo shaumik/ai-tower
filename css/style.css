@@ -199,7 +199,7 @@ button { font-family:inherit; }
 #boss-bar-fill { height:100%; width:100%; background:linear-gradient(90deg,#ff3d71,#ff8a5c); transition:width .15s; }
 
 #combo-ind {
-  position:absolute; top:calc(env(safe-area-inset-top) + 92px); right:14px; z-index:9;
+  position:absolute; top:calc(env(safe-area-inset-top) + 58px); right:14px; z-index:9;
   font-size:15px; font-weight:900; letter-spacing:1px; color:#ffd166;
   text-shadow:0 0 12px rgba(255,209,102,.8); opacity:0; transition:opacity .2s, transform .1s;
   pointer-events:none; transform-origin:right center; white-space:nowrap;
@@ -207,7 +207,7 @@ button { font-family:inherit; }
 #combo-ind.show { opacity:1; }
 
 #chip-ind {
-  position:absolute; top:calc(env(safe-area-inset-top) + 92px); left:12px; z-index:9;
+  position:absolute; top:calc(env(safe-area-inset-top) + 58px); left:12px; z-index:9;
   display:none; align-items:center; justify-content:center; gap:4px;
   min-width:34px; height:34px; padding:0 8px; border-radius:17px;
   background:rgba(11,21,38,.92); border:1px solid #d9a441; color:#ffd166;

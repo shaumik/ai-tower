@@ -26,7 +26,9 @@ const RENDER = (function () {
       const availW = W - 8, availH = H - TOP_MARGIN - BOTTOM_MARGIN;
       T = Math.min(availW / lv.cols, availH / lv.rows);
       OX = (W - T * lv.cols) / 2;
-      OY = TOP_MARGIN + (availH - T * lv.rows) / 2;
+      // anchor the board just under the HUD; spare height goes to the bottom
+      const slack = availH - T * lv.rows;
+      OY = TOP_MARGIN + Math.min(slack * 0.18, 24);
       for (const k in sprites) delete sprites[k]; // rebuild at new scale
       buildMap(game);
     }
