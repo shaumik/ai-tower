@@ -248,6 +248,9 @@ const GAME = (function () {
         }
       }
       UI.phaseBanner(ev.ico + ' ' + ev.name + ' — ' + ev.desc, true);
+    } else if (w.formation) {
+      const f = WAVES.formationInfo(w.formation);
+      UI.phaseBanner(f.ico + ' ' + f.name + ' — ' + f.desc, true);
     } else {
       UI.phaseBanner('WAVE ' + g.wave + (g.wave > g.totalWaves ? ' — OVERTIME' : ''), false);
     }

@@ -300,13 +300,16 @@ const UI = (function () {
       sw.classList.remove('hidden');
       const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff);
       const rush = g.rushT > 0 && g.rushBase > 0 ? Math.ceil(g.rushBase * (g.rushT / 22)) : 0;
-      const evTag = prev.event ? ' <span style="color:#ffd166">' + DATA.EVENTS[prev.event].ico + ' ' + DATA.EVENTS[prev.event].name + '</span>' : '';
+      const fInfo = prev.formation ? WAVES.formationInfo(prev.formation) : null;
+      const tag = prev.event
+        ? ' <span style="color:#ffd166">' + DATA.EVENTS[prev.event].ico + ' ' + DATA.EVENTS[prev.event].name + '</span>'
+        : (fInfo ? ' <span style="color:#ff8aa8">' + fInfo.ico + ' ' + fInfo.name + '</span>' : '');
       sw.innerHTML = '▶ START WAVE ' + g.wave +
-        (rush > 0 ? ' <span style="color:#ffd166">+¤' + rush + '</span>' : '') + evTag +
+        (rush > 0 ? ' <span style="color:#ffd166">+¤' + rush + '</span>' : '') + tag +
         '<br><span style="font-size:10px;font-weight:400;opacity:.75">' +
         prev.list.slice(0, 3).map(p => p.count + '× ' + DATA.ENEMIES[p.type].name).join(', ') +
         (prev.list.length > 3 ? ' +' : '') +
-        (prev.event ? ' · ' + DATA.EVENTS[prev.event].desc : '') + '</span>';
+        (prev.event ? ' · ' + DATA.EVENTS[prev.event].desc : (fInfo ? ' · ' + fInfo.desc : '')) + '</span>';
     } else {
       sw.classList.add('hidden');
     }

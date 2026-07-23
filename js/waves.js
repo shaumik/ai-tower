@@ -15,6 +15,17 @@ const WAVES = (function () {
     return (1 + 0.018 * level) * diff.bountyMult * (1 - 0.30 * Math.min(1, p || 0));
   }
 
+  // Themed wave formations: each asks a different question of your build
+  const FORMATIONS = {
+    rush:    { name: 'SPEED RUSH',   ico: '»', desc: 'Fast movers only',            match: e => e.speed >= 1.7, budgetMult: 1.0, hpMult: 0.85 },
+    horde:   { name: 'HORDE',        ico: '≋', desc: 'A flood of light units',      match: e => e.threat <= 4,  budgetMult: 1.5, hpMult: 0.75 },
+    siege:   { name: 'SIEGE COLUMN', ico: '▣', desc: 'Few, massive, armored',       match: e => e.hp >= 70,     budgetMult: 0.8, hpMult: 1.2 },
+    airraid: { name: 'AIR RAID',     ico: '✈', desc: 'Airborne assault',            match: e => e.traits && e.traits.flying },
+    phantom: { name: 'PHANTOM OPS',  ico: '◌', desc: 'Stealth infiltration',        match: e => e.traits && e.traits.stealth },
+  };
+  // formation display data for the UI
+  function formationInfo(key) { return FORMATIONS[key] || null; }
+
   // Build the spawn schedule for one wave: array of {delay, type, hpMult, banner}
   function build(level, wave, totalWaves, diff) {
     const r = UTIL.rng(0xBEEF + level * 10007 + wave * 271);
@@ -24,11 +35,17 @@ const WAVES = (function () {
     const isEliteWave = !isBossWave && wave === totalWaves;
     let hs = hpScale(level, wave, diffDef.hpMult, totalWaves);
 
-    // seeded wave event roll (never on wave 1-3 or boss waves)
-    let event = null;
-    if (!isBossWave && wave >= 3 && r() < 0.24) {
-      const keys = Object.keys(DATA.EVENTS);
-      event = keys[Math.floor(r() * keys.length)];
+    // themed formation roll first, else a wave event (never both, never on bosses)
+    let event = null, formation = null;
+    if (!isBossWave && wave >= 3) {
+      const roll = r();
+      if (roll < 0.35) {
+        const fkeys = Object.keys(FORMATIONS);
+        formation = fkeys[Math.floor(r() * fkeys.length)];
+      } else if (roll < 0.60) {
+        const keys = Object.keys(DATA.EVENTS);
+        event = keys[Math.floor(r() * keys.length)];
+      }
     }
     const ev = event ? DATA.EVENTS[event] : null;
     if (ev && ev.hpMult) hs *= ev.hpMult;
@@ -44,7 +61,16 @@ const WAVES = (function () {
     if (wave > totalWaves) budget *= Math.pow(1.13, wave - totalWaves); // endless overtime compounds
 
     // pool of unlocked enemy types, weighted toward recent unlocks
-    const pool = MAPS.unlockedEnemies(level);
+    let pool = MAPS.unlockedEnemies(level);
+    let fdef = formation ? FORMATIONS[formation] : null;
+    if (fdef) {
+      const sub = pool.filter(id => fdef.match(DATA.ENEMIES[id]));
+      if (sub.length >= 1) {
+        pool = sub;
+        if (fdef.budgetMult) budget *= fdef.budgetMult;
+        if (fdef.hpMult) hs *= fdef.hpMult;
+      } else { formation = null; fdef = null; }
+    }
     const weights = pool.map(id => {
       const e = DATA.ENEMIES[id];
       let w = 1 + 2.4 * Math.exp(-(level - e.unlock) / 6);
@@ -60,9 +86,11 @@ const WAVES = (function () {
       const share = budget * (0.25 + r() * 0.4);
       let count = Math.max(1, Math.min(26, Math.round(share / e.threat)));
       if (type === 'swarmling') count = Math.min(34, count * 2);
-      // specialists (stealth/flying) arrive as squads, never as the whole wave
+      // specialists (stealth/flying) arrive as squads, never as the whole wave —
+      // unless this IS an air raid / phantom ops formation
       const tr = e.traits || {};
-      if (tr.stealth || tr.flying) count = Math.min(count, 3 + Math.floor(wave / 3));
+      if ((tr.stealth || tr.flying) && !fdef) count = Math.min(count, 3 + Math.floor(wave / 3));
+      if (fdef && (tr.stealth || tr.flying)) count = Math.min(count, 9 + Math.floor(wave / 2));
       budget -= count * e.threat;
       const gap = UTIL.clamp(0.9 / e.speed * (e.size + 0.55), 0.26, 0.95);
       for (let i = 0; i < count; i++) {
@@ -102,7 +130,7 @@ const WAVES = (function () {
     return {
       events,
       bounty: bountyScale(level, diffDef, p) * (ev && ev.bounty ? ev.bounty : 1),
-      event,
+      event, formation,
     };
   }
 
@@ -115,12 +143,12 @@ const WAVES = (function () {
       if (!seen[ev.type]) { seen[ev.type] = 0; list.push(ev.type); }
       seen[ev.type]++;
     }
-    return { list: list.map(type => ({ type, count: seen[type] })), event: w.event };
+    return { list: list.map(type => ({ type, count: seen[type] })), event: w.event, formation: w.formation };
   }
 
   function waveEndBonus(level, wave) {
     return 18 + level * 2.5 + wave * 2.5;
   }
 
-  return { build, preview, waveEndBonus, hpScale };
+  return { build, preview, waveEndBonus, hpScale, formationInfo };
 })();
