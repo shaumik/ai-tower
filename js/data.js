@@ -2,7 +2,7 @@
 'use strict';
 const DATA = (function () {
 
-  const VERSION = '1.6.2';
+  const VERSION = '1.6.3';
 
   // ------------------------------------------------------------------
   // SECTORS — 5 campaigns of 10 levels

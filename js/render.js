@@ -4,6 +4,7 @@ const RENDER = (function () {
   let canvas, ctx, dpr = 1;
   let W = 0, H = 0;          // css pixels
   let T = 32, OX = 0, OY = 0; // tile size + origin (css px)
+  let boardBottom = 0;        // css y of the board's bottom edge
   let mapLayer = null;        // offscreen pre-rendered map
   const sprites = {};         // cache
 
@@ -29,6 +30,7 @@ const RENDER = (function () {
       // anchor the board just under the HUD; spare height goes to the bottom
       const slack = availH - T * lv.rows;
       OY = TOP_MARGIN + Math.min(slack * 0.18, 24);
+      boardBottom = OY + T * lv.rows;
       for (const k in sprites) delete sprites[k]; // rebuild at new scale
       buildMap(game);
     }
@@ -1106,5 +1108,5 @@ const RENDER = (function () {
     }
   }
 
-  return { setup, resize, frame, screenToCell, screenToWorld, cellToScreen, paintTowerIcon, paintEnemyIcon, get T() { return T; } };
+  return { setup, resize, frame, screenToCell, screenToWorld, cellToScreen, paintTowerIcon, paintEnemyIcon, get T() { return T; }, get boardBottom() { return boardBottom; } };
 })();

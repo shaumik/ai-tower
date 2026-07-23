@@ -316,6 +316,42 @@ const UI = (function () {
     refreshBuildBarState();
     refreshPlaceActions();
     refreshAbilities();
+    renderWaveIntel();
+  }
+
+  // ================================================================ WAVE INTEL
+  // Fills the space between board and build bar with the incoming wave roster.
+  function renderWaveIntel() {
+    const g = GAME;
+    const box = $('wave-intel');
+    if (!g.active || g.phase !== 'build') { box.classList.remove('show'); return; }
+    const top = RENDER.boardBottom + 8;
+    const bottomEdge = window.innerHeight - 185; // above the build bar block
+    if (bottomEdge - top < 66) { box.classList.remove('show'); return; }
+    box.style.top = top + 'px';
+    box.style.maxHeight = (bottomEdge - top) + 'px';
+    const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff);
+    box.innerHTML = '';
+    let title = 'INCOMING — WAVE ' + g.wave + ' / ' + g.totalWaves;
+    if (prev.hasBoss) title += '  <b>☠ BOSS</b>';
+    else if (prev.hasMini) title += '  <b>⚠ MINI-BOSS</b>';
+    box.appendChild(UTIL.h('div', 'wi-title', title));
+    const row = UTIL.h('div', 'wi-row');
+    for (const p of prev.list.slice(0, 6)) {
+      const cell = UTIL.h('div', 'wi-enemy');
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 60;
+      RENDER.paintEnemyIcon(cv, p.type);
+      cell.appendChild(cv);
+      const e = DATA.ENEMIES[p.type];
+      cell.appendChild(UTIL.h('span', '', '<span class="wc">×' + p.count + '</span><br><span class="wn">' + e.name + '</span>'));
+      row.appendChild(cell);
+    }
+    box.appendChild(row);
+    const fInfo = prev.formation ? WAVES.formationInfo(prev.formation) : null;
+    if (prev.event) box.appendChild(UTIL.h('div', 'wi-warn', DATA.EVENTS[prev.event].ico + ' ' + DATA.EVENTS[prev.event].name + ' — ' + DATA.EVENTS[prev.event].desc));
+    else if (fInfo) box.appendChild(UTIL.h('div', 'wi-warn', fInfo.ico + ' ' + fInfo.name + ' — ' + fInfo.desc));
+    box.classList.add('show');
   }
 
   // ================================================================ ABILITIES

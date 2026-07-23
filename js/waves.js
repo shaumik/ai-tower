@@ -139,11 +139,14 @@ const WAVES = (function () {
     const w = build(level, wave, totalWaves, diff);
     const seen = {};
     const list = [];
+    let hasMini = false, hasBoss = false;
     for (const ev of w.events) {
+      if (ev.mini) hasMini = true;
+      if (DATA.ENEMIES[ev.type].traits && DATA.ENEMIES[ev.type].traits.boss) hasBoss = true;
       if (!seen[ev.type]) { seen[ev.type] = 0; list.push(ev.type); }
       seen[ev.type]++;
     }
-    return { list: list.map(type => ({ type, count: seen[type] })), event: w.event, formation: w.formation };
+    return { list: list.map(type => ({ type, count: seen[type] })), event: w.event, formation: w.formation, hasMini, hasBoss };
   }
 
   function waveEndBonus(level, wave) {
