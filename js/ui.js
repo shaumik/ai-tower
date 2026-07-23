@@ -376,8 +376,7 @@ const UI = (function () {
     const g = GAME;
     if (!g.active || !g.chips.length) { box.classList.remove('show'); return; }
     const defs = g.chips.map(id => DATA.CHIPS.find(c => c.id === id)).filter(Boolean);
-    box.innerHTML = defs.map(c => '<span>' + c.ico + '</span>').join('') +
-      '<span>' + defs[defs.length - 1].name.toUpperCase() + '</span>';
+    box.innerHTML = defs.map(c => '<span>' + c.ico + '</span>').join('');
     box.onclick = () => {
       toast(defs.map(c => c.ico + ' ' + c.name + ': ' + c.desc).join(' · '), 'warn');
       AUDIO.sfx.click();
