@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#05070d">
+<title>NEURAL SIEGE — Art Direction Mock</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#05070d; color:#cfe8ff; font-family:system-ui,-apple-system,sans-serif; padding:18px 14px 60px; }
+  .wrap { max-width:480px; margin:0 auto; }
+  h1 { font-size:15px; letter-spacing:4px; color:#7fa8c9; font-weight:800; margin-bottom:2px; }
+  .sub { font-size:11px; color:#4a637f; letter-spacing:1px; margin-bottom:22px; }
+  h2 { font-size:11px; letter-spacing:3px; color:#5f89ad; font-weight:800; margin:26px 0 8px; }
+  .cmp { display:flex; gap:10px; }
+  .cmp > div { flex:1; text-align:center; }
+  .tag { font-size:9px; letter-spacing:2px; color:#4a637f; font-weight:800; margin-top:5px; }
+  .tag.new { color:#ffd166; }
+  canvas { width:100%; height:auto; display:block; border-radius:12px; }
+  .row canvas { border-radius:12px; }
+  .note { font-size:11px; color:#6d8aa8; line-height:1.55; margin-top:8px; }
+  .note b { color:#cfe8ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ART DIRECTION MOCK</h1>
+  <div class="sub">dark machines · glowing threats — nothing in the real game changed yet</div>
+
+  <h2>SENTRY — CURRENT VS PROPOSED</h2>
+  <div class="cmp">
+    <div><canvas id="cur-tw" width="440" height="440"></canvas><div class="tag">CURRENT</div></div>
+    <div><canvas id="new-tw" width="440" height="440"></canvas><div class="tag new">PROPOSED</div></div>
+  </div>
+
+  <h2>SENTRY FAMILY — TIERS &amp; BRANCHES</h2>
+  <canvas id="fam" width="920" height="330"></canvas>
+  <div class="note">T1 → T4 gain visible <b>mass</b> (armor, twin barrels, skirt). Far right: the two tier-3 branches — <b>GATLING</b> (spinning tri-barrel) and <b>RAILGUN</b> (charge-up glow before each shot). Heads idle-track and recoil.</div>
+
+  <h2>ENEMIES — ICONS VS CREATURES</h2>
+  <div class="cmp">
+    <div><canvas id="cur-en" width="440" height="300"></canvas><div class="tag">CURRENT</div></div>
+    <div><canvas id="new-en" width="440" height="300"></canvas><div class="tag new">PROPOSED</div></div>
+  </div>
+  <div class="note"><b>Spambot</b>: hovering courier drone — bobs, thrusters flicker, antenna blinks. <b>Ransomware</b>: padlock-crab that actually <b>walks</b>. Enemies own nearly all the light on the board.</div>
+
+  <h2>IN CONTEXT</h2>
+  <canvas id="dio" width="920" height="360"></canvas>
+  <div class="note">Textured floor, no naked grid (grid would only appear while placing). Dark turret holds the line; the wave glows as it comes in.</div>
+</div>
+
+<script>
+'use strict';
+const TAU = Math.PI * 2;
+function cv(id) {
+  const el = document.getElementById(id);
+  const c = el.getContext('2d');
+  return { el, c, w: el.width, h: el.height };
+}
+function rr(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+function oct(c, x, y, r, k) {
+  k = k || 0.42;
+  c.beginPath();
+  c.moveTo(x - r, y - r * k);
+  c.lineTo(x - r * k, y - r); c.lineTo(x + r * k, y - r);
+  c.lineTo(x + r, y - r * k); c.lineTo(x + r, y + r * k);
+  c.lineTo(x + r * k, y + r); c.lineTo(x - r * k, y + r);
+  c.lineTo(x - r, y + r * k);
+  c.closePath();
+}
+
+/* ---------- environment: textured floor panel (no naked grid) ---------- */
+function floorPanel(c, w, h, seed) {
+  let s = seed || 7;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const gd = c.createLinearGradient(0, 0, w * 0.3, h);
+  gd.addColorStop(0, '#0a0f18'); gd.addColorStop(1, '#060a11');
+  c.fillStyle = gd; c.fillRect(0, 0, w, h);
+  // faint circuit traces
+  c.strokeStyle = 'rgba(58,88,128,0.10)'; c.lineWidth = 2;
+  for (let i = 0; i < 14; i++) {
+    let x = rnd() * w, y = rnd() * h;
+    c.beginPath(); c.moveTo(x, y);
+    for (let j = 0; j < 3; j++) {
+      if (rnd() < 0.5) x += (rnd() - 0.5) * 180; else y += (rnd() - 0.5) * 180;
+      c.lineTo(x, y);
+    }
+    c.stroke();
+    c.fillStyle = 'rgba(90,140,190,0.14)';
+    c.beginPath(); c.arc(x, y, 3, 0, TAU); c.fill();
+  }
+  // plate seams
+  c.strokeStyle = 'rgba(20,32,50,0.55)'; c.lineWidth = 1.5;
+  for (let i = 1; i < 4; i++) {
+    c.beginPath(); c.moveTo((w / 4) * i + rnd() * 8, 0); c.lineTo((w / 4) * i - rnd() * 8, h); c.stroke();
+  }
+  // grain
+  c.fillStyle = 'rgba(255,255,255,0.018)';
+  for (let i = 0; i < w * h / 340; i++) c.fillRect(rnd() * w, rnd() * h, 1.6, 1.6);
+  // vignette
+  const vg = c.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+  c.fillStyle = vg; c.fillRect(0, 0, w, h);
+}
+
+/* ---------- CURRENT style (approximation of live game) ---------- */
+function curSentry(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  c.strokeStyle = '#59d7ff'; c.lineWidth = S * 0.045; c.shadowColor = '#59d7ff'; c.shadowBlur = 14;
+  c.strokeRect(-S * 0.36, -S * 0.36, S * 0.72, S * 0.72);
+  c.beginPath(); c.arc(0, 0, S * 0.2, 0, TAU); c.stroke();
+  c.rotate(Math.sin(t * 0.6) * 0.4);
+  c.beginPath(); c.moveTo(0, 0); c.lineTo(S * 0.34, 0); c.stroke();
+  c.restore();
+}
+function curSpambot(c, x, y, S) {
+  c.save(); c.translate(x, y);
+  c.strokeStyle = '#ff6b81'; c.fillStyle = 'rgba(255,107,129,0.18)';
+  c.lineWidth = S * 0.05; c.shadowColor = '#ff6b81'; c.shadowBlur = 12;
+  c.beginPath(); c.moveTo(0, -S * 0.3); c.lineTo(S * 0.28, S * 0.22); c.lineTo(-S * 0.28, S * 0.22);
+  c.closePath(); c.fill(); c.stroke();
+  c.restore();
+}
+function curRansom(c, x, y, S) {
+  c.save(); c.translate(x, y);
+  c.strokeStyle = '#ffb347'; c.fillStyle = 'rgba(255,179,71,0.16)';
+  c.lineWidth = S * 0.05; c.shadowColor = '#ffb347'; c.shadowBlur = 12;
+  c.beginPath();
+  c.moveTo(0, -S * 0.32); c.lineTo(S * 0.3, 0); c.lineTo(0, S * 0.32); c.lineTo(-S * 0.3, 0);
+  c.closePath(); c.fill(); c.stroke();
+  c.restore();
+}
+
+/* ---------- PROPOSED turret ---------- */
+function shadowBlob(c, x, y, r) {
+  const g = c.createRadialGradient(x, y, r * 0.1, x, y, r);
+  g.addColorStop(0, 'rgba(0,0,0,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+}
+function hullGrad(c, x0, y0, x1, y1, lo, hi) {
+  const g = c.createLinearGradient(x0, y0, x1, y1);
+  g.addColorStop(0, hi); g.addColorStop(1, lo);
+  return g;
+}
+function basePlate(c, S, tier) {
+  const r = S * 0.42;
+  shadowBlob(c, S * 0.03, S * 0.07, r * 1.15);
+  oct(c, 0, 0, r);
+  c.fillStyle = hullGrad(c, -r, -r, r, r, '#151b26', '#2b3646');
+  c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.02; c.stroke();
+  // top-left bevel light
+  c.strokeStyle = 'rgba(120,150,185,0.4)'; c.lineWidth = S * 0.012;
+  c.beginPath();
+  c.moveTo(-r, -r * 0.42); c.lineTo(-r * 0.42, -r); c.lineTo(r * 0.42, -r);
+  c.stroke();
+  // inner deck
+  oct(c, 0, 0, r * 0.74);
+  c.fillStyle = hullGrad(c, -r, -r, r, r, '#10151f', '#222c3a');
+  c.fill();
+  c.strokeStyle = 'rgba(10,14,21,0.9)'; c.lineWidth = S * 0.012; c.stroke();
+  // bolts
+  c.fillStyle = '#0d1119';
+  for (const a of [0.25, 0.75, 1.25, 1.75]) {
+    const bx = Math.cos(a * Math.PI) * r * 0.86, by = Math.sin(a * Math.PI) * r * 0.86;
+    c.beginPath(); c.arc(bx, by, S * 0.028, 0, TAU); c.fill();
+  }
+  // tier pips (the only base glow)
+  for (let i = 0; i < tier; i++) {
+    c.fillStyle = '#ffd166';
+    c.shadowColor = '#ffd166'; c.shadowBlur = 6;
+    c.fillRect(-r * 0.55 + i * S * 0.075, r * 0.62, S * 0.045, S * 0.028);
+    c.shadowBlur = 0;
+  }
+}
+function barrel(c, S, len, wdt, off) {
+  // shroud
+  c.fillStyle = hullGrad(c, 0, -wdt, 0, wdt, '#0e131c', '#2a3646');
+  rr(c, off, -wdt, len, wdt * 2, wdt * 0.5); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+  c.strokeStyle = 'rgba(130,160,195,0.35)'; c.lineWidth = S * 0.01;
+  c.beginPath(); c.moveTo(off + wdt * 0.4, -wdt * 0.75); c.lineTo(off + len - wdt * 0.5, -wdt * 0.75); c.stroke();
+  // muzzle
+  c.fillStyle = '#080b11';
+  rr(c, off + len - S * 0.035, -wdt * 0.72, S * 0.05, wdt * 1.44, wdt * 0.3); c.fill();
+}
+function muzzleFlash(c, x, S, k) {
+  c.save(); c.globalCompositeOperation = 'lighter'; c.translate(x, 0);
+  const g = c.createRadialGradient(0, 0, 0, 0, 0, S * 0.16 * k);
+  g.addColorStop(0, 'rgba(255,244,214,0.95)');
+  g.addColorStop(0.4, 'rgba(255,180,90,0.6)');
+  g.addColorStop(1, 'rgba(255,120,40,0)');
+  c.fillStyle = g;
+  c.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU, rr2 = (i % 2 ? 0.16 : 0.07) * S * k;
+    c.lineTo(Math.cos(a) * rr2, Math.sin(a) * rr2);
+  }
+  c.closePath(); c.fill();
+  c.restore();
+}
+function newSentry(c, x, y, S, t, tier, branch, phase) {
+  tier = tier || 1;
+  c.save(); c.translate(x, y);
+  basePlate(c, S, tier);
+
+  // aim: smooth idle sweep with a settle (kept shallow so the profile reads)
+  const aim = Math.sin(t * 0.5 + (phase || 0)) * 0.28 + Math.sin(t * 0.13) * 0.12;
+  c.rotate(aim);
+
+  // fire cycle
+  const period = branch === 'rail' ? 2.6 : (branch === 'gat' ? 0.14 : 1.6);
+  const ft = ((t + (phase || 0)) % period) / period;
+  const recoil = Math.max(0, 1 - ft * 7) * S * 0.035;
+  c.translate(-recoil, 0);
+
+  const bodyW = S * (0.24 + tier * 0.018), bodyH = S * (0.28 + tier * 0.024);
+  // armor cheeks (t2+)
+  if (tier >= 2) {
+    c.fillStyle = hullGrad(c, 0, -bodyH, 0, bodyH, '#141a25', '#303e50');
+    rr(c, -bodyW * 0.7, -bodyH * 0.72, bodyW * 0.55, bodyH * 1.44, S * 0.03); c.fill();
+    c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+  }
+  // armor skirt (t4)
+  if (tier >= 4) {
+    oct(c, 0, 0, S * 0.34, 0.5);
+    c.fillStyle = hullGrad(c, -S * 0.3, -S * 0.3, S * 0.3, S * 0.3, '#1a2230', '#38485c');
+    c.fill(); c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+  }
+
+  // barrels
+  if (branch === 'gat') {
+    const spin = t * 9;
+    for (const by of [-S * 0.052, 0, S * 0.052]) {
+      c.save(); c.translate(0, by); barrel(c, S, S * (by === 0 ? 0.5 : 0.44), S * 0.026, S * 0.08); c.restore();
+    }
+    // spinning collar
+    c.fillStyle = '#0d121b';
+    c.beginPath(); c.arc(S * 0.12, 0, S * 0.075, 0, TAU); c.fill();
+    c.strokeStyle = 'rgba(140,170,205,0.4)'; c.lineWidth = S * 0.012;
+    c.beginPath(); c.arc(S * 0.12, 0, S * 0.075, spin, spin + 1.1); c.stroke();
+    if (ft < 0.35) muzzleFlash(c, S * 0.56, S, 0.45);
+  } else if (branch === 'rail') {
+    // twin rails + fins
+    barrel(c, S, S * 0.52, S * 0.032, S * 0.06);
+    c.fillStyle = '#0d121b';
+    for (const fy of [-S * 0.075, S * 0.075]) rr(c, S * 0.14, fy - S * 0.014, S * 0.3, S * 0.028, S * 0.012), c.fill();
+    // charge-up: energy gathers before the shot
+    const chg = ft > 0.55 ? (ft - 0.55) / 0.45 : 0;
+    if (chg > 0) {
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = 'rgba(89,215,255,' + (0.55 * chg) + ')';
+      c.shadowColor = '#59d7ff'; c.shadowBlur = 12 * chg;
+      c.beginPath(); c.arc(S * 0.56, 0, S * 0.035 * chg, 0, TAU); c.fill();
+      c.restore();
+    }
+    if (ft < 0.1) { // rail discharge streak
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.strokeStyle = 'rgba(160,235,255,' + (1 - ft * 10) + ')'; c.lineWidth = S * 0.024;
+      c.beginPath(); c.moveTo(S * 0.56, 0); c.lineTo(S * 0.95, 0); c.stroke();
+      c.restore();
+    }
+  } else {
+    if (tier >= 3) {
+      // twin barrels
+      for (const by of [-S * 0.058, S * 0.058]) {
+        c.save(); c.translate(0, by); barrel(c, S, S * 0.52, S * 0.034, S * 0.06); c.restore();
+      }
+    } else {
+      barrel(c, S, S * (0.46 + tier * 0.04), S * (0.038 + tier * 0.005), S * 0.06);
+    }
+    if (ft < 0.1) muzzleFlash(c, S * (0.56 + tier * 0.04), S, 0.55);
+  }
+
+  // body block
+  c.fillStyle = hullGrad(c, -bodyW, -bodyH, bodyW, bodyH, '#1b2432', '#3b4c60');
+  rr(c, -bodyW, -bodyH * 0.62, bodyW * 1.4, bodyH * 1.24, S * 0.045); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.016; c.stroke();
+  // top rim light
+  c.strokeStyle = 'rgba(170,200,235,0.7)'; c.lineWidth = S * 0.014;
+  c.beginPath(); c.moveTo(-bodyW * 0.85, -bodyH * 0.62); c.lineTo(bodyW * 0.3, -bodyH * 0.62); c.stroke();
+  // panel seam
+  c.strokeStyle = 'rgba(9,12,18,0.8)'; c.lineWidth = S * 0.01;
+  c.beginPath(); c.moveTo(-bodyW * 0.2, -bodyH * 0.6); c.lineTo(-bodyW * 0.2, bodyH * 0.6); c.stroke();
+
+  // EMISSIVE: lens + status leds only (~15%)
+  const blink = 0.65 + 0.35 * Math.sin(t * 2.4 + (phase || 0) * 3);
+  c.save(); c.globalCompositeOperation = 'lighter';
+  c.fillStyle = 'rgba(89,215,255,' + (0.85 * blink) + ')';
+  c.shadowColor = '#59d7ff'; c.shadowBlur = 10;
+  c.beginPath(); c.arc(bodyW * 0.12, 0, S * 0.042, 0, TAU); c.fill();
+  c.shadowBlur = 0;
+  c.fillStyle = 'rgba(255,209,102,' + (t % 1.4 < 0.12 ? 0.9 : 0.25) + ')';
+  c.fillRect(-bodyW * 0.72, -bodyH * 0.3, S * 0.026, S * 0.026);
+  c.fillStyle = 'rgba(120,220,160,0.7)';
+  c.fillRect(-bodyW * 0.72, -bodyH * 0.05, S * 0.026, S * 0.026);
+  c.restore();
+
+  c.restore();
+}
+
+/* ---------- PROPOSED enemies ---------- */
+function newSpambot(c, x, y, S, t, phase) {
+  phase = phase || 0;
+  const bob = Math.sin(t * 3.1 + phase) * S * 0.045;
+  const tilt = Math.sin(t * 2.2 + phase * 2) * 0.09;
+  c.save(); c.translate(x, y + bob); c.rotate(tilt);
+  shadowBlob(c, 0, S * 0.34 - bob * 0.6, S * 0.2);
+
+  // thruster flames (behind body, additive)
+  c.save(); c.globalCompositeOperation = 'lighter';
+  for (const sx of [-1, 1]) {
+    const fl = S * (0.1 + 0.07 * Math.abs(Math.sin(t * 21 + phase + sx)));
+    const g = c.createLinearGradient(sx * S * 0.2, S * 0.1, sx * S * 0.2, S * 0.1 + fl * 2);
+    g.addColorStop(0, 'rgba(255,170,120,0.9)'); g.addColorStop(1, 'rgba(255,80,90,0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(sx * S * 0.2 - S * 0.035, S * 0.12);
+    c.lineTo(sx * S * 0.2 + S * 0.035, S * 0.12);
+    c.lineTo(sx * S * 0.2, S * 0.12 + fl * 2);
+    c.closePath(); c.fill();
+  }
+  c.restore();
+
+  // glowing body core (the light source)
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const cg = c.createRadialGradient(0, S * 0.02, 0, 0, S * 0.02, S * 0.3);
+  cg.addColorStop(0, 'rgba(255,150,160,0.95)');
+  cg.addColorStop(0.55, 'rgba(255,80,105,0.55)');
+  cg.addColorStop(1, 'rgba(255,60,90,0)');
+  c.fillStyle = cg; c.beginPath(); c.arc(0, S * 0.02, S * 0.3, 0, TAU); c.fill();
+  c.restore();
+
+  // body: rounded envelope shape, emissive belly
+  c.beginPath();
+  c.moveTo(0, -S * 0.2);
+  c.quadraticCurveTo(S * 0.26, -S * 0.14, S * 0.24, S * 0.08);
+  c.quadraticCurveTo(S * 0.14, S * 0.2, 0, S * 0.2);
+  c.quadraticCurveTo(-S * 0.14, S * 0.2, -S * 0.24, S * 0.08);
+  c.quadraticCurveTo(-S * 0.26, -S * 0.14, 0, -S * 0.2);
+  c.closePath();
+  const bg = c.createLinearGradient(0, -S * 0.2, 0, S * 0.2);
+  bg.addColorStop(0, '#3d1420'); bg.addColorStop(0.45, '#7c2033'); bg.addColorStop(1, '#ff5d75');
+  c.fillStyle = bg; c.fill();
+  c.strokeStyle = '#1c0910'; c.lineWidth = S * 0.02; c.stroke();
+  // dark top plate w/ rim
+  c.beginPath();
+  c.moveTo(0, -S * 0.2);
+  c.quadraticCurveTo(S * 0.26, -S * 0.14, S * 0.24, S * 0.02);
+  c.quadraticCurveTo(0, -S * 0.05, -S * 0.24, S * 0.02);
+  c.quadraticCurveTo(-S * 0.26, -S * 0.14, 0, -S * 0.2);
+  c.closePath();
+  c.fillStyle = '#1a0d13'; c.fill();
+  c.strokeStyle = 'rgba(255,140,160,0.5)'; c.lineWidth = S * 0.012;
+  c.beginPath(); c.moveTo(-S * 0.2, -S * 0.1); c.quadraticCurveTo(0, -S * 0.18, S * 0.2, -S * 0.1); c.stroke();
+
+  // eye
+  c.save(); c.globalCompositeOperation = 'lighter';
+  c.fillStyle = '#ffe6ea'; c.shadowColor = '#ff8ba0'; c.shadowBlur = 12;
+  c.beginPath(); c.arc(0, S * 0.05, S * 0.055 * (0.9 + 0.15 * Math.sin(t * 5 + phase)), 0, TAU); c.fill();
+  c.restore();
+
+  // antenna with blinking tip
+  c.strokeStyle = '#2a141c'; c.lineWidth = S * 0.02;
+  c.beginPath(); c.moveTo(S * 0.06, -S * 0.19); c.lineTo(S * 0.1, -S * 0.32); c.stroke();
+  const on = (t + phase) % 0.9 < 0.15;
+  c.save(); c.globalCompositeOperation = 'lighter';
+  c.fillStyle = on ? '#ffd166' : 'rgba(255,209,102,0.2)';
+  if (on) { c.shadowColor = '#ffd166'; c.shadowBlur = 8; }
+  c.beginPath(); c.arc(S * 0.1, -S * 0.34, S * 0.03, 0, TAU); c.fill();
+  c.restore();
+
+  c.restore();
+}
+function newRansom(c, x, y, S, t, phase) {
+  phase = phase || 0;
+  c.save(); c.translate(x, y);
+  shadowBlob(c, 0, S * 0.3, S * 0.26);
+
+  // walking legs: 3 per side, phased
+  c.lineWidth = S * 0.048; c.lineCap = 'round';
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
+    const lp = Math.sin(t * 7 + phase + i * 2.1 + (sx > 0 ? Math.PI : 0));
+    const hipX = sx * S * 0.18, hipY = -S * 0.02 + i * S * 0.09;
+    const kneeX = hipX + sx * S * 0.14, kneeY = hipY + S * 0.02 - lp * S * 0.03;
+    const footX = kneeX + sx * S * 0.08 + lp * S * 0.05 * sx, footY = S * 0.26;
+    c.strokeStyle = '#241019';
+    c.beginPath(); c.moveTo(hipX, hipY); c.lineTo(kneeX, kneeY); c.lineTo(footX, footY); c.stroke();
+    // glowing joint
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.fillStyle = 'rgba(255,179,71,0.8)';
+    c.beginPath(); c.arc(kneeX, kneeY, S * 0.022, 0, TAU); c.fill();
+    c.restore();
+  }
+
+  // shackle
+  c.strokeStyle = '#2c1a10'; c.lineWidth = S * 0.055;
+  c.beginPath(); c.arc(0, -S * 0.14, S * 0.13, Math.PI, 0); c.stroke();
+  c.strokeStyle = 'rgba(255,200,130,0.35)'; c.lineWidth = S * 0.018;
+  c.beginPath(); c.arc(0, -S * 0.14, S * 0.16, Math.PI * 1.15, Math.PI * 1.75); c.stroke();
+
+  // body glow
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const gg = c.createRadialGradient(0, S * 0.05, 0, 0, S * 0.05, S * 0.3);
+  gg.addColorStop(0, 'rgba(255,190,110,0.75)'); gg.addColorStop(1, 'rgba(255,140,60,0)');
+  c.fillStyle = gg; c.beginPath(); c.arc(0, S * 0.05, S * 0.3, 0, TAU); c.fill();
+  c.restore();
+
+  // padlock body
+  rr(c, -S * 0.19, -S * 0.14, S * 0.38, S * 0.34, S * 0.05);
+  const pg = c.createLinearGradient(0, -S * 0.14, 0, S * 0.2);
+  pg.addColorStop(0, '#4a2410'); pg.addColorStop(0.5, '#8a4517'); pg.addColorStop(1, '#e08a2e');
+  c.fillStyle = pg; c.fill();
+  c.strokeStyle = '#1c0f06'; c.lineWidth = S * 0.02; c.stroke();
+  c.strokeStyle = 'rgba(255,210,150,0.45)'; c.lineWidth = S * 0.012;
+  c.beginPath(); c.moveTo(-S * 0.15, -S * 0.135); c.lineTo(S * 0.12, -S * 0.135); c.stroke();
+
+  // keyhole eye (emissive, pulsing)
+  const pu = 0.75 + 0.25 * Math.sin(t * 4 + phase);
+  c.save(); c.globalCompositeOperation = 'lighter';
+  c.fillStyle = 'rgba(255,236,190,' + pu + ')';
+  c.shadowColor = '#ffb347'; c.shadowBlur = 12;
+  c.beginPath(); c.arc(0, 0, S * 0.05, 0, TAU); c.fill();
+  c.fillRect(-S * 0.02, S * 0.02, S * 0.04, S * 0.09);
+  c.restore();
+
+  c.restore();
+}
+
+/* ================= scenes ================= */
+const scenes = [];
+
+// current vs proposed turret
+{
+  const A = cv('cur-tw'), B = cv('new-tw');
+  scenes.push(t => {
+    floorPanel(A.c, A.w, A.h, 3); curSentry(A.c, A.w / 2, A.h / 2, 300, t);
+    floorPanel(B.c, B.w, B.h, 3); newSentry(B.c, B.w / 2, B.h / 2, 300, t, 2, null, 0);
+  });
+}
+// family strip
+{
+  const F = cv('fam');
+  scenes.push(t => {
+    floorPanel(F.c, F.w, F.h, 11);
+    const S = 140, y = F.h / 2 - 8;
+    const xs = [0, 1, 2, 3, 4, 5].map(i => 78 + i * 153);
+    newSentry(F.c, xs[0], y, S * 0.92, t, 1, null, 0.3);
+    newSentry(F.c, xs[1], y, S, t, 2, null, 1.1);
+    newSentry(F.c, xs[2], y, S * 1.1, t, 3, null, 2.2);
+    newSentry(F.c, xs[3], y, S * 1.2, t, 4, null, 0.7);
+    newSentry(F.c, xs[4], y, S * 1.06, t, 3, 'gat', 1.9);
+    newSentry(F.c, xs[5], y, S * 1.06, t, 3, 'rail', 0);
+    F.c.fillStyle = 'rgba(127,168,201,0.8)'; F.c.font = '700 17px system-ui'; F.c.textAlign = 'center';
+    const labels = ['T1', 'T2', 'T3', 'T4', 'GATLING', 'RAILGUN'];
+    labels.forEach((L, i) => F.c.fillText(L, xs[i], F.h - 14));
+  });
+}
+// enemies compare
+{
+  const A = cv('cur-en'), B = cv('new-en');
+  scenes.push(t => {
+    floorPanel(A.c, A.w, A.h, 5);
+    curSpambot(A.c, A.w * 0.3, A.h / 2, 190);
+    curRansom(A.c, A.w * 0.72, A.h / 2, 190);
+    floorPanel(B.c, B.w, B.h, 5);
+    newSpambot(B.c, B.w * 0.28, B.h / 2, 190, t, 0);
+    newRansom(B.c, B.w * 0.72, B.h / 2, 190, t, 1);
+  });
+}
+// diorama
+{
+  const D = cv('dio');
+  const bots = [0, 1, 2, 3].map(i => ({ p: i * 0.27, phase: i * 1.7 }));
+  scenes.push(t => {
+    floorPanel(D.c, D.w, D.h, 23);
+    // path lane: dark channel with faint energy flow, not a neon tube
+    const py = D.h * 0.42;
+    D.c.fillStyle = 'rgba(6,9,14,0.85)';
+    rr(D.c, -10, py - 44, D.w + 20, 88, 20); D.c.fill();
+    D.c.strokeStyle = 'rgba(40,70,110,0.5)'; D.c.lineWidth = 2;
+    D.c.beginPath(); D.c.moveTo(0, py - 44); D.c.lineTo(D.w, py - 44); D.c.stroke();
+    D.c.beginPath(); D.c.moveTo(0, py + 44); D.c.lineTo(D.w, py + 44); D.c.stroke();
+    D.c.save(); D.c.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 7; i++) {
+      const fx = ((t * 60 + i * 150) % (D.w + 60)) - 30;
+      D.c.fillStyle = 'rgba(70,130,190,0.12)';
+      rr(D.c, fx, py - 2.5, 34, 5, 2.5); D.c.fill();
+    }
+    D.c.restore();
+    // enemies flow
+    for (const b of bots) {
+      const x = ((t * 0.085 + b.p) % 1.15) * (D.w + 130) - 65;
+      newSpambot(D.c, x, py, 120, t, b.phase);
+    }
+    newRansom(D.c, ((t * 0.055 + 0.5) % 1.15) * (D.w + 130) - 65, py, 130, t, 2.4);
+    // defenders
+    newSentry(D.c, D.w * 0.3, D.h * 0.76, 165, t, 3, null, 0.2);
+    newSentry(D.c, D.w * 0.68, D.h * 0.76, 165, t, 3, 'rail', 1.4);
+  });
+}
+
+let start;
+function loop(ts) {
+  if (!start) start = ts;
+  const t = (ts - start) / 1000;
+  for (const s of scenes) s(t);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
