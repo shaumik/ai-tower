@@ -92,6 +92,7 @@ const AUDIO = (function () {
     defeat()    { [400, 320, 240, 150].forEach((f, i) => tone(f, 0.4, 'sawtooth', 0.14, f * 0.7, i * 0.2)); },
     newThreat() { tone(200, 0.2, 'sawtooth', 0.14, 400); tone(200, 0.2, 'sawtooth', 0.14, 400, 0.25); },
     stun()      { if (throttled('stun', 150)) return; tone(1800, 0.08, 'sine', 0.05, 900); },
+    alarm()     { tone(1300, 0.06, 'square', 0.07); tone(1300, 0.06, 'square', 0.07, undefined, 0.14); },
   };
 
   // ---------- ambient generative music ----------

@@ -106,6 +106,7 @@ class Enemy {
     const g = this.g;
     this.anim += dt;
     this.noHitT += dt;
+    if (this.hitT > 0) this.hitT -= dt;
     if (this.stunT > 0) this.stunT -= dt;
     if (this.slowT > 0) this.slowT -= dt;
     if (this.revealT > 0) this.revealT -= dt;
@@ -179,6 +180,7 @@ class Enemy {
       dmg = Math.max(amount * 0.1, dmg - this.armor);
     }
     this.hp -= dmg;
+    this.hitT = 0.12; // visual hit-pop
     if (this.hp <= 0) { this.dead = true; this.g.onEnemyKilled(this, opts.source); }
     return dmg;
   }

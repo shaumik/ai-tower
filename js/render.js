@@ -74,6 +74,17 @@ const RENDER = (function () {
     c.fillStyle = sec.bg;
     c.fillRect(0, 0, tw, th);
 
+    // sector-colored nebula blobs for depth
+    const rn = UTIL.rng(lv.n * 555);
+    for (let i = 0; i < 4; i++) {
+      const nx = rn() * tw, ny = rn() * th, nr = T * (3 + rn() * 4);
+      const ng = c.createRadialGradient(nx, ny, 0, nx, ny, nr);
+      ng.addColorStop(0, sec.glow + '16');
+      ng.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = ng;
+      c.fillRect(nx - nr, ny - nr, nr * 2, nr * 2);
+    }
+
     // subtle grid + circuit traces
     c.strokeStyle = 'rgba(120,180,255,0.055)';
     c.lineWidth = 1;
@@ -436,17 +447,33 @@ const RENDER = (function () {
       c.beginPath(); c.arc(-27 + i * 18, 33, 4, 0, 7); c.fill();
     }
   }
-  function drawTowerHead(c, def, tier) {
+  function drawTowerHead(c, def, tier, branch) {
     const col = def.color;
     c.lineWidth = 5; c.lineJoin = 'round'; c.lineCap = 'round';
     neon(c, col, 10);
     const t = tier;
+    const br = (tier === 3 && branch !== null && branch !== undefined) ? branch : -1;
     switch (def.kind) {
       case 'bullet':
         if (def.reveals) { // scanner: radar dish
           c.beginPath(); c.arc(0, 0, 20 + t * 2, -1.9, 1.9); c.stroke();
+          if (br === 0) { c.beginPath(); c.arc(0, 0, 30, -1.6, 1.6); c.stroke(); }          // Overscan: extra dish
           c.beginPath(); c.moveTo(0, 0); c.lineTo(26 + t * 3, 0); c.stroke();
+          if (br === 1) { c.beginPath(); c.moveTo(0, -8); c.lineTo(24, -8); c.moveTo(0, 8); c.lineTo(24, 8); c.stroke(); } // Burst: feeds
           c.beginPath(); c.arc(0, 0, 7, 0, 7); c.globalAlpha = 0.7; c.fill(); c.globalAlpha = 1;
+        } else if (br === 0) { // GATLING: triple rotary barrels
+          c.beginPath(); c.arc(0, 0, 17, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
+          c.beginPath(); c.arc(0, 0, 17, 0, 7); c.stroke();
+          c.lineWidth = 4.5;
+          for (const yy of [-9, 0, 9]) { c.beginPath(); c.moveTo(10, yy); c.lineTo(36, yy); c.stroke(); }
+          c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 5, 0, 7); c.fill();
+        } else if (br === 1) { // RAILGUN: long finned cannon
+          c.beginPath(); c.arc(0, 0, 15, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
+          c.beginPath(); c.arc(0, 0, 15, 0, 7); c.stroke();
+          c.lineWidth = 8; c.beginPath(); c.moveTo(6, 0); c.lineTo(46, 0); c.stroke();
+          c.lineWidth = 3;
+          c.beginPath(); c.moveTo(18, -9); c.lineTo(30, -9); c.moveTo(18, 9); c.lineTo(30, 9); c.stroke();
+          c.fillStyle = '#fff'; c.shadowBlur = 14; c.beginPath(); c.arc(46, 0, 4.5, 0, 7); c.fill(); neon(c, col, 10);
         } else { // sentry: barrel(s)
           c.beginPath(); c.arc(0, 0, 15 + t * 1.5, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
           c.beginPath(); c.arc(0, 0, 15 + t * 1.5, 0, 7); c.stroke();
@@ -459,18 +486,42 @@ const RENDER = (function () {
         c.beginPath(); c.arc(0, 0, 13, 0, 7); c.stroke();
         c.lineWidth = 6; c.beginPath(); c.moveTo(6, 0); c.lineTo(44 + t * 2, 0); c.stroke();
         c.lineWidth = 3; c.beginPath(); c.moveTo(20, -7); c.lineTo(30, -7); c.stroke();
+        if (br === 0) { // Antimatter: white-hot core
+          c.fillStyle = '#fff'; c.shadowBlur = 16; c.beginPath(); c.arc(0, 0, 6.5, 0, 7); c.fill(); neon(c, col, 10);
+        } else if (br === 1) { // Spotter: twin scopes
+          c.beginPath(); c.moveTo(20, 7); c.lineTo(30, 7); c.stroke();
+          c.beginPath(); c.arc(34, -10, 4, 0, 7); c.stroke();
+        }
         break;
       case 'chain':
         c.beginPath(); c.moveTo(0, -26 - t * 2); c.lineTo(0, 8); c.stroke();
         for (let i = 0; i < 3; i++) {
           c.beginPath(); c.arc(0, 2 - i * (9 + t), 12 - i * 2.5, 0.4, Math.PI - 0.4); c.stroke();
         }
+        if (br === 0) { // Chain Storm: twin side prongs
+          c.beginPath(); c.moveTo(-12, 4); c.lineTo(-16, -22); c.stroke();
+          c.beginPath(); c.moveTo(12, 4); c.lineTo(16, -22); c.stroke();
+          c.fillStyle = '#fff'; c.beginPath(); c.arc(-16, -22, 3.5, 0, 7); c.arc(16, -22, 3.5, 0, 7); c.fill();
+        } else if (br === 1) { // Amplifier: charged delta
+          c.globalAlpha = 0.5; c.beginPath(); c.moveTo(0, -34); c.lineTo(10, -18); c.lineTo(-10, -18); c.closePath(); c.fill(); c.globalAlpha = 1;
+        }
         c.fillStyle = '#fff'; c.beginPath(); c.arc(0, -26 - t * 2, 5, 0, 7); c.fill();
         break;
       case 'splash':
         roundRect(c, -12, -14, 24, 28, 6); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
         roundRect(c, -12, -14, 24, 28, 6); c.stroke();
-        c.lineWidth = 8; c.beginPath(); c.moveTo(6, 0); c.lineTo(30 + t * 3, 0); c.stroke();
+        if (br === 0) { // Napalm: fire-glow muzzle
+          c.lineWidth = 8; c.beginPath(); c.moveTo(6, 0); c.lineTo(33, 0); c.stroke();
+          c.fillStyle = '#ffc14d'; c.shadowColor = '#ff8a5c'; c.shadowBlur = 16;
+          c.beginPath(); c.arc(35, 0, 6, 0, 7); c.fill(); neon(c, col, 10);
+        } else if (br === 1) { // Cluster: triple mortar tubes
+          c.lineWidth = 5;
+          c.beginPath(); c.moveTo(6, -8); c.lineTo(30, -12); c.stroke();
+          c.beginPath(); c.moveTo(6, 0); c.lineTo(33, 0); c.stroke();
+          c.beginPath(); c.moveTo(6, 8); c.lineTo(30, 12); c.stroke();
+        } else {
+          c.lineWidth = 8; c.beginPath(); c.moveTo(6, 0); c.lineTo(30 + t * 3, 0); c.stroke();
+        }
         break;
       case 'slowaura':
         for (let i = 0; i < 3; i++) { c.globalAlpha = 0.9 - i * 0.28; c.beginPath(); c.arc(0, 0, 10 + i * 9 + t, 0, 7); c.stroke(); }
@@ -499,6 +550,13 @@ const RENDER = (function () {
         roundRect(c, -10, -18, 36 + t * 3, 12, 5); c.stroke();
         roundRect(c, -10, 6, 36 + t * 3, 12, 5); c.globalAlpha = 0.4; c.fill(); c.globalAlpha = 1;
         roundRect(c, -10, 6, 36 + t * 3, 12, 5); c.stroke();
+        if (br === 0) { // Focus Crystal: diamond emitter
+          c.fillStyle = '#fff'; c.shadowBlur = 16;
+          c.beginPath(); c.moveTo(40, 0); c.lineTo(31, -7); c.lineTo(22, 0); c.lineTo(31, 7); c.closePath(); c.fill();
+          neon(c, col, 10);
+        } else if (br === 1) { // Wide Lens: big secondary ring
+          c.beginPath(); c.arc(34, 0, 9, 0, 7); c.stroke();
+        }
         c.fillStyle = '#fff'; c.beginPath(); c.arc(-14, 0, 8, 0, 7); c.fill();
         break;
       case 'emp':
@@ -515,6 +573,17 @@ const RENDER = (function () {
         c.beginPath(); c.ellipse(0, 0, 30, 10, -0.5, 0, 7); c.stroke();
         break;
     }
+    // universal specialization badge for kinds without bespoke branch art
+    if (br >= 0 && ['slowaura', 'field', 'income', 'buffaura', 'emp', 'orb'].indexOf(def.kind) >= 0) {
+      c.shadowBlur = 8;
+      c.fillStyle = br === 0 ? '#ffd166' : '#7fdcff';
+      c.shadowColor = c.fillStyle;
+      if (br === 0) { // gold delta
+        c.beginPath(); c.moveTo(-32, -24); c.lineTo(-24, -38); c.lineTo(-16, -24); c.closePath(); c.fill();
+      } else {        // cyan diamond
+        c.beginPath(); c.moveTo(-24, -40); c.lineTo(-16, -31); c.lineTo(-24, -22); c.lineTo(-32, -31); c.closePath(); c.fill();
+      }
+    }
   }
   const DIRECTIONAL = { bullet: 1, snipe: 1, splash: 1, beam: 1 };
 
@@ -522,19 +591,20 @@ const RENDER = (function () {
     const px = T * 1.06;
     return makeSprite('tb_' + type + tier + '_' + Math.round(px), px, c => drawTowerBase(c, DATA.TOWERS[type], tier));
   }
-  function towerHeadSprite(type, tier) {
+  function towerHeadSprite(type, tier, branch) {
     const px = T * 1.06;
-    return makeSprite('th_' + type + tier + '_' + Math.round(px), px, c => drawTowerHead(c, DATA.TOWERS[type], tier));
+    const bkey = branch === null || branch === undefined ? 'x' : branch;
+    return makeSprite('th_' + type + tier + bkey + '_' + Math.round(px), px, c => drawTowerHead(c, DATA.TOWERS[type], tier, branch));
   }
 
   // Icon renderers for DOM UI (build bar, codex)
-  function paintTowerIcon(cv, type, tier) {
+  function paintTowerIcon(cv, type, tier, branch) {
     const c = cv.getContext('2d');
     const s = cv.width;
     c.clearRect(0, 0, s, s);
     c.save(); c.scale(s / 100, s / 100); c.translate(50, 50);
     drawTowerBase(c, DATA.TOWERS[type], tier || 0);
-    drawTowerHead(c, DATA.TOWERS[type], tier || 0);
+    drawTowerHead(c, DATA.TOWERS[type], tier || 0, branch);
     c.restore();
   }
   function paintEnemyIcon(cv, type) {
@@ -653,7 +723,7 @@ const RENDER = (function () {
     // towers
     for (const tw of g.towers) {
       const bs = towerBaseSprite(tw.type, tw.tier);
-      const hs = towerHeadSprite(tw.type, tw.tier);
+      const hs = towerHeadSprite(tw.type, tw.tier, tw.branch);
       const px = sx(tw.x), py = sy(tw.y);
       const sz = T * 1.06;
       ctx.drawImage(bs, px - sz / 2, py - sz / 2, sz, sz);
@@ -777,6 +847,15 @@ const RENDER = (function () {
         ctx.globalAlpha = a * 0.28;
         ctx.fillStyle = f.color || '#fff';
         ctx.fillRect(-20, -20, W + 40, H + 40);
+      } else if (f.kind === 'sweep') {
+        // wave-start scanline sweeping down the board
+        const yy = OY + (1 - a) * T * lv.rows;
+        const sg = ctx.createLinearGradient(0, yy - T, 0, yy + T * 0.2);
+        sg.addColorStop(0, 'rgba(127,220,255,0)');
+        sg.addColorStop(0.85, 'rgba(127,220,255,' + (0.30 * a).toFixed(3) + ')');
+        sg.addColorStop(1, 'rgba(255,255,255,' + (0.5 * a).toFixed(3) + ')');
+        ctx.fillStyle = sg;
+        ctx.fillRect(OX, yy - T, T * lv.cols, T * 1.2);
       }
     }
     for (const p of g.particles) {
@@ -832,6 +911,16 @@ const RENDER = (function () {
         ctx.stroke();
       }
       ctx.shadowBlur = 0;
+    }
+
+    // near-miss amber vignette
+    if (g.dangerT > 0 && g.hurtT <= 0) {
+      const da = Math.min(1, g.dangerT * 3) * (0.55 + 0.45 * Math.sin(now * 0.012));
+      const dg = ctx.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.75);
+      dg.addColorStop(0, 'rgba(255,170,40,0)');
+      dg.addColorStop(1, 'rgba(255,150,30,' + (0.20 * da).toFixed(3) + ')');
+      ctx.fillStyle = dg;
+      ctx.fillRect(0, 0, W, H);
     }
 
     // core-hit red vignette
@@ -915,9 +1004,18 @@ const RENDER = (function () {
     if (e.flying) ctx.translate(0, -T * 0.22 + Math.sin(e.anim * 4) * T * 0.05);
     const wob = Math.sin(e.anim * 6 + e.wobble) * 0.06;
     ctx.rotate(e.angle + wob);
-    const sc = 1 + Math.sin(e.anim * 5) * 0.04;
+    const sc = 1 + Math.sin(e.anim * 5) * 0.04 + (e.hitT > 0 ? e.hitT * 1.5 : 0);
     ctx.drawImage(spr, -dim / 2 * sc, -dim / 2 * sc, dim * sc, dim * sc);
     ctx.restore();
+    // boss aura sparks
+    if (e.isBoss && !e.stealthed && Math.random() < 0.2 && e.g.particles.length < 280) {
+      const oa = Math.random() * Math.PI * 2;
+      e.g.particles.push({
+        x: e.x + Math.cos(oa) * e.size * 1.5, y: e.y + Math.sin(oa) * e.size * 1.5,
+        vx: Math.cos(oa + 1.57) * 0.8, vy: Math.sin(oa + 1.57) * 0.8,
+        life: 0.4, maxLife: 0.4, size: 2.2, color: e.def.color,
+      });
+    }
     // boss menace ring
     if (e.isBoss && !e.stealthed) {
       ctx.globalCompositeOperation = 'lighter';

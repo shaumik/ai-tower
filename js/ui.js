@@ -514,7 +514,7 @@ const UI = (function () {
     body.innerHTML = '';
     const head = UTIL.h('div', 'tp-head');
     const cv = document.createElement('canvas'); cv.width = cv.height = 92;
-    RENDER.paintTowerIcon(cv, tw.type, tw.tier);
+    RENDER.paintTowerIcon(cv, tw.type, tw.tier, tw.branch);
     head.appendChild(cv);
     const hd = UTIL.h('div');
     const branchName = (tw.tier === 3 && tw.branch !== null && DATA.BRANCHES[tw.type])
@@ -595,10 +595,15 @@ const UI = (function () {
     card.innerHTML = '';
     card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'NODE SECURED' : 'CORE BREACHED'));
     if (won) {
+      const gr = GAME.grade || 'B';
+      const gcol = { S: '#ffd166', A: '#7fdcff', B: '#9fd4ff', C: '#7fa8c9' }[gr];
+      card.appendChild(UTIL.h('div', '', '<span style="font-size:44px;font-weight:900;color:' + gcol +
+        ';text-shadow:0 0 20px ' + gcol + '">' + gr + '</span>' +
+        (gr === 'S' ? ' <span style="font-size:11px;color:#ffd166">FLAWLESS +30% ◈</span>' : '')));
       card.appendChild(UTIL.h('div', 'end-stars', '★'.repeat(stars) + '<span style="opacity:.25">' + '★'.repeat(3 - stars) + '</span>'));
       card.appendChild(UTIL.h('div', 'end-line',
-        'Integrity ' + GAME.lives + '/' + GAME.maxLives + ' · ' + GAME.stats.kills + ' kills' +
-        '<br>DATA CORES EARNED: <b>+' + cores + ' ◈</b>'));
+        'Integrity ' + GAME.lives + '/' + GAME.maxLives + ' · ' + GAME.stats.kills + ' kills · best combo ×' + (GAME.bestCombo || 0) +
+        '<br>' + (GAME.perfectWaves || 0) + ' perfect waves · DATA CORES: <b>+' + cores + ' ◈</b>'));
     } else {
       card.appendChild(UTIL.h('div', 'end-line',
         'Survived to wave ' + GAME.wave + ' of ' + GAME.totalWaves +

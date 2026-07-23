@@ -60,6 +60,7 @@ const GAME = (function () {
     g.curEvent = null; g.evSpeedMult = 1; g.evRegen = 0; g.evComboMult = 1;
     g.slowmoT = 0; g.endDelay = 0; g.hurtT = 0; g.autoT2 = 0;
     g.revived = false;
+    g.perfectStreak = 0; g.perfectWaves = 0; g.bestCombo = 0; g.dangerT = 0; g.alarmT = 0;
 
     // offer 1-of-3 protocol chips, seeded per attempt
     SAVE.state.stats.attempts = (SAVE.state.stats.attempts || 0) + 1;
@@ -250,6 +251,7 @@ const GAME = (function () {
     } else {
       UI.phaseBanner('WAVE ' + g.wave + (g.wave > g.totalWaves ? ' — OVERTIME' : ''), false);
     }
+    g.fx.push({ kind: 'sweep', ttl: 0.9, t: 0.9 });
     UI.closeSheets();
     UI.updateHUD();
     AUDIO.sfx.waveStart();
@@ -272,14 +274,18 @@ const GAME = (function () {
         interestPct += s.interest || 0;
       }
     }
-    const interest = Math.floor(g.cash * Math.min(12, interestPct) / 100);
+    const interest = Math.floor(g.cash * Math.min(8, interestPct) / 100);
     g.cash += income + interest;
 
-    // perfect wave grade
+    // perfect wave streak: consecutive clean waves compound the payout
     if (g.waveLeaks === 0 && g.stats.kills > 0) {
-      const perfect = 10 + g.wave * 2 + g.levelN;
+      g.perfectStreak++;
+      g.perfectWaves++;
+      const perfect = Math.round((8 + g.wave + g.levelN) * (1 + 0.25 * Math.min(4, g.perfectStreak - 1)));
       g.cash += perfect;
-      UI.toast('★ PERFECT WAVE +¤' + perfect, 'warn');
+      UI.toast('★ PERFECT' + (g.perfectStreak > 1 ? ' ×' + g.perfectStreak : '') + ' +¤' + perfect, 'warn');
+    } else if (g.waveLeaks > 0) {
+      g.perfectStreak = 0;
     }
     if (chipHas('medic') && g.lives < g.maxLives) g.lives++;
     SAVE.addStat('cashEarned', income + interest);
@@ -287,6 +293,7 @@ const GAME = (function () {
     SAVE.addStat('wavesCleared', 1);
     AUDIO.sfx.waveClear();
 
+    g.bestCombo = Math.max(g.bestCombo || 0, g.comboPeak);
     const clearedWave = g.wave;
     g.wave++;
     g.bossEnemy = null;
@@ -323,8 +330,10 @@ const GAME = (function () {
     ADS.gameplayStop();
     const fracLives = g.lives / g.maxLives;
     const stars = g.lives >= g.maxLives * 0.9 ? 3 : (fracLives >= 0.5 ? 2 : 1);
+    g.grade = g.stats.leaked === 0 ? 'S' : (fracLives >= 0.9 ? 'A' : (fracLives >= 0.55 ? 'B' : 'C'));
     const prev = SAVE.starsFor(g.levelN, g.diff);
     let cores = Math.round((2 + g.levelN * 0.3) * g.diffDef.coreMult) + (stars - 1);
+    if (g.grade === 'S') cores = Math.round(cores * 1.3); // flawless pays extra
     if (stars <= prev) cores = Math.max(1, Math.round(cores * 0.2)); // repeat clears pay less
     SAVE.recordWin(g.levelN, g.diff, stars, cores);
     if (g.stats.leaked === 0) SAVE.addStat('perfectWins', 1);
@@ -389,7 +398,7 @@ const GAME = (function () {
     g.combo++;
     g.comboT = 1.6;
     if (g.combo > g.comboPeak) g.comboPeak = g.combo;
-    const comboBonus = Math.min(0.5, g.combo * 0.012) * g.evComboMult;
+    const comboBonus = Math.min(0.35, g.combo * 0.01) * g.evComboMult;
     if (e.bounty) { g.cash += Math.round(e.bounty * (1 + comboBonus)); }
     // ability energy from kills
     g.energy = Math.min(100, g.energy + 1 + (e.def.threat || 2) * 0.05);
@@ -462,6 +471,22 @@ const GAME = (function () {
   function fxBoom(x, y, r, color) {
     g.fx.push({ kind: 'boom', x, y, r, color, ttl: 0.35, t: 0.35 });
     fxHit(x, y, color, 10);
+    if (g.particles.length < 270) {
+      for (let i = 0; i < 5; i++) { // rising smoke
+        g.particles.push({
+          x: x + (Math.random() - 0.5) * r, y: y + (Math.random() - 0.5) * r,
+          vx: (Math.random() - 0.5) * 0.4, vy: -0.6 - Math.random() * 0.8,
+          life: 0.55 + Math.random() * 0.3, maxLife: 0.85, size: 4 + Math.random() * 4, color: 'rgba(150,150,160,0.5)',
+        });
+      }
+      for (let i = 0; i < 6; i++) { // hot debris
+        const a = Math.random() * Math.PI * 2, sp = 2.5 + Math.random() * 3;
+        g.particles.push({
+          x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          life: 0.35 + Math.random() * 0.2, maxLife: 0.55, size: 2, color: '#fff2cc',
+        });
+      }
+    }
   }
   function fxHit(x, y, color, n) {
     if (g.particles.length > 260) return;
@@ -652,6 +677,17 @@ const GAME = (function () {
     }
     g.autoT2 -= dt;
     if (g.autoT2 <= 0) { g.autoT2 = 0.8; autocast(); }
+
+    // near-miss alarm: something is in the final stretch
+    let danger = false;
+    for (const e of g.enemies) {
+      if (!e.dead && e.y > 0 && e.dist / e.totalLen > 0.85) { danger = true; break; }
+    }
+    if (danger) {
+      g.dangerT = 0.35;
+      g.alarmT -= dt;
+      if (g.alarmT <= 0) { g.alarmT = 0.9; AUDIO.sfx.alarm(); }
+    } else if (g.dangerT > 0) g.dangerT -= dt;
 
     tickFx(dt);
 

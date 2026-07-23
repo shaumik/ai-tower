@@ -7,11 +7,12 @@ const WAVES = (function () {
     // progress-relative: same difficulty envelope regardless of how many waves a level has
     const p = Math.max(0, (wave - 1) / Math.max(1, (totalWaves || 20) - 1));
     const earlyGrit = 1 + 0.22 * Math.exp(-(level - 1) / 7); // early enemies are no pushovers
-    return (1 + 0.045 * (level - 1) + (0.5 + 0.11 * level) * Math.pow(p, 1.5)) * diffMult * earlyGrit;
+    return (1 + 0.045 * (level - 1) + (1.15 + 0.13 * level) * Math.pow(p, 1.35)) * diffMult * earlyGrit;
   }
-  function bountyScale(level, diff) {
-    // bounties grow with level to track HP inflation
-    return (1 + 0.018 * level) * diff.bountyMult;
+  function bountyScale(level, diff, p) {
+    // bounties grow with level but decay across a level: late waves have more
+    // kills, so per-kill pay drops to keep income roughly flat vs rising threat
+    return (1 + 0.018 * level) * diff.bountyMult * (1 - 0.30 * Math.min(1, p || 0));
   }
 
   // Build the spawn schedule for one wave: array of {delay, type, hpMult, banner}
@@ -36,7 +37,7 @@ const WAVES = (function () {
     const rampIn = Math.min(1, 0.7 + wave * 0.15); // first waves are only slightly lighter
     const earlyBoost = 1 + 0.5 * Math.exp(-(level - 1) / 7); // early levels punch harder, fades by ~L15
     const p = Math.max(0, (wave - 1) / Math.max(1, totalWaves - 1));
-    const growth = 1.7 + level * 0.165; // total count growth across the level
+    const growth = 2.3 + level * 0.17; // total count growth across the level
     let budget = (20 + level * 1.6) * earlyBoost * Math.pow(growth, Math.min(p, 1)) * (0.9 + 0.2 * r()) * rampIn;
     if (ev && ev.countMult) budget *= ev.countMult;
     if (isBossWave) budget *= 0.45; // boss itself is the show
@@ -100,7 +101,7 @@ const WAVES = (function () {
 
     return {
       events,
-      bounty: bountyScale(level, diffDef) * (ev && ev.bounty ? ev.bounty : 1),
+      bounty: bountyScale(level, diffDef, p) * (ev && ev.bounty ? ev.bounty : 1),
       event,
     };
   }
@@ -118,7 +119,7 @@ const WAVES = (function () {
   }
 
   function waveEndBonus(level, wave) {
-    return 24 + level * 3 + wave * 4;
+    return 18 + level * 2.5 + wave * 2.5;
   }
 
   return { build, preview, waveEndBonus, hpScale };
