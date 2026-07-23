@@ -86,11 +86,32 @@ const MAPS = (function () {
     const path = carve(COLS, rows, r, minLen, maxLen);
     const blocks = placeBlocks(COLS, rows, path, r, 3 + UTIL.rint(r, 0, 3) + Math.floor(n / 15));
 
+    // special terrain: hills (+range), power nodes (+dmg), dead zones (unbuildable)
+    const tiles = [];
+    const taken = new Set(path.map(p => p.x + ',' + p.y).concat(blocks.map(b => b.x + ',' + b.y)));
+    const wantTiles = [['hill', 1 + UTIL.rint(r, 0, 1)], ['power', 1 + UTIL.rint(r, 0, 1)], ['dead', UTIL.rint(r, 1, 2)]];
+    for (const [kind, cnt] of wantTiles) {
+      let placed = 0, guard = 0;
+      while (placed < cnt && guard++ < 200) {
+        const x = UTIL.rint(r, 0, COLS - 1), y = UTIL.rint(r, 1, rows - 2);
+        if (taken.has(x + ',' + y)) continue;
+        // hills/power should be useful: within 2.5 tiles of the path
+        if (kind !== 'dead') {
+          let near = false;
+          for (const p of path) if ((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) <= 6.25) { near = true; break; }
+          if (!near) continue;
+        }
+        taken.add(x + ',' + y);
+        tiles.push({ x, y, kind });
+        placed++;
+      }
+    }
+
     const waves = 10 + Math.floor(n * 0.28);            // 10 → 24 waves
     const startCash = 165 + n * 16;
     const lives = 20;
     const def = {
-      n, sector, cols: COLS, rows, path, blocks, waves, startCash, lives,
+      n, sector, cols: COLS, rows, path, blocks, tiles, waves, startCash, lives,
       boss: DATA.BOSS_LEVELS[n] || null,
       name: nodeName(n, r),
     };

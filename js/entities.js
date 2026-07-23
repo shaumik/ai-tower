@@ -53,6 +53,11 @@ class Enemy {
     this.phaseT = this.traits.phaser ? this.traits.phaser.period : 0;
     this.enraged = false;
     this.anim = Math.random() * 10;
+    // status effects for tower combos
+    this.chilledT = 0; this.shockT = 0; this.burnT = 0; this.critCd = 0;
+    // signal jammer state
+    this.jamT = this.traits.jam ? this.traits.jam.every : 0;
+    this.jammingT = 0; this.jamTarget = null;
 
     if (this.flying) {
       const p = g.level.path;
@@ -90,13 +95,14 @@ class Enemy {
   }
 
   speedNow() {
-    if (this.stunT > 0) return 0;
+    if (this.stunT > 0 || this.jammingT > 0) return 0;
     let s = this.baseSpeed * (1 + this.auraSpeed);
     if (this.enraged) s *= 1.6;
     if (!this.traits.slowImmune && !this.flying) {
       let slow = this.slowT > 0 ? this.slowPct : 0;
       slow = Math.max(slow, this.g.auraSlowAt(this.x, this.y));
       if (this.isBoss) slow = Math.min(slow, 0.45);
+      if (slow > 0.05) this.chilledT = Math.max(this.chilledT, 0.25); // CHILLED status
       s *= (1 - slow);
     }
     return s;
@@ -110,6 +116,36 @@ class Enemy {
     if (this.stunT > 0) this.stunT -= dt;
     if (this.slowT > 0) this.slowT -= dt;
     if (this.revealT > 0) this.revealT -= dt;
+    if (this.chilledT > 0) this.chilledT -= dt;
+    if (this.shockT > 0) this.shockT -= dt;
+    if (this.burnT > 0) this.burnT -= dt;
+    if (this.critCd > 0) this.critCd -= dt;
+
+    // signal jammer: stop and knock the nearest tower offline
+    if (this.traits.jam && !this.dead && this.y > 0) {
+      if (this.jammingT > 0) {
+        this.jammingT -= dt;
+        if (this.jamTarget && !this.jamTarget.dead) this.jamTarget.disabledT = 0.35; // refreshed while jamming
+        if (this.jammingT <= 0) this.jamTarget = null;
+      } else {
+        this.jamT -= dt;
+        if (this.jamT <= 0) {
+          let best = null, bd = this.traits.jam.range * this.traits.jam.range;
+          for (const tw of g.towers) {
+            if (tw.def.kind === 'income') continue;
+            const d2 = UTIL.dist2(this.x, this.y, tw.x, tw.y);
+            if (d2 < bd) { bd = d2; best = tw; }
+          }
+          if (best) {
+            this.jamTarget = best;
+            this.jammingT = this.traits.jam.dur;
+            g.fxRing(this.x, this.y, 0.6, '#ff5252');
+            AUDIO.sfx.stun();
+          }
+          this.jamT = this.traits.jam.every;
+        }
+      }
+    }
 
     // damage over time
     if (this.dotT > 0) {
@@ -170,6 +206,13 @@ class Enemy {
     opts = opts || {};
     this.noHitT = 0;
     let dmg = amount;
+    // damage type matchups: weakness +30%, resistance -30%
+    if (opts.dtype) {
+      if (this.def.weak === opts.dtype) dmg *= 1.3;
+      else if (this.def.resist === opts.dtype) dmg *= 0.7;
+    }
+    // SHOCKED enemies take +25%
+    if (this.shockT > 0) dmg *= 1.25;
     if (this.shield > 0) {
       const absorbed = Math.min(this.shield, dmg);
       this.shield -= absorbed;
@@ -255,8 +298,12 @@ class Tower {
       if (g.chipHas('harvest')) income = Math.round(income * 1.4);
       if (g.chipHas('napalm') && this.type === 'mortar') burn = true;
     }
+    // terrain bonuses
+    const tile = g.tileAt ? g.tileAt(this.gx, this.gy) : null;
+    if (tile === 'hill') range += 1;
     const surge = g.surgeT > 0;
-    const fw = 1 + SAVE.researchValue('firmware') / 100 + this.buffDmg + (surge ? 0.8 : 0);
+    let fw = 1 + SAVE.researchValue('firmware') / 100 + this.buffDmg + (surge ? 0.8 : 0);
+    if (tile === 'power') fw *= 1.25;
     let rr = 1 + SAVE.researchValue('overclockr') / 100 + this.buffRate + (surge ? 0.3 : 0);
     if (g.chipHas && g.chipHas('overvolt')) rr += 0.10;
     return {
@@ -267,8 +314,12 @@ class Tower {
     };
   }
 
-  // roll a crit for one shot: returns {dmg, crit}
-  rollHit(baseDmg) {
+  // roll a crit for one shot: returns {dmg, crit}. CHILLED targets guarantee one.
+  rollHit(baseDmg, target) {
+    if (target && target.chilledT > 0 && target.critCd <= 0) {
+      target.critCd = 1.5;
+      return { dmg: baseDmg * 2.2, crit: true };
+    }
     const chance = 0.08 + (this.g.chipHas && this.g.chipHas('deadeye') ? 0.12 : 0);
     if (Math.random() < chance) return { dmg: baseDmg * 2.2, crit: true };
     return { dmg: baseDmg, crit: false };
@@ -319,8 +370,8 @@ class Tower {
         if (!t) break;
         this.aim = Math.atan2(t.y - this.y, t.x - this.x);
         this.cool = 1 / s.rate;
-        const h = this.rollHit(s.dmg);
-        g.projectiles.push(new Projectile(g, this, t, { dmg: h.dmg, crit: h.crit, pierce: s.pierce, speed: 11, color: this.def.color, kind: 'bullet' }));
+        const h = this.rollHit(s.dmg, t);
+        g.projectiles.push(new Projectile(g, this, t, { dmg: h.dmg, crit: h.crit, pierce: s.pierce, dtype: this.def.dtype, speed: 11, color: this.def.color, kind: 'bullet' }));
         this.fireJuice();
         if (this.type === 'scanner') AUDIO.sfx.scan(); else AUDIO.sfx.shot();
         break;
@@ -331,8 +382,8 @@ class Tower {
         if (!t) break;
         this.aim = Math.atan2(t.y - this.y, t.x - this.x);
         this.cool = 1 / s.rate;
-        const h = this.rollHit(s.dmg);
-        t.hurt(h.dmg, { pierce: s.pierce, source: this });
+        const h = this.rollHit(s.dmg, t);
+        t.hurt(h.dmg, { pierce: s.pierce, dtype: this.def.dtype, source: this });
         if (h.crit) g.fxText(t.x, t.y, Math.round(h.dmg), '#ffd166', true);
         g.fxLine(this.x, this.y, t.x, t.y, this.def.color, 0.14);
         g.fxHit(t.x, t.y, this.def.color, 6);
@@ -346,13 +397,14 @@ class Tower {
         if (!first) break;
         this.aim = Math.atan2(first.y - this.y, first.x - this.x);
         this.cool = 1 / s.rate;
-        const h = this.rollHit(s.dmg);
+        const h = this.rollHit(s.dmg, first);
         let prev = { x: this.x, y: this.y };
         let cur = first, dmg = h.dmg;
         const hitSet = new Set();
         for (let i = 0; i < s.chains && cur; i++) {
           g.fxLine(prev.x, prev.y, cur.x, cur.y, this.def.color, 0.12, true);
-          cur.hurt(dmg, { source: this });
+          cur.hurt(dmg, { dtype: this.def.dtype, source: this });
+          cur.shockT = Math.max(cur.shockT, 2); // SHOCKED
           if (h.crit && i === 0) g.fxText(cur.x, cur.y, Math.round(dmg), '#ffd166', true);
           g.fxHit(cur.x, cur.y, this.def.color, 3);
           hitSet.add(cur);
@@ -380,10 +432,10 @@ class Tower {
         // lead the target slightly
         const lead = UTIL.clamp(t.speedNow() * 0.45, 0, 0.9);
         const tx = t.x + Math.cos(t.angle) * lead, ty = t.y + Math.sin(t.angle) * lead;
-        const h = this.rollHit(s.dmg);
+        const h = this.rollHit(s.dmg, t);
         g.projectiles.push(new Projectile(g, this, null, {
           dmg: h.dmg, crit: h.crit, speed: 6.5, color: this.def.color, kind: 'mortar',
-          destX: tx, destY: ty, splash: s.splash, arc: true, burn: s.burn,
+          destX: tx, destY: ty, splash: s.splash, arc: true, burn: s.burn, dtype: this.def.dtype,
         }));
         this.fireJuice();
         AUDIO.sfx.shot();
@@ -395,9 +447,9 @@ class Tower {
         if (!t) break;
         this.aim = Math.atan2(t.y - this.y, t.x - this.x);
         this.cool = 1 / s.rate;
-        const h = this.rollHit(s.dmg);
+        const h = this.rollHit(s.dmg, t);
         g.projectiles.push(new Projectile(g, this, t, {
-          dmg: h.dmg, crit: h.crit, speed: 5.5, color: this.def.color, kind: 'orb', splash: s.splash, air: true,
+          dmg: h.dmg, crit: h.crit, speed: 5.5, color: this.def.color, kind: 'orb', splash: s.splash, air: true, dtype: this.def.dtype,
         }));
         this.fireJuice();
         AUDIO.sfx.orb();
@@ -416,7 +468,7 @@ class Tower {
           const t = this.beamTarget;
           this.aim = Math.atan2(t.y - this.y, t.x - this.x);
           this.beamRamp = Math.min(s.rampMax, this.beamRamp + dt * 0.55);
-          t.hurt(s.dmg * this.beamRamp * dt, { source: this });
+          t.hurt(s.dmg * this.beamRamp * dt, { dtype: this.def.dtype, source: this });
           AUDIO.sfx.beam();
         }
         break;
@@ -445,8 +497,8 @@ class Tower {
         this.cool = 1 / s.rate;
         for (const e of g.enemies) {
           if (e.dead || e.y < 0 || !this.inRange(e, s.range)) continue;
-          e.hurt(s.dmg, { source: this, noArmor: true });
-          if (!e.dead) e.applyStun(s.stun);
+          e.hurt(s.dmg, { dtype: this.def.dtype, source: this, noArmor: true });
+          if (!e.dead) { e.applyStun(s.stun); e.shockT = Math.max(e.shockT, 2); }
         }
         g.fxRing(this.x, this.y, s.range, this.def.color);
         g.shake(3);
@@ -478,6 +530,7 @@ class Projectile {
     this.dmg = opts.dmg;
     this.crit = !!opts.crit;
     this.pierce = !!opts.pierce;
+    this.dtype = opts.dtype || null;
     this.burn = !!opts.burn;
     this.speed = opts.speed;
     this.color = opts.color;
@@ -522,7 +575,7 @@ class Projectile {
         if (e.dead || e.y < 0) continue;
         if (e.flying && this.kind === 'mortar') continue;
         if (UTIL.dist2(this.x, this.y, e.x, e.y) <= (r + e.size) * (r + e.size)) {
-          e.hurt(this.dmg, { source: this.source });
+          e.hurt(this.dmg, { dtype: this.dtype, source: this.source });
         }
       }
       if (this.crit) g.fxText(this.x, this.y, Math.round(this.dmg), '#ffd166', true);
@@ -533,7 +586,7 @@ class Projectile {
     } else {
       // single hit
       if (this.target && !this.target.dead) {
-        this.target.hurt(this.dmg, { pierce: this.pierce, source: this.source });
+        this.target.hurt(this.dmg, { pierce: this.pierce, dtype: this.dtype, source: this.source });
         if (this.crit) g.fxText(this.x, this.y, Math.round(this.dmg), '#ffd166', true);
         g.fxHit(this.x, this.y, this.color, 3);
       }

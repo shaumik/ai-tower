@@ -2,7 +2,7 @@
 'use strict';
 const DATA = (function () {
 
-  const VERSION = '1.6.3';
+  const VERSION = '1.7.0';
 
   // ------------------------------------------------------------------
   // SECTORS — 5 campaigns of 10 levels
@@ -20,8 +20,8 @@ const DATA = (function () {
   // ------------------------------------------------------------------
   const DIFFS = [
     { id: 'standard', name: 'STANDARD', hpMult: 1.0,  bountyMult: 1.0,  coreMult: 1 },
-    { id: 'hard',     name: 'HARD',     hpMult: 1.4,  bountyMult: 0.92, coreMult: 2 },
-    { id: 'insane',   name: 'INSANE',   hpMult: 1.95, bountyMult: 0.85, coreMult: 4 },
+    { id: 'hard',     name: 'HARD',     hpMult: 1.4,  bountyMult: 0.92, coreMult: 2, towerCap: 14 },
+    { id: 'insane',   name: 'INSANE',   hpMult: 1.95, bountyMult: 0.85, coreMult: 4, towerCap: 10 },
   ];
 
   // ------------------------------------------------------------------
@@ -30,7 +30,7 @@ const DATA = (function () {
   // ------------------------------------------------------------------
   const TOWERS = {
     sentry: {
-      name: 'Sentry Node', color: '#4fc3f7', unlock: 1, kind: 'bullet', air: true,
+      name: 'Sentry Node', color: '#4fc3f7', unlock: 1, kind: 'bullet', air: true, dtype: 'kin',
       desc: 'Reliable packet-interceptor turret. The backbone of any perimeter.',
       levels: [
         { cost: 45,  dmg: 8,  rate: 1.2,  range: 2.5 },
@@ -40,7 +40,7 @@ const DATA = (function () {
       ],
     },
     scanner: {
-      name: 'Scan Array', color: '#7fdcff', unlock: 2, kind: 'bullet', air: true, reveals: true,
+      name: 'Scan Array', color: '#7fdcff', unlock: 2, kind: 'bullet', air: true, reveals: true, dtype: 'kin',
       desc: 'Rapid-fire heuristic scanner. REVEALS stealthed threats in range.',
       levels: [
         { cost: 70,  dmg: 3,  rate: 3.5, range: 2.3 },
@@ -60,7 +60,7 @@ const DATA = (function () {
       ],
     },
     mortar: {
-      name: 'Packet Mortar', color: '#ff8a5c', unlock: 5, kind: 'splash', air: false,
+      name: 'Packet Mortar', color: '#ff8a5c', unlock: 5, kind: 'splash', air: false, dtype: 'ex',
       desc: 'Lobs compressed payload bombs. Splash damage wrecks clustered threats. Cannot hit fliers.',
       levels: [
         { cost: 130, dmg: 26,  rate: 0.5,  range: 3.4, splash: 1.15 },
@@ -90,7 +90,7 @@ const DATA = (function () {
       ],
     },
     pulse: {
-      name: 'Pulse Coil', color: '#b388ff', unlock: 11, kind: 'chain', air: true,
+      name: 'Pulse Coil', color: '#b388ff', unlock: 11, kind: 'chain', air: true, dtype: 'en',
       desc: 'Arc-discharge coil. Lightning chains between multiple threats.',
       levels: [
         { cost: 120, dmg: 12, rate: 0.9,  range: 2.4, chains: 3 },
@@ -100,7 +100,7 @@ const DATA = (function () {
       ],
     },
     sniper: {
-      name: 'Kernel Sniper', color: '#ff5d8a', unlock: 14, kind: 'snipe', air: true, pierce: true,
+      name: 'Kernel Sniper', color: '#ff5d8a', unlock: 14, kind: 'snipe', air: true, pierce: true, dtype: 'kin',
       desc: 'Ring-0 precision strike. Extreme range and damage, IGNORES armor.',
       levels: [
         { cost: 160, dmg: 55,  rate: 0.38, range: 5.5 },
@@ -120,7 +120,7 @@ const DATA = (function () {
       ],
     },
     lance: {
-      name: 'Photon Lance', color: '#2fe6a8', unlock: 21, kind: 'beam', air: true,
+      name: 'Photon Lance', color: '#2fe6a8', unlock: 21, kind: 'beam', air: true, dtype: 'en',
       desc: 'GPU-cluster beam weapon. Damage ramps up to 250% while locked on a target.',
       levels: [
         { cost: 210, dmg: 18, rate: 0, range: 3.0 },
@@ -130,7 +130,7 @@ const DATA = (function () {
       ],
     },
     emp: {
-      name: 'EMP Emitter', color: '#c86bff', unlock: 26, kind: 'emp', air: true,
+      name: 'EMP Emitter', color: '#c86bff', unlock: 26, kind: 'emp', air: true, dtype: 'en',
       desc: 'Periodic electromagnetic burst: damages and STUNS every threat in radius. Bosses are slowed instead.',
       levels: [
         { cost: 190, dmg: 15, rate: 1 / 5.5, range: 2.2, stun: 0.9 },
@@ -140,7 +140,7 @@ const DATA = (function () {
       ],
     },
     singularity: {
-      name: 'Singularity Core', color: '#ffffff', unlock: 31, kind: 'orb', air: true,
+      name: 'Singularity Core', color: '#ffffff', unlock: 31, kind: 'orb', air: true, dtype: 'ex',
       desc: 'Contained micro-singularity launches homing plasma spheres with splash damage. The endgame.',
       levels: [
         { cost: 500,  dmg: 45,  rate: 1.4, range: 3.2, splash: 0.8  },
@@ -159,13 +159,13 @@ const DATA = (function () {
   const ENEMIES = {
     spambot:   { name: 'Spambot',        hp: 22,  speed: 1.5,  bounty: 4,  dmg: 1, size: .27, color: '#ff8a5c', shape: 'bot',    unlock: 1,  threat: 3,
       lore: 'Mass-produced junk process. Alone it is nothing. It is never alone.' },
-    crawler:   { name: 'Ad Crawler',     hp: 14,  speed: 2.6,  bounty: 4,  dmg: 1, size: .22, color: '#ffd166', shape: 'dart',   unlock: 2,  threat: 3,
+    crawler:   { name: 'Ad Crawler', weak: 'kin',     hp: 14,  speed: 2.6,  bounty: 4,  dmg: 1, size: .22, color: '#ffd166', shape: 'dart',   unlock: 2,  threat: 3,
       lore: 'Scrapes everything, respects nothing. Fast and flimsy.' },
-    bloat:     { name: 'Bloatware',      hp: 72,  speed: 0.9,  bounty: 8,  dmg: 2, size: .36, color: '#9ccc65', shape: 'blob',   unlock: 3,  threat: 8,
+    bloat:     { name: 'Bloatware', weak: 'ex', resist: 'kin',      hp: 72,  speed: 0.9,  bounty: 8,  dmg: 2, size: .36, color: '#9ccc65', shape: 'blob',   unlock: 3,  threat: 8,
       lore: '400MB of toolbar. Slow, bloated, annoyingly durable.' },
     swarmling: { name: 'Swarmling',      hp: 8,   speed: 2.3,  bounty: 2,  dmg: 1, size: .16, color: '#ffab91', shape: 'tri',    unlock: 4,  threat: 1.5,
       lore: 'Script-kiddie botlets. Individually trivial. They ship in bulk.' },
-    trojan:    { name: 'Trojan Carrier', hp: 95,  speed: 1.2,  bounty: 12, dmg: 2, size: .38, color: '#ce93d8', shape: 'box',    unlock: 5,  threat: 12,
+    trojan:    { name: 'Trojan Carrier', weak: 'ex', hp: 95,  speed: 1.2,  bounty: 12, dmg: 2, size: .38, color: '#ce93d8', shape: 'box',    unlock: 5,  threat: 12,
       traits: { spawnOnDeath: { type: 'spambot', count: 4 } },
       lore: 'Looks like a harmless package. Bursts into Spambots on destruction.' },
     worm:      { name: 'Worm',           hp: 42,  speed: 1.4,  bounty: 6,  dmg: 1, size: .30, color: '#aed581', shape: 'worm',   unlock: 6,  threat: 8,
@@ -173,51 +173,54 @@ const DATA = (function () {
       lore: 'Self-replicating. Kill it and two segments crawl on.' },
     wormlet:   { name: 'Wormlet',        hp: 18,  speed: 1.8,  bounty: 3,  dmg: 1, size: .20, color: '#c5e1a5', shape: 'worm',   unlock: 99, nopool: true, threat: 2,
       lore: 'A worm fragment, still wriggling toward your core.' },
-    drone:     { name: 'Recon Drone',    hp: 32,  speed: 2.0,  bounty: 6,  dmg: 1, size: .26, color: '#4dd0e1', shape: 'wing',   unlock: 7,  threat: 7,
+    drone:     { name: 'Recon Drone', weak: 'kin', resist: 'en',    hp: 32,  speed: 2.0,  bounty: 6,  dmg: 1, size: .26, color: '#4dd0e1', shape: 'wing',   unlock: 7,  threat: 7,
       traits: { flying: true },
       lore: 'AIRBORNE — ignores the data bus and flies straight for your core. Tarpits and Mortars cannot touch it.' },
-    ransom:    { name: 'Ransomware',     hp: 125, speed: 1.0,  bounty: 14, dmg: 2, size: .36, color: '#ef5350', shape: 'lock',   unlock: 8,  threat: 14,
+    ransom:    { name: 'Ransomware', weak: 'ex', resist: 'kin',     hp: 125, speed: 1.0,  bounty: 14, dmg: 2, size: .36, color: '#ef5350', shape: 'lock',   unlock: 8,  threat: 14,
       traits: { armor: 6 },
       lore: 'ARMORED — flat damage reduction on every hit. Snipers pierce it.' },
     leech:     { name: 'Data Leech',     hp: 46,  speed: 1.8,  bounty: 10, dmg: 1, size: .26, color: '#f48fb1', shape: 'leech',  unlock: 9,  threat: 9,
       traits: { leech: 20 },
       lore: 'If it reaches your core it siphons credits along with integrity.' },
-    ganheal:   { name: 'GAN Regenerator',hp: 85,  speed: 1.3,  bounty: 12, dmg: 2, size: .32, color: '#80cbc4', shape: 'twin',   unlock: 11, threat: 13,
+    ganheal:   { name: 'GAN Regenerator', weak: 'en',hp: 85,  speed: 1.3,  bounty: 12, dmg: 2, size: .32, color: '#80cbc4', shape: 'twin',   unlock: 11, threat: 13,
       traits: { regen: 6 },
       lore: 'Generator and discriminator, endlessly repairing each other. Burst it down.' },
-    deepfake:  { name: 'Deepfake',       hp: 58,  speed: 1.7,  bounty: 12, dmg: 2, size: .28, color: '#b0bec5', shape: 'mask',   unlock: 12, threat: 12,
+    deepfake:  { name: 'Deepfake', weak: 'en', resist: 'kin',       hp: 58,  speed: 1.7,  bounty: 12, dmg: 2, size: .28, color: '#b0bec5', shape: 'mask',   unlock: 12, threat: 12,
       traits: { stealth: true },
       lore: 'STEALTHED — invisible to towers unless revealed by a Scan Array.' },
-    botnode:   { name: 'Botnet Node',    hp: 105, speed: 1.1,  bounty: 15, dmg: 2, size: .36, color: '#ffb74d', shape: 'hub',    unlock: 13, threat: 16,
+    botnode:   { name: 'Botnet Node', weak: 'en',    hp: 105, speed: 1.1,  bounty: 15, dmg: 2, size: .36, color: '#ffb74d', shape: 'hub',    unlock: 13, threat: 16,
       traits: { aura: { speed: 0.35, range: 2.2 } },
       lore: 'Command relay. Accelerates every threat marching near it. Kill it first.' },
-    golem:     { name: 'Overfit Golem',  hp: 270, speed: 0.75, bounty: 22, dmg: 3, size: .42, color: '#a1887f', shape: 'golem',  unlock: 14, threat: 22,
+    jammer:    { name: 'Signal Jammer',  hp: 95,  speed: 1.1,  bounty: 15, dmg: 2, size: .32, color: '#ff5252', shape: 'jam',    unlock: 13, threat: 16, weak: 'kin',
+      traits: { jam: { every: 5, dur: 2.5, range: 2.2 } },
+      lore: 'Stops to JAM your nearest tower offline. Kill it fast or fight half-blind.' },
+    golem:     { name: 'Overfit Golem', weak: 'en', resist: 'ex',  hp: 270, speed: 0.75, bounty: 22, dmg: 3, size: .42, color: '#a1887f', shape: 'golem',  unlock: 14, threat: 22,
       traits: { slowImmune: true },
       lore: 'Memorized the whole training set, including your slow effects. IMMUNE to slows.' },
-    phisher:   { name: 'Phisher',        hp: 95,  speed: 1.4,  bounty: 14, dmg: 2, size: .30, color: '#7986cb', shape: 'hook',   unlock: 16, threat: 15,
+    phisher:   { name: 'Phisher', weak: 'kin', resist: 'en',        hp: 95,  speed: 1.4,  bounty: 14, dmg: 2, size: .30, color: '#7986cb', shape: 'hook',   unlock: 16, threat: 15,
       traits: { shield: 65 },
       lore: 'SHIELDED — the shield recharges out of combat. Focus fire to crack it.' },
-    quantum:   { name: 'Quantum Glitch', hp: 62,  speed: 1.5,  bounty: 14, dmg: 2, size: .27, color: '#e1bee7', shape: 'qbit',   unlock: 18, threat: 14,
+    quantum:   { name: 'Quantum Glitch', weak: 'kin', resist: 'en', hp: 62,  speed: 1.5,  bounty: 14, dmg: 2, size: .27, color: '#e1bee7', shape: 'qbit',   unlock: 18, threat: 14,
       traits: { teleport: { every: 3.0, dist: 1.5 } },
       lore: 'Superposition abuse. BLINKS forward along the path every few seconds.' },
-    zeroday:   { name: 'Zero-Day',       hp: 48,  speed: 2.8,  bounty: 16, dmg: 3, size: .26, color: '#fff176', shape: 'flash',  unlock: 22, threat: 16,
+    zeroday:   { name: 'Zero-Day', weak: 'en',       hp: 48,  speed: 2.8,  bounty: 16, dmg: 3, size: .26, color: '#fff176', shape: 'flash',  unlock: 22, threat: 16,
       traits: { stealth: true },
       lore: 'Unknown signature, terrifying speed. STEALTHED and nearly gone before you see it.' },
-    hydra:     { name: 'Hydra Process',  hp: 160, speed: 1.2,  bounty: 18, dmg: 2, size: .38, color: '#81c784', shape: 'hydra',  unlock: 24, threat: 20,
+    hydra:     { name: 'Hydra Process', weak: 'ex', resist: 'kin',  hp: 160, speed: 1.2,  bounty: 18, dmg: 2, size: .38, color: '#81c784', shape: 'hydra',  unlock: 24, threat: 20,
       traits: { split: { type: 'worm', count: 3 } },
       lore: 'kill -9 one head and three Worms fork from the corpse.' },
-    wraith:    { name: 'Ghost Protocol', hp: 75,  speed: 2.2,  bounty: 16, dmg: 3, size: .28, color: '#90a4ae', shape: 'ghost',  unlock: 27, threat: 18,
+    wraith:    { name: 'Ghost Protocol', weak: 'en', resist: 'ex', hp: 75,  speed: 2.2,  bounty: 16, dmg: 3, size: .28, color: '#90a4ae', shape: 'ghost',  unlock: 27, threat: 18,
       traits: { flying: true, stealth: true },
       lore: 'AIRBORNE and STEALTHED. Your worst nightmare without scanner coverage.' },
-    juggernaut:{ name: 'Juggernaut',     hp: 440, speed: 0.8,  bounty: 30, dmg: 4, size: .44, color: '#ff7043', shape: 'tank',   unlock: 34, threat: 34,
+    juggernaut:{ name: 'Juggernaut', weak: 'en', resist: 'kin',     hp: 440, speed: 0.8,  bounty: 30, dmg: 4, size: .44, color: '#ff7043', shape: 'tank',   unlock: 34, threat: 34,
       traits: { armor: 12, regen: 8 },
       lore: 'ARMORED and REGENERATING siege platform. Bring armor-piercing rounds.' },
-    mirage:    { name: 'Mirage',         hp: 125, speed: 1.6,  bounty: 18, dmg: 2, size: .30, color: '#80deea', shape: 'mirror', unlock: 38, threat: 18,
+    mirage:    { name: 'Mirage', weak: 'kin',         hp: 125, speed: 1.6,  bounty: 18, dmg: 2, size: .30, color: '#80deea', shape: 'mirror', unlock: 38, threat: 18,
       traits: { spawnOnDeath: { type: 'decoy', count: 3 } },
       lore: 'Hallucinated by an adversarial model. Shatters into decoys that clog your targeting.' },
     decoy:     { name: 'Decoy',          hp: 2,   speed: 2.0,  bounty: 0,  dmg: 1, size: .22, color: '#b2ebf2', shape: 'mirror', unlock: 99, nopool: true, threat: 1,
       lore: 'It is not real. It can still hurt you.' },
-    titan:     { name: 'Compute Titan',  hp: 950, speed: 0.7,  bounty: 60, dmg: 6, size: .48, color: '#ffcc80', shape: 'titan',  unlock: 45, threat: 70,
+    titan:     { name: 'Compute Titan', weak: 'ex', resist: 'kin',  hp: 950, speed: 0.7,  bounty: 60, dmg: 6, size: .48, color: '#ffcc80', shape: 'titan',  unlock: 45, threat: 70,
       traits: { armor: 10, slowImmune: true },
       lore: 'A rogue datacenter on legs. ARMORED, slow-IMMUNE, unstoppable-adjacent.' },
     // ---------------- BOSSES ----------------
@@ -360,6 +363,19 @@ const DATA = (function () {
                   { name: 'Overmass',      ico: '◉', desc: 'Damage ×1.6',                        mods: { dmg: 1.6 } }],
   };
 
+  // damage type display metadata
+  const DTYPES = {
+    kin: { name: 'KINETIC',   ico: '➤', color: '#9fd4ff' },
+    en:  { name: 'ENERGY',    ico: '⚡', color: '#c86bff' },
+    ex:  { name: 'EXPLOSIVE', ico: '✳', color: '#ff8a5c' },
+  };
+
+  // pre-wave deals — decisions, not bills
+  const DEALS = {
+    bargain:   { ico: '¤', name: "DEVIL'S BARGAIN", desc: 'Take the credits now — the next wave hits 35% harder.' },
+    insurance: { ico: '⛨', name: 'LEAK INSURANCE',  desc: 'Pay up: leaks this wave cost no Integrity (streak still breaks).' },
+  };
+
   return { VERSION, SECTORS, DIFFS, TOWERS, TOWER_ORDER, ENEMIES, BOSS_LEVELS, RESEARCH, ACHIEVEMENTS,
-           EVENTS, ABILITIES, CHIPS, BRANCHES };
+           EVENTS, ABILITIES, CHIPS, BRANCHES, DTYPES, DEALS };
 })();

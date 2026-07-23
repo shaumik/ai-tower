@@ -61,6 +61,9 @@ const GAME = (function () {
     g.slowmoT = 0; g.endDelay = 0; g.hurtT = 0; g.autoT2 = 0;
     g.revived = false;
     g.perfectStreak = 0; g.perfectWaves = 0; g.bestCombo = 0; g.dangerT = 0; g.alarmT = 0;
+    g.tiles = {}; g.corrupt = {};
+    g.deal = null; g.dealAccepted = null; g.insured = false; g.bargainMult = 1;
+    g.fork = null; g.forkPick = null;
 
     // offer 1-of-3 protocol chips, seeded per attempt
     SAVE.state.stats.attempts = (SAVE.state.stats.attempts || 0) + 1;
@@ -76,6 +79,10 @@ const GAME = (function () {
     g.pathLen = g.level.path.length - 1;
     for (const b of g.level.blocks) g.grid[b.x + ',' + b.y] = 'block';
     for (const p of g.level.path) g.grid[p.x + ',' + p.y] = 'path';
+    for (const t of (g.level.tiles || [])) {
+      if (t.kind === 'dead') g.grid[t.x + ',' + t.y] = 'block';
+      else g.tiles[t.x + ',' + t.y] = t.kind;
+    }
     g.active = true;
 
     RENDER.resize(g);
@@ -100,8 +107,9 @@ const GAME = (function () {
   function cellFree(x, y) {
     const lv = g.level;
     if (x < 0 || y < 0 || x >= lv.cols || y >= lv.rows) return false;
-    return !g.grid[x + ',' + y];
+    return !g.grid[x + ',' + y] && !g.corrupt[x + ',' + y];
   }
+  function tileAt(x, y) { return g.tiles[x + ',' + y] || null; }
   function towerAt(x, y) {
     const v = g.grid[x + ',' + y];
     return (v && v instanceof Tower) ? v : null;
@@ -137,6 +145,10 @@ const GAME = (function () {
   function placeTower(type, x, y) {
     if (g.phase !== 'build') { UI.toast('CANNOT BUILD DURING A WAVE', 'warn'); AUDIO.sfx.error(); return false; }
     if (!cellFree(x, y)) { AUDIO.sfx.error(); return false; }
+    if (g.diffDef.towerCap && g.towers.length >= g.diffDef.towerCap) {
+      UI.toast('CAPACITY ' + g.diffDef.towerCap + ' REACHED — SELL TO REBUILD', 'warn');
+      AUDIO.sfx.error(); return false;
+    }
     const cost = towerCost(type);
     if (g.cash < cost) { UI.toast('INSUFFICIENT CREDITS', 'warn'); AUDIO.sfx.error(); return false; }
     g.cash -= cost;
@@ -222,8 +234,12 @@ const GAME = (function () {
     }
     g.rushT = 0; g.rushBase = 0;
 
-    const w = WAVES.build(g.levelN, g.wave, g.totalWaves, g.diff);
+    const w = WAVES.build(g.levelN, g.wave, g.totalWaves, g.diff, g.forkPick);
     g.bountyMult = w.bounty * (1 + SAVE.researchValue('bounty') / 100) * (chipHas('bounty') ? 1.2 : 1);
+    // apply accepted deals for this wave
+    g.bargainMult = g.dealAccepted === 'bargain' ? 1.35 : 1;
+    g.deal = null; g.dealAccepted = g.dealAccepted === 'bargain' ? null : g.dealAccepted;
+    g.fork = null; g.forkPick = null;
     g.spawnQueue = w.events.slice();
     g.spawnT = 0;
     g.phase = 'combat';
@@ -319,6 +335,55 @@ const GAME = (function () {
     g.phase = 'build';
     g.rushBase = 18 + g.wave * 5 + g.levelN * 2;
     g.rushT = 22;
+    g.insured = false; g.dealAccepted = null; g.bargainMult = 1;
+
+    // pre-wave content roll (seeded): fork the wave, or a deal
+    const pr = UTIL.rng(0xD1CE + g.levelN * 811 + g.wave * 53);
+    g.fork = null; g.deal = null;
+    if (g.wave <= g.totalWaves) {
+      const roll = pr();
+      if (roll < 0.22 && g.wave >= 3 && !DATA.BOSS_LEVELS[g.levelN] || (roll < 0.22 && g.wave < g.totalWaves)) {
+        const keys = ['rush', 'horde', 'siege', 'airraid', 'phantom'];
+        const a = keys[Math.floor(pr() * keys.length)];
+        let b = keys[Math.floor(pr() * keys.length)];
+        if (b === a) b = keys[(keys.indexOf(a) + 1 + Math.floor(pr() * 3)) % keys.length];
+        g.fork = [a, b];
+      } else if (roll < 0.50 && g.wave >= 3) {
+        if (pr() < 0.5) {
+          g.deal = { id: 'bargain', gain: 110 + g.wave * 16 + g.levelN * 6 };
+        } else {
+          g.deal = { id: 'insurance', cost: 45 + g.wave * 10 };
+        }
+      }
+    }
+    // corruption: seeds at wave 5, spreads every wave-end until purged
+    const ck = Object.keys(g.corrupt);
+    if (ck.length) {
+      for (const key of ck) {
+        const [cx, cy] = key.split(',').map(Number);
+        const opts2 = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+          .map(([dx, dy]) => [cx + dx, cy + dy])
+          .filter(([x, y]) => cellFree(x, y) && !tileAt(x, y));
+        if (opts2.length) {
+          const [nx, ny] = opts2[Math.floor(pr() * opts2.length)];
+          g.corrupt[nx + ',' + ny] = 1;
+          break; // one spread per wave total
+        }
+      }
+      UI.toast('⚠ CORRUPTION SPREADING — ' + Object.keys(g.corrupt).length + ' TILES', 'warn');
+    } else if (g.wave === 5 || (g.wave > 5 && g.wave % 7 === 0 && pr() < 0.5)) {
+      const lv = g.level;
+      let guard = 0;
+      while (guard++ < 80) {
+        const x = Math.floor(pr() * lv.cols), y = 1 + Math.floor(pr() * (lv.rows - 2));
+        if (cellFree(x, y) && !tileAt(x, y)) {
+          g.corrupt[x + ',' + y] = 1;
+          UI.toast('⚠ TILE CORRUPTED — PURGE BEFORE IT SPREADS', 'warn');
+          AUDIO.sfx.newThreat();
+          break;
+        }
+      }
+    }
     UI.phaseBanner('WAVE CLEARED  ·  +' + UTIL.fmt(income + interest) + ' ¤  ·  DEPLOY PHASE', false);
     UI.updateHUD();
     UI.checkAchToasts();
@@ -370,7 +435,7 @@ const GAME = (function () {
 
   // ================================================================ SPAWN & COMBAT
   function spawnEnemy(type, hpMult, opts) {
-    const e = new Enemy(g, type, hpMult, opts);
+    const e = new Enemy(g, type, hpMult * (g.bargainMult || 1), opts);
     if (g.evSpeedMult !== 1) e.baseSpeed *= g.evSpeedMult;
     if (g.evRegen) e.regenBonus = g.evRegen * hpMult;
     g.enemies.push(e);
@@ -411,6 +476,18 @@ const GAME = (function () {
     // shatter burst
     fxHit(e.x, e.y, e.def.color, e.isBoss ? 30 : 10);
     fxRing(e.x, e.y, e.size * 1.6, e.def.color);
+    // BURNING enemies detonate: fire spreads to neighbors
+    if (e.burnT > 0 && !e.flying) {
+      const burst = Math.min(60, e.maxHp * 0.05);
+      for (const o of g.enemies) {
+        if (o.dead || o === e || o.flying || o.y < 0) continue;
+        if (UTIL.dist2(e.x, e.y, o.x, o.y) <= 1.21) {
+          o.hurt(burst, { noArmor: true });
+          o.burnT = Math.max(o.burnT, 1);
+        }
+      }
+      fxBoom(e.x, e.y, 0.7, '#ff8a5c');
+    }
     // final kill of the wave: slow-mo finish
     if (g.phase === 'combat' && !g.spawnQueue.length) {
       let alive = 0;
@@ -447,6 +524,12 @@ const GAME = (function () {
   }
 
   function onLeak(e) {
+    if (g.insured) {
+      g.waveLeaks++;
+      UI.toast('⛨ LEAK INSURED', 'warn');
+      fxText(e.x, e.y, 'INSURED', '#7fdcff', false);
+      return;
+    }
     g.lives -= e.dmg;
     g.stats.leaked++;
     g.waveLeaks++;
@@ -511,6 +594,50 @@ const GAME = (function () {
   function addBurn(x, y, r, dps, dur) {
     if (g.burns.length > 12) g.burns.shift();
     g.burns.push({ x, y, r, dps, t: dur });
+  }
+
+  // ================================================================ DEALS / CORRUPTION / FORK
+  function acceptDeal() {
+    if (!g.deal || g.phase !== 'build') return false;
+    if (g.deal.id === 'bargain') {
+      g.cash += g.deal.gain;
+      g.dealAccepted = 'bargain';
+      UI.toast("DEVIL'S BARGAIN: +¤" + g.deal.gain + ' — NEXT WAVE +35%', 'warn');
+      AUDIO.sfx.cash();
+    } else if (g.deal.id === 'insurance') {
+      if (g.cash < g.deal.cost) { AUDIO.sfx.error(); return false; }
+      g.cash -= g.deal.cost;
+      g.insured = true;
+      g.dealAccepted = 'insurance';
+      UI.toast('⛨ INSURED — LEAKS COST NO INTEGRITY THIS WAVE', 'warn');
+      AUDIO.sfx.build();
+    }
+    g.deal = null;
+    UI.updateHUD();
+    return true;
+  }
+  function purgeCost() { return 40 + 30 * Math.max(0, Object.keys(g.corrupt).length - 1); }
+  function purgeCorruption() {
+    const n = Object.keys(g.corrupt).length;
+    if (!n || g.phase !== 'build') return false;
+    const cost = purgeCost();
+    if (g.cash < cost) { AUDIO.sfx.error(); UI.toast('NEED ¤' + cost + ' TO PURGE', 'warn'); return false; }
+    g.cash -= cost;
+    for (const key of Object.keys(g.corrupt)) {
+      const [x, y] = key.split(',').map(Number);
+      fxRing(x + 0.5, y + 0.5, 0.6, '#c86bff');
+    }
+    g.corrupt = {};
+    UI.toast('CORRUPTION PURGED', 'warn');
+    AUDIO.sfx.waveClear();
+    UI.updateHUD();
+    return true;
+  }
+  function pickFork(idx) {
+    if (!g.fork || g.phase !== 'build') return;
+    g.forkPick = g.fork[idx];
+    AUDIO.sfx.click();
+    UI.updateHUD();
   }
 
   // ================================================================ ABILITIES
@@ -675,7 +802,10 @@ const GAME = (function () {
       if (b.t <= 0) { g.burns.splice(i, 1); continue; }
       for (const e of g.enemies) {
         if (e.dead || e.flying || e.y < 0) continue;
-        if (UTIL.dist2(b.x, b.y, e.x, e.y) <= b.r * b.r) e.hurt(b.dps * dt, { noArmor: true });
+        if (UTIL.dist2(b.x, b.y, e.x, e.y) <= b.r * b.r) {
+          e.hurt(b.dps * dt, { noArmor: true });
+          e.burnT = Math.max(e.burnT, 0.6); // BURNING status
+        }
       }
     }
     g.autoT2 -= dt;
@@ -744,6 +874,9 @@ const GAME = (function () {
   g.abilityCost = abilityCost; g.abilityReady = abilityReady;
   g.castAbility = castAbility; g.doStrike = doStrike;
   g.revive = revive;
+  g.tileAt = tileAt;
+  g.acceptDeal = acceptDeal; g.purgeCorruption = purgeCorruption; g.purgeCost = purgeCost;
+  g.pickFork = pickFork;
   g.toast = (m, k) => UI.toast(m, k);
   return g;
 })();

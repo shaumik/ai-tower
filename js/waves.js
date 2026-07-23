@@ -27,7 +27,7 @@ const WAVES = (function () {
   function formationInfo(key) { return FORMATIONS[key] || null; }
 
   // Build the spawn schedule for one wave: array of {delay, type, hpMult, banner}
-  function build(level, wave, totalWaves, diff) {
+  function build(level, wave, totalWaves, diff, forcedFormation) {
     const r = UTIL.rng(0xBEEF + level * 10007 + wave * 271);
     const diffDef = DATA.DIFFS.find(d => d.id === diff) || DATA.DIFFS[0];
     const events = [];
@@ -37,7 +37,9 @@ const WAVES = (function () {
 
     // themed formation roll first, else a wave event (never both, never on bosses)
     let event = null, formation = null;
-    if (!isBossWave && wave >= 3) {
+    if (forcedFormation && !isBossWave) {
+      formation = forcedFormation;
+    } else if (!isBossWave && wave >= 3) {
       const roll = r();
       if (roll < 0.35) {
         const fkeys = Object.keys(FORMATIONS);
@@ -135,8 +137,8 @@ const WAVES = (function () {
   }
 
   // Preview: which types appear in a wave + any wave event (for the UI)
-  function preview(level, wave, totalWaves, diff) {
-    const w = build(level, wave, totalWaves, diff);
+  function preview(level, wave, totalWaves, diff, forcedFormation) {
+    const w = build(level, wave, totalWaves, diff, forcedFormation);
     const seen = {};
     const list = [];
     let hasMini = false, hasBoss = false;

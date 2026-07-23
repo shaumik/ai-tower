@@ -129,6 +129,50 @@ const RENDER = (function () {
     strokePathOffset(c, path, -(pw / 2 - 2));
     c.globalAlpha = 1;
 
+    // special terrain
+    for (const tl of (lv.tiles || [])) {
+      const tx = tl.x * T, ty = tl.y * T;
+      if (tl.kind === 'hill') {
+        // elevated pad: layered plates + chevron
+        c.fillStyle = 'rgba(140,190,255,0.10)';
+        roundRect(c, tx + T * 0.06, ty + T * 0.06, T * 0.88, T * 0.88, T * 0.14); c.fill();
+        c.fillStyle = 'rgba(140,190,255,0.14)';
+        roundRect(c, tx + T * 0.16, ty + T * 0.16, T * 0.68, T * 0.68, T * 0.1); c.fill();
+        c.strokeStyle = 'rgba(159,212,255,0.8)'; c.lineWidth = 2; c.lineJoin = 'round';
+        c.beginPath();
+        c.moveTo(tx + T * 0.34, ty + T * 0.56); c.lineTo(tx + T * 0.5, ty + T * 0.38); c.lineTo(tx + T * 0.66, ty + T * 0.56);
+        c.moveTo(tx + T * 0.34, ty + T * 0.72); c.lineTo(tx + T * 0.5, ty + T * 0.54); c.lineTo(tx + T * 0.66, ty + T * 0.72);
+        c.stroke();
+      } else if (tl.kind === 'power') {
+        // glowing power socket
+        c.shadowColor = '#ffd166'; c.shadowBlur = 12;
+        c.strokeStyle = 'rgba(255,209,102,0.9)'; c.lineWidth = 2;
+        roundRect(c, tx + T * 0.14, ty + T * 0.14, T * 0.72, T * 0.72, T * 0.12); c.stroke();
+        c.fillStyle = 'rgba(255,209,102,0.16)';
+        roundRect(c, tx + T * 0.14, ty + T * 0.14, T * 0.72, T * 0.72, T * 0.12); c.fill();
+        c.fillStyle = '#ffd166';
+        c.font = 'bold ' + Math.round(T * 0.42) + 'px monospace';
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText('⚡', tx + T / 2, ty + T * 0.54);
+        c.shadowBlur = 0;
+      } else if (tl.kind === 'dead') {
+        // dead zone: red hatching
+        c.strokeStyle = 'rgba(255,61,113,0.4)'; c.lineWidth = 2;
+        roundRect(c, tx + T * 0.08, ty + T * 0.08, T * 0.84, T * 0.84, T * 0.1); c.stroke();
+        c.save();
+        c.beginPath();
+        roundRect(c, tx + T * 0.08, ty + T * 0.08, T * 0.84, T * 0.84, T * 0.1); c.clip();
+        c.strokeStyle = 'rgba(255,61,113,0.28)'; c.lineWidth = 1.5;
+        for (let i = -1; i < 3; i++) {
+          c.beginPath();
+          c.moveTo(tx + i * T * 0.4, ty + T);
+          c.lineTo(tx + i * T * 0.4 + T, ty);
+          c.stroke();
+        }
+        c.restore();
+      }
+    }
+
     // blocked cells: server racks
     for (const b of lv.blocks) {
       const bx = b.x * T, by = b.y * T;
@@ -283,6 +327,23 @@ const RENDER = (function () {
           c.beginPath(); c.arc(Math.cos(a) * 38, Math.sin(a) * 38, 6, 0, 7); c.fillStyle = '#fff'; c.fill();
           neon(c, color, 12);
         }
+        break;
+      case 'jam':
+        c.beginPath(); c.arc(0, 0, 18, 0, 7); c.globalAlpha = 0.3; c.fill(); c.globalAlpha = 1;
+        c.beginPath(); c.arc(0, 0, 18, 0, 7); c.stroke();
+        // radiating interference spikes
+        for (let i = 0; i < 4; i++) {
+          const a = i * Math.PI / 2 + Math.PI / 4;
+          c.beginPath();
+          c.moveTo(Math.cos(a) * 18, Math.sin(a) * 18);
+          c.lineTo(Math.cos(a) * 36, Math.sin(a) * 36);
+          c.stroke();
+          c.beginPath(); c.arc(Math.cos(a) * 36, Math.sin(a) * 36, 4, 0, 7);
+          c.globalAlpha = 0.7; c.fill(); c.globalAlpha = 1;
+        }
+        c.fillStyle = '#fff';
+        c.font = 'bold 22px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText('✕', 0, 1);
         break;
       case 'golem':
         c.globalAlpha = 0.3; roundRect(c, -30, -26, 60, 52, 10); c.fill(); c.globalAlpha = 1;
@@ -724,6 +785,40 @@ const RENDER = (function () {
       ctx.globalAlpha = 1;
     }
 
+    // corruption: creeping purple rot
+    for (const key in g.corrupt) {
+      const [cx2, cy2] = key.split(',').map(Number);
+      const flick = 0.7 + Math.sin(now * 0.004 + cx2 * 3 + cy2 * 7) * 0.3;
+      ctx.fillStyle = 'rgba(150,60,220,' + (0.20 * flick).toFixed(3) + ')';
+      ctx.fillRect(sx(cx2) + 1, sy(cy2) + 1, T - 2, T - 2);
+      ctx.strokeStyle = 'rgba(200,107,255,' + (0.55 * flick).toFixed(3) + ')';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(sx(cx2) + 2, sy(cy2) + 2, T - 4, T - 4);
+      ctx.setLineDash([]);
+      if (Math.random() < 0.06 && g.particles.length < 280) {
+        g.particles.push({
+          x: cx2 + Math.random(), y: cy2 + Math.random(),
+          vx: 0, vy: -0.4, life: 0.6, maxLife: 0.6, size: 2, color: '#c86bff',
+        });
+      }
+    }
+
+    // jammer beams
+    ctx.globalCompositeOperation = 'lighter';
+    for (const e of g.enemies) {
+      if (e.dead || !e.jamTarget || e.jammingT <= 0) continue;
+      const t = e.jamTarget;
+      ctx.strokeStyle = '#ff5252';
+      ctx.lineWidth = 1.6;
+      ctx.globalAlpha = 0.5 + Math.sin(now * 0.03) * 0.3;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.moveTo(sx(e.x), sy(e.y)); ctx.lineTo(sx(t.x), sy(t.y)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
     // towers
     for (const tw of g.towers) {
       const bs = towerBaseSprite(tw.type, tw.tier);
@@ -1048,6 +1143,16 @@ const RENDER = (function () {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+    }
+
+    // status pips: chilled / shocked / burning
+    if (!e.stealthed && (e.chilledT > 0 || e.shockT > 0 || e.burnT > 0)) {
+      ctx.globalCompositeOperation = 'lighter';
+      let sxo = px - dim * 0.4;
+      if (e.chilledT > 0) { ctx.fillStyle = '#7fdcff'; ctx.fillRect(sxo, py + dim / 2 + 2, 5, 5); sxo += 7; }
+      if (e.shockT > 0)   { ctx.fillStyle = '#c86bff'; ctx.fillRect(sxo, py + dim / 2 + 2, 5, 5); sxo += 7; }
+      if (e.burnT > 0)    { ctx.fillStyle = '#ff8a5c'; ctx.fillRect(sxo, py + dim / 2 + 2, 5, 5); }
+      ctx.globalCompositeOperation = 'source-over';
     }
 
     // hp bar

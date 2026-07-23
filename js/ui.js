@@ -190,6 +190,9 @@ const UI = (function () {
         if (tr.split || tr.spawnOnDeath) tags.push('SPAWNER');
         if (tr.teleport) tags.push('BLINKS');
         if (tr.aura) tags.push('BUFFER');
+        if (tr.jam) tags.push('JAMMER');
+        if (e.weak) tags.push('WEAK: ' + DATA.DTYPES[e.weak].name);
+        if (e.resist) tags.push('RESISTS: ' + DATA.DTYPES[e.resist].name);
         mid.appendChild(UTIL.h('div', 'cdx-tags', seen ? tags.join(' · ') : 'ENCOUNTER TO DECRYPT'));
         mid.appendChild(UTIL.h('div', 'cdx-desc', seen ? e.lore : 'No data. Encounter this entity in the field.'));
         if (seen) mid.appendChild(UTIL.h('div', 'cdx-stats',
@@ -209,7 +212,8 @@ const UI = (function () {
         item.appendChild(sp);
         const mid = UTIL.h('div');
         mid.appendChild(UTIL.h('div', 'cdx-name', t.name));
-        mid.appendChild(UTIL.h('div', 'cdx-tags', 'UNLOCKS AT NODE ' + t.unlock + (t.air ? ' · TARGETS AIR' : ' · GROUND ONLY')));
+        mid.appendChild(UTIL.h('div', 'cdx-tags', 'UNLOCKS AT NODE ' + t.unlock + (t.air ? ' · TARGETS AIR' : ' · GROUND ONLY') +
+          (t.dtype ? ' · ' + DATA.DTYPES[t.dtype].ico + ' ' + DATA.DTYPES[t.dtype].name : '')));
         mid.appendChild(UTIL.h('div', 'cdx-desc', t.desc));
         const l0 = t.levels[0];
         mid.appendChild(UTIL.h('div', 'cdx-stats', 'COST ' + l0.cost +
@@ -330,11 +334,12 @@ const UI = (function () {
     if (bottomEdge - top < 66) { box.classList.remove('show'); return; }
     box.style.top = top + 'px';
     box.style.maxHeight = (bottomEdge - top) + 'px';
-    const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff);
+    const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff, g.forkPick);
     box.innerHTML = '';
     let title = 'INCOMING — WAVE ' + g.wave + ' / ' + g.totalWaves;
     if (prev.hasBoss) title += '  <b>☠ BOSS</b>';
     else if (prev.hasMini) title += '  <b>⚠ MINI-BOSS</b>';
+    if (g.diffDef.towerCap) title += '  <span style="color:#7fa8c9">· TOWERS ' + g.towers.length + '/' + g.diffDef.towerCap + '</span>';
     box.appendChild(UTIL.h('div', 'wi-title', title));
     const row = UTIL.h('div', 'wi-row');
     for (const p of prev.list.slice(0, 6)) {
@@ -344,13 +349,65 @@ const UI = (function () {
       RENDER.paintEnemyIcon(cv, p.type);
       cell.appendChild(cv);
       const e = DATA.ENEMIES[p.type];
-      cell.appendChild(UTIL.h('span', '', '<span class="wc">×' + p.count + '</span><br><span class="wn">' + e.name + '</span>'));
+      let marks = '';
+      if (e.weak) marks += ' <span style="color:' + DATA.DTYPES[e.weak].color + '">▲' + DATA.DTYPES[e.weak].ico + '</span>';
+      if (e.resist) marks += ' <span style="color:#5f6e89">▼' + DATA.DTYPES[e.resist].ico + '</span>';
+      cell.appendChild(UTIL.h('span', '', '<span class="wc">×' + p.count + '</span>' + marks + '<br><span class="wn">' + e.name + '</span>'));
       row.appendChild(cell);
     }
     box.appendChild(row);
     const fInfo = prev.formation ? WAVES.formationInfo(prev.formation) : null;
     if (prev.event) box.appendChild(UTIL.h('div', 'wi-warn', DATA.EVENTS[prev.event].ico + ' ' + DATA.EVENTS[prev.event].name + ' — ' + DATA.EVENTS[prev.event].desc));
     else if (fInfo) box.appendChild(UTIL.h('div', 'wi-warn', fInfo.ico + ' ' + fInfo.name + ' — ' + fInfo.desc));
+
+    // fork the wave: pick what's coming
+    if (g.fork && !g.forkPick) {
+      const fr = UTIL.h('div', 'wi-deal');
+      fr.appendChild(UTIL.h('div', 'wi-warn', '⑂ ROUTE SPLIT — choose the incoming wave:'));
+      const btns = UTIL.h('div', 'wi-btns');
+      g.fork.forEach((key, idx) => {
+        const f = WAVES.formationInfo(key);
+        const b = UTIL.h('button', 'btn wi-btn', f.ico + ' ' + f.name);
+        b.onclick = () => { GAME.pickFork(idx); };
+        btns.appendChild(b);
+      });
+      fr.appendChild(btns);
+      box.appendChild(fr);
+    } else if (g.forkPick) {
+      const f = WAVES.formationInfo(g.forkPick);
+      box.appendChild(UTIL.h('div', 'wi-warn', '⑂ ROUTED: ' + f.ico + ' ' + f.name));
+    }
+
+    // deal on the table
+    if (g.deal) {
+      const dd = DATA.DEALS[g.deal.id];
+      const dr = UTIL.h('div', 'wi-deal');
+      const label = g.deal.id === 'bargain' ? '+¤' + g.deal.gain : '−¤' + g.deal.cost;
+      dr.appendChild(UTIL.h('div', 'wi-warn', dd.ico + ' ' + dd.name + ' <b>' + label + '</b> — ' + dd.desc));
+      const btns = UTIL.h('div', 'wi-btns');
+      const acc = UTIL.h('button', 'btn btn-primary wi-btn', '✓ ACCEPT ' + label);
+      acc.onclick = () => { GAME.acceptDeal(); renderWaveIntel(); };
+      btns.appendChild(acc);
+      dr.appendChild(btns);
+      box.appendChild(dr);
+    } else if (g.dealAccepted === 'insurance') {
+      box.appendChild(UTIL.h('div', 'wi-warn', '⛨ INSURED FOR THIS WAVE'));
+    } else if (g.dealAccepted === 'bargain') {
+      box.appendChild(UTIL.h('div', 'wi-warn', "¤ BARGAIN STRUCK — NEXT WAVE +35%"));
+    }
+
+    // corruption purge
+    const corruptN = Object.keys(g.corrupt).length;
+    if (corruptN) {
+      const cr = UTIL.h('div', 'wi-deal');
+      cr.appendChild(UTIL.h('div', 'wi-warn', '☣ CORRUPTION: ' + corruptN + ' TILE' + (corruptN > 1 ? 'S' : '') + ' — spreads every wave'));
+      const btns = UTIL.h('div', 'wi-btns');
+      const pb = UTIL.h('button', 'btn btn-danger wi-btn', '☣ PURGE ¤' + g.purgeCost());
+      pb.onclick = () => { GAME.purgeCorruption(); renderWaveIntel(); };
+      btns.appendChild(pb);
+      cr.appendChild(btns);
+      box.appendChild(cr);
+    }
     box.classList.add('show');
   }
 
@@ -531,6 +588,7 @@ const UI = (function () {
     if (l0.chains) bits.push('CHAIN ×' + l0.chains);
     if (l0.income) bits.push('+¤' + l0.income + '/wave');
     if (l0.buffDmg) bits.push('+' + Math.round(l0.buffDmg * 100) + '% DMG aura');
+    if (t.dtype) bits.push('<span style="color:' + DATA.DTYPES[t.dtype].color + '">' + DATA.DTYPES[t.dtype].ico + ' ' + DATA.DTYPES[t.dtype].name + '</span>');
     bits.push(t.air ? 'hits air' : 'ground only');
     mid.appendChild(UTIL.h('div', 'pi-stats', bits.join(' · ')));
     box.appendChild(mid);
@@ -768,8 +826,14 @@ const UI = (function () {
     const cost = g.towerCost(g.placingType);
     const valid = active && g.cellFree(g.placeCell.x, g.placeCell.y) && g.cash >= cost;
     ok.disabled = !valid;
+    let tileTag = '';
+    if (g.placeCell && valid) {
+      const tk = g.tileAt(g.placeCell.x, g.placeCell.y);
+      if (tk === 'hill') tileTag = '  ▲ +1 RANGE';
+      else if (tk === 'power') tileTag = '  ⚡ +25% DMG';
+    }
     ok.textContent = g.placeCell
-      ? (valid ? '✓ DEPLOY  ¤' + cost : (g.placeCell && !g.cellFree(g.placeCell.x, g.placeCell.y) ? 'BLOCKED TILE' : 'NEED ¤' + cost))
+      ? (valid ? '✓ DEPLOY  ¤' + cost + tileTag : (g.placeCell && !g.cellFree(g.placeCell.x, g.placeCell.y) ? 'BLOCKED TILE' : 'NEED ¤' + cost))
       : 'TAP THE GRID…';
   }
 
