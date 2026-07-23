@@ -603,6 +603,36 @@ const UI = (function () {
         'Survived to wave ' + GAME.wave + ' of ' + GAME.totalWaves +
         '<br>' + GAME.stats.kills + ' threats neutralized.'));
     }
+    // rewarded ad: bonus cores on victory / second wind on defeat (portal builds only)
+    if (ADS.available()) {
+      if (won) {
+        const bonus = Math.max(1, Math.ceil(cores * 0.5));
+        const adB = UTIL.h('button', 'btn btn-primary', '▶ WATCH AD: +' + bonus + ' ◈ BONUS');
+        adB.onclick = () => {
+          adB.disabled = true;
+          ADS.showRewarded(ok => {
+            if (ok) {
+              SAVE.state.cores += bonus; SAVE.persist();
+              adB.textContent = '✓ +' + bonus + ' ◈ CLAIMED';
+              toast('+' + bonus + ' ◈ DATA CORES', 'warn');
+              AUDIO.sfx.cash();
+            } else { adB.textContent = 'AD UNAVAILABLE'; }
+          });
+        };
+        card.appendChild(adB);
+      } else if (!GAME.revived) {
+        const adB = UTIL.h('button', 'btn btn-primary', '▶ WATCH AD: ⚡ SECOND WIND (+5 ⬢)');
+        adB.onclick = () => {
+          adB.disabled = true;
+          ADS.showRewarded(ok => {
+            if (ok && GAME.revive()) { $('end-overlay').classList.remove('show'); }
+            else { adB.textContent = 'AD UNAVAILABLE'; }
+          });
+        };
+        card.appendChild(adB);
+      }
+    }
+
     if (won) {
       if (!GAME.endless) {
         const cont = UTIL.h('button', 'btn', '∞ CONTINUE ENDLESS');
@@ -617,12 +647,18 @@ const UI = (function () {
       }
       if (GAME.levelN < 50 && !GAME.endless) {
         const nxt = UTIL.h('button', 'btn btn-primary', '▶ NEXT NODE');
-        nxt.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(GAME.levelN + 1, GAME.diff, false); };
+        nxt.onclick = () => {
+          $('end-overlay').classList.remove('show');
+          ADS.interstitial(() => GAME.start(GAME.levelN + 1, GAME.diff, false));
+        };
         card.appendChild(nxt);
       }
     } else {
       const rty = UTIL.h('button', 'btn btn-primary', '↻ RETRY NODE');
-      rty.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(GAME.levelN, GAME.diff, GAME.endless); };
+      rty.onclick = () => {
+        $('end-overlay').classList.remove('show');
+        ADS.interstitial(() => GAME.start(GAME.levelN, GAME.diff, GAME.endless));
+      };
       card.appendChild(rty);
     }
     const back = UTIL.h('button', 'btn', 'NODE SELECT');
@@ -634,7 +670,8 @@ const UI = (function () {
   function togglePause(on) {
     GAME.paused = on;
     $('pause-overlay').classList.toggle('show', on);
-    if (on) renderPauseToggles();
+    if (on) { renderPauseToggles(); ADS.gameplayStop(); }
+    else if (GAME.phase === 'combat') ADS.gameplayStart();
   }
   function renderPauseToggles() {
     const box = $('pause-toggles');

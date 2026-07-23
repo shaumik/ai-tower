@@ -1,12 +1,15 @@
 /* NEURAL SIEGE — bootstrap */
 'use strict';
 (function () {
+  ADS.loadingStart();
   SAVE.load();
   RENDER.setup(UTIL.el('game-canvas'));
   UI.init();
+  ADS.init();
+  ADS.loadingStop();
 
-  // Offline support (needs http(s); silently skipped on file://)
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  // Offline support (needs http(s); silently skipped on file:// and portal builds)
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.__NO_SW) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });

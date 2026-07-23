@@ -59,6 +59,7 @@ const GAME = (function () {
     g.burns = []; g.texts = [];
     g.curEvent = null; g.evSpeedMult = 1; g.evRegen = 0; g.evComboMult = 1;
     g.slowmoT = 0; g.endDelay = 0; g.hurtT = 0; g.autoT2 = 0;
+    g.revived = false;
 
     // offer 1-of-3 protocol chips, seeded per attempt
     SAVE.state.stats.attempts = (SAVE.state.stats.attempts || 0) + 1;
@@ -252,6 +253,7 @@ const GAME = (function () {
     UI.closeSheets();
     UI.updateHUD();
     AUDIO.sfx.waveStart();
+    ADS.gameplayStart();
   }
 
   function endWave() {
@@ -318,6 +320,7 @@ const GAME = (function () {
 
   function victory() {
     g.phase = 'won';
+    ADS.gameplayStop();
     const fracLives = g.lives / g.maxLives;
     const stars = g.lives >= g.maxLives * 0.9 ? 3 : (fracLives >= 0.5 ? 2 : 1);
     const prev = SAVE.starsFor(g.levelN, g.diff);
@@ -333,8 +336,24 @@ const GAME = (function () {
 
   function defeat() {
     g.phase = 'lost';
+    ADS.gameplayStop();
     AUDIO.sfx.defeat();
     UI.showEnd(false, 0, 0);
+  }
+
+  // rewarded-ad second wind: once per level, back into the fight
+  function revive() {
+    if (g.phase !== 'lost' || g.revived) return false;
+    g.revived = true;
+    g.lives = 5;
+    g.phase = 'combat';
+    for (const e of g.enemies) if (!e.dead) e.applyStun(2.5);
+    fxRing(g.level.path[g.level.path.length - 1].x + 0.5, g.level.path[g.level.path.length - 1].y + 0.5, 3, '#7fdcff');
+    shake(5);
+    UI.phaseBanner('⚡ SECOND WIND — CORE RESTORED TO 5', true);
+    UI.updateHUD();
+    ADS.gameplayStart();
+    return true;
   }
 
   // ================================================================ SPAWN & COMBAT
@@ -685,6 +704,7 @@ const GAME = (function () {
   g.chipHas = chipHas; g.pickChip = pickChip;
   g.abilityCost = abilityCost; g.abilityReady = abilityReady;
   g.castAbility = castAbility; g.doStrike = doStrike;
+  g.revive = revive;
   g.toast = (m, k) => UI.toast(m, k);
   return g;
 })();

@@ -1,9 +1,10 @@
 /* NEURAL SIEGE — service worker: cache-first for full offline play */
-const CACHE = 'neural-siege-v8';
+const CACHE = 'neural-siege-v9';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
+  './js/ads.js',
   './js/util.js',
   './js/data.js',
   './js/save.js',
