@@ -283,6 +283,7 @@ const UI = (function () {
     $('pause-overlay').classList.remove('show');
     $('end-overlay').classList.remove('show');
     $('chip-overlay').classList.remove('show');
+    refreshChipInd();
     bossBar(null);
   }
 
@@ -359,10 +360,26 @@ const UI = (function () {
         $('chip-overlay').classList.remove('show');
         toast('CHIP INSTALLED: ' + c.name.toUpperCase(), 'warn');
         AUDIO.sfx.upgrade();
+        refreshChipInd();
       };
       card.appendChild(b);
     }
     $('chip-overlay').classList.add('show');
+  }
+
+  // persistent badge showing the active chip; tap it to re-read the effect
+  function refreshChipInd() {
+    const box = $('chip-ind');
+    const g = GAME;
+    if (!g.active || !g.chips.length) { box.classList.remove('show'); return; }
+    const defs = g.chips.map(id => DATA.CHIPS.find(c => c.id === id)).filter(Boolean);
+    box.innerHTML = defs.map(c => '<span>' + c.ico + '</span>').join('') +
+      '<span>' + defs[defs.length - 1].name.toUpperCase() + '</span>';
+    box.onclick = () => {
+      toast(defs.map(c => c.ico + ' ' + c.name + ': ' + c.desc).join(' · '), 'warn');
+      AUDIO.sfx.click();
+    };
+    box.classList.add('show');
   }
 
   function hurtFlash() {
