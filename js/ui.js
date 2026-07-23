@@ -19,7 +19,8 @@ const UI = (function () {
     const st = SAVE.state;
     $('menu-stats').innerHTML =
       '◈ ' + st.cores + ' CORES &nbsp;·&nbsp; ★ ' + st.stats.starsTotal + '/150' +
-      '<br>' + UTIL.fmt(st.stats.kills) + ' THREATS NEUTRALIZED';
+      '<br>' + UTIL.fmt(st.stats.kills) + ' THREATS NEUTRALIZED' +
+      '<br><span style="opacity:.55">v' + DATA.VERSION + '</span>';
   }
 
   // ================================================================ LEVEL SELECT
@@ -809,6 +810,24 @@ const UI = (function () {
     document.querySelectorAll('.ctab').forEach(t => {
       t.onclick = () => { codexTab = t.dataset.ctab; renderCodex(); };
     });
+
+    // force update: nuke SW + caches, reload fresh (save data untouched)
+    const upBtn = UTIL.h('button', 'btn', '⟳ CHECK FOR UPDATES');
+    upBtn.onclick = async () => {
+      upBtn.textContent = 'UPDATING…';
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) await r.unregister();
+        }
+        if (window.caches) {
+          const keys = await caches.keys();
+          for (const k of keys) await caches.delete(k);
+        }
+      } catch (e) {}
+      location.replace(location.pathname + '?u=' + Math.floor(performance.now()));
+    };
+    document.querySelector('#screen-settings .settings-danger').insertBefore(upBtn, $('btn-wipe'));
 
     // wipe with confirm
     let wipeArmed = false;

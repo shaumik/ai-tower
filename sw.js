@@ -1,5 +1,5 @@
 /* NEURAL SIEGE — service worker: cache-first for full offline play */
-const CACHE = 'neural-siege-v9';
+const CACHE = 'neural-siege-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -35,6 +35,18 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  // navigations are network-first so a fresh deploy is picked up on next open;
+  // cache fallback keeps full offline play
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put('./index.html', copy));
+        return res;
+      }).catch(() => caches.match('./index.html', { ignoreSearch: true }))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit =>
       hit || fetch(e.request).then(res => {
