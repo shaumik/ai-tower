@@ -86,24 +86,45 @@ const MAPS = (function () {
     const path = carve(COLS, rows, r, minLen, maxLen);
     const blocks = placeBlocks(COLS, rows, path, r, 3 + UTIL.rint(r, 0, 3) + Math.floor(n / 15));
 
-    // special terrain: hills (+range), power nodes (+dmg), dead zones (unbuildable)
+    // special terrain: hills (+range), power nodes (+dmg), dead zones (unbuildable).
+    // Placement is scored, not random: bonus tiles go where a tower can actually
+    // work the path, dead zones deny prime real estate.
     const tiles = [];
     const taken = new Set(path.map(p => p.x + ',' + p.y).concat(blocks.map(b => b.x + ',' + b.y)));
-    const wantTiles = [['hill', 1 + UTIL.rint(r, 0, 1)], ['power', 1 + UTIL.rint(r, 0, 1)], ['dead', UTIL.rint(r, 1, 2)]];
-    for (const [kind, cnt] of wantTiles) {
-      let placed = 0, guard = 0;
-      while (placed < cnt && guard++ < 200) {
-        const x = UTIL.rint(r, 0, COLS - 1), y = UTIL.rint(r, 1, rows - 2);
-        if (taken.has(x + ',' + y)) continue;
-        // hills/power should be useful: within 2.5 tiles of the path
-        if (kind !== 'dead') {
-          let near = false;
-          for (const p of path) if ((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) <= 6.25) { near = true; break; }
-          if (!near) continue;
-        }
-        taken.add(x + ',' + y);
-        tiles.push({ x, y, kind });
-        placed++;
+    const cover = (x, y, r2) => {
+      let n = 0, best = 1e9;
+      for (const p of path) {
+        const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+        if (d <= r2) n++;
+        if (d < best) best = d;
+      }
+      return { n, near: Math.sqrt(best) };
+    };
+    const candidates = [];
+    for (let y = 1; y < rows - 1; y++) for (let x = 0; x < COLS; x++) {
+      if (taken.has(x + ',' + y)) continue;
+      const base = cover(x, y, 6.25);   // path cells inside ~standard tower range
+      if (base.near > 2.2) continue;    // too far to ever matter
+      const wide = cover(x, y, 12.25);  // path cells a +1-range tower could reach
+      candidates.push({ x, y, base: base.n, wide: wide.n, near: base.near });
+    }
+    const wantTiles = [
+      // hills pay off where +1 range unlocks extra path beyond normal reach
+      ['hill', 1 + UTIL.rint(r, 0, 1), c => c.wide + c.base * 0.5],
+      // power nodes pay off on maximum direct coverage
+      ['power', 1 + UTIL.rint(r, 0, 1), c => c.base * 2 + c.wide * 0.25],
+      // dead zones hurt most on the tiles you'd most want (hug the path)
+      ['dead', UTIL.rint(r, 1, 2), c => (c.near <= 1.2 ? c.base * 2 : 0)],
+    ];
+    for (const [kind, cnt, score] of wantTiles) {
+      for (let placed = 0; placed < cnt; placed++) {
+        const open = candidates.filter(c => !taken.has(c.x + ',' + c.y) && score(c) > 0);
+        if (!open.length) break;
+        open.sort((a, b) => score(b) - score(a));
+        // pick among the best few (seeded) so maps stay varied
+        const pick = open[UTIL.rint(r, 0, Math.min(open.length - 1, 3))];
+        taken.add(pick.x + ',' + pick.y);
+        tiles.push({ x: pick.x, y: pick.y, kind });
       }
     }
 

@@ -328,10 +328,10 @@ const UI = (function () {
   function renderWaveIntel() {
     const g = GAME;
     const box = $('wave-intel');
-    if (!g.active || g.phase !== 'build') { box.classList.remove('show'); return; }
+    if (!g.active || g.phase !== 'build') { box.classList.remove('show'); renderAlertChips(true); return; }
     const top = RENDER.boardBottom + 8;
     const bottomEdge = window.innerHeight - 185; // above the build bar block
-    if (bottomEdge - top < 66) { box.classList.remove('show'); return; }
+    if (bottomEdge - top < 66) { box.classList.remove('show'); renderAlertChips(false); return; }
     box.style.top = top + 'px';
     box.style.maxHeight = (bottomEdge - top) + 'px';
     const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff, g.forkPick);
@@ -362,17 +362,7 @@ const UI = (function () {
 
     // fork the wave: pick what's coming
     if (g.fork && !g.forkPick) {
-      const fr = UTIL.h('div', 'wi-deal');
-      fr.appendChild(UTIL.h('div', 'wi-warn', '⑂ ROUTE SPLIT — choose the incoming wave:'));
-      const btns = UTIL.h('div', 'wi-btns');
-      g.fork.forEach((key, idx) => {
-        const f = WAVES.formationInfo(key);
-        const b = UTIL.h('button', 'btn wi-btn', f.ico + ' ' + f.name);
-        b.onclick = () => { GAME.pickFork(idx); };
-        btns.appendChild(b);
-      });
-      fr.appendChild(btns);
-      box.appendChild(fr);
+      box.appendChild(buildForkCard());
     } else if (g.forkPick) {
       const f = WAVES.formationInfo(g.forkPick);
       box.appendChild(UTIL.h('div', 'wi-warn', '⑂ ROUTED: ' + f.ico + ' ' + f.name));
@@ -380,16 +370,7 @@ const UI = (function () {
 
     // deal on the table
     if (g.deal) {
-      const dd = DATA.DEALS[g.deal.id];
-      const dr = UTIL.h('div', 'wi-deal');
-      const label = g.deal.id === 'bargain' ? '+¤' + g.deal.gain : '−¤' + g.deal.cost;
-      dr.appendChild(UTIL.h('div', 'wi-warn', dd.ico + ' ' + dd.name + ' <b>' + label + '</b> — ' + dd.desc));
-      const btns = UTIL.h('div', 'wi-btns');
-      const acc = UTIL.h('button', 'btn btn-primary wi-btn', '✓ ACCEPT ' + label);
-      acc.onclick = () => { GAME.acceptDeal(); renderWaveIntel(); };
-      btns.appendChild(acc);
-      dr.appendChild(btns);
-      box.appendChild(dr);
+      box.appendChild(buildDealCard());
     } else if (g.dealAccepted === 'insurance') {
       box.appendChild(UTIL.h('div', 'wi-warn', '⛨ INSURED FOR THIS WAVE'));
     } else if (g.dealAccepted === 'bargain') {
@@ -397,18 +378,126 @@ const UI = (function () {
     }
 
     // corruption purge
-    const corruptN = Object.keys(g.corrupt).length;
-    if (corruptN) {
-      const cr = UTIL.h('div', 'wi-deal');
-      cr.appendChild(UTIL.h('div', 'wi-warn', '☣ CORRUPTION: ' + corruptN + ' TILE' + (corruptN > 1 ? 'S' : '') + ' — spreads every wave'));
-      const btns = UTIL.h('div', 'wi-btns');
-      const pb = UTIL.h('button', 'btn btn-danger wi-btn', '☣ PURGE ¤' + g.purgeCost());
-      pb.onclick = () => { GAME.purgeCorruption(); renderWaveIntel(); };
-      btns.appendChild(pb);
-      cr.appendChild(btns);
-      box.appendChild(cr);
-    }
+    if (Object.keys(g.corrupt).length) box.appendChild(buildPurgeCard());
     box.classList.add('show');
+    renderAlertChips(true);
+  }
+
+  // Shared action cards: rendered inside the intel panel when it fits,
+  // or inside the tile popup (via alert chips / tile taps) when it doesn't.
+  function actionDone() { hideTilePop(); renderWaveIntel(); }
+  function buildForkCard() {
+    const g = GAME;
+    const fr = UTIL.h('div', 'wi-deal');
+    fr.appendChild(UTIL.h('div', 'wi-warn', '⑂ ROUTE SPLIT — choose the incoming wave:'));
+    const btns = UTIL.h('div', 'wi-btns');
+    g.fork.forEach((key, idx) => {
+      const f = WAVES.formationInfo(key);
+      const b = UTIL.h('button', 'btn wi-btn', f.ico + ' ' + f.name);
+      b.onclick = () => { GAME.pickFork(idx); actionDone(); };
+      btns.appendChild(b);
+    });
+    fr.appendChild(btns);
+    return fr;
+  }
+  function buildDealCard() {
+    const g = GAME;
+    const dd = DATA.DEALS[g.deal.id];
+    const dr = UTIL.h('div', 'wi-deal');
+    const label = g.deal.id === 'bargain' ? '+¤' + g.deal.gain : '−¤' + g.deal.cost;
+    dr.appendChild(UTIL.h('div', 'wi-warn', dd.ico + ' ' + dd.name + ' <b>' + label + '</b> — ' + dd.desc));
+    const btns = UTIL.h('div', 'wi-btns');
+    const acc = UTIL.h('button', 'btn btn-primary wi-btn', '✓ ACCEPT ' + label);
+    acc.onclick = () => { GAME.acceptDeal(); actionDone(); };
+    btns.appendChild(acc);
+    dr.appendChild(btns);
+    return dr;
+  }
+  function buildPurgeCard() {
+    const g = GAME;
+    const n = Object.keys(g.corrupt).length;
+    const cr = UTIL.h('div', 'wi-deal');
+    cr.appendChild(UTIL.h('div', 'wi-warn', '☣ CORRUPTION: ' + n + ' TILE' + (n > 1 ? 'S' : '') + ' — spreads every wave'));
+    const btns = UTIL.h('div', 'wi-btns');
+    const pb = UTIL.h('button', 'btn btn-danger wi-btn', '☣ PURGE ¤' + g.purgeCost());
+    pb.onclick = () => { GAME.purgeCorruption(); actionDone(); };
+    btns.appendChild(pb);
+    cr.appendChild(btns);
+    return cr;
+  }
+
+  // ============================================================= TILE POPUP
+  // Tap any special tile to learn what it is (and act on it).
+  let tilePopT = null, tilePopSticky = false;
+  function hideTilePop() {
+    $('tile-pop').classList.remove('show');
+    tilePopSticky = false;
+    if (tilePopT) { clearTimeout(tilePopT); tilePopT = null; }
+  }
+  function showTilePop(cellY, nodes, autoHide) {
+    const box = $('tile-pop');
+    box.innerHTML = '';
+    for (const n of nodes) box.appendChild(n);
+    // sit above the build bar; if the tapped cell is down there, jump to the top
+    const cellPx = cellY == null ? -1 : RENDER.cellToScreen(0, cellY + 1).y;
+    if (cellPx > window.innerHeight - 330) { box.style.top = '66px'; box.style.bottom = 'auto'; }
+    else { box.style.bottom = '195px'; box.style.top = 'auto'; }
+    box.classList.add('show');
+    tilePopSticky = !autoHide;
+    if (tilePopT) clearTimeout(tilePopT);
+    tilePopT = autoHide ? setTimeout(hideTilePop, 4500) : null;
+  }
+  const TILE_INFO = {
+    hill:  { t: '▲ UPLINK RIDGE',   c: '#ffd166', d: 'High ground. Towers built on this tile get <b>+1 RANGE</b>.' },
+    power: { t: '⚡ POWER NODE',     c: '#7fdcff', d: 'Live conduit. Towers built on this tile deal <b>+25% DAMAGE</b>.' },
+    dead:  { t: '▦ DEAD ZONE',      c: '#ff5252', d: 'Scorched sector. <b>Nothing can be built here.</b>' },
+    block: { t: '▪ DATA BLOCK',     c: '#8fb3d4', d: 'Solid obstruction. Cannot build on it.' },
+  };
+  function tapTileInfo(cell) {
+    const g = GAME;
+    if (g.corrupt[cell.x + ',' + cell.y]) {
+      const nodes = [
+        UTIL.h('div', 'tp-title', '<span style="color:#c86bff">☣ CORRUPTED TILE</span>'),
+        UTIL.h('div', 'tp-desc', 'Spreads to a neighboring tile after every wave, eating your build space.'),
+      ];
+      if (g.phase === 'build') nodes.push(buildPurgeCard());
+      showTilePop(cell.y, nodes, g.phase !== 'build');
+      AUDIO.sfx.click();
+      return true;
+    }
+    const tk = g.tileAt(cell.x, cell.y) || (g.grid[cell.x + ',' + cell.y] === 'block' ? 'block' : null);
+    const info = TILE_INFO[tk];
+    if (!info) return false;
+    showTilePop(cell.y, [
+      UTIL.h('div', 'tp-title', '<span style="color:' + info.c + '">' + info.t + '</span>'),
+      UTIL.h('div', 'tp-desc', info.d),
+    ], true);
+    AUDIO.sfx.click();
+    return true;
+  }
+
+  // ============================================================ ALERT CHIPS
+  // When the intel panel has no room (tall boards), pending decisions surface
+  // as pulsing chips above the build bar; tapping one opens the card popup.
+  function renderAlertChips(panelFits) {
+    const g = GAME;
+    const box = $('alert-chips');
+    box.innerHTML = '';
+    const pending = [];
+    if (g.active && g.phase === 'build' && !panelFits && !g.placingType) {
+      if (g.fork && !g.forkPick) pending.push(['⑂ ROUTE', buildForkCard, '']);
+      if (g.deal) pending.push([DATA.DEALS[g.deal.id].ico + ' DEAL', buildDealCard, '']);
+      if (Object.keys(g.corrupt).length) pending.push(['☣ PURGE ¤' + g.purgeCost(), buildPurgeCard, 'danger']);
+    }
+    for (const [label, builder, cls] of pending) {
+      const b = UTIL.h('button', 'al-chip ' + cls, label);
+      b.onclick = () => { AUDIO.unlock(); showTilePop(null, [builder()], false); };
+      box.appendChild(b);
+    }
+    box.style.bottom = '192px';
+    box.classList.toggle('show', pending.length > 0);
+    // an open action card is stale once the build phase ends
+    if (tilePopSticky && g.phase !== 'build') hideTilePop();
   }
 
   // ================================================================ ABILITIES
@@ -549,7 +638,7 @@ const UI = (function () {
       item.onclick = () => {
         if (GAME.phase !== 'build') { toast('DEPLOY ONLY BETWEEN WAVES', 'warn'); AUDIO.sfx.error(); return; }
         if (GAME.placingType === id) { cancelPlacement(); }
-        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); renderPlaceInfo(id); refreshPlaceActions(); }
+        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); hideTilePop(); renderPlaceInfo(id); refreshPlaceActions(); renderWaveIntel(); }
         refreshBuildBarState();
         AUDIO.sfx.click();
       };
@@ -832,8 +921,11 @@ const UI = (function () {
       if (tk === 'hill') tileTag = '  ▲ +1 RANGE';
       else if (tk === 'power') tileTag = '  ⚡ +25% DMG';
     }
+    let blockedLabel = 'BLOCKED TILE';
+    if (g.placeCell && g.corrupt[g.placeCell.x + ',' + g.placeCell.y]) blockedLabel = '☣ CORRUPTED — PURGE FIRST';
+    else if (g.placeCell && g.tileAt(g.placeCell.x, g.placeCell.y) === 'dead') blockedLabel = '▦ DEAD ZONE';
     ok.textContent = g.placeCell
-      ? (valid ? '✓ DEPLOY  ¤' + cost + tileTag : (g.placeCell && !g.cellFree(g.placeCell.x, g.placeCell.y) ? 'BLOCKED TILE' : 'NEED ¤' + cost))
+      ? (valid ? '✓ DEPLOY  ¤' + cost + tileTag : (g.placeCell && !g.cellFree(g.placeCell.x, g.placeCell.y) ? blockedLabel : 'NEED ¤' + cost))
       : 'TAP THE GRID…';
   }
 
@@ -843,6 +935,7 @@ const UI = (function () {
     closeSheets();
     refreshBuildBarState();
     refreshPlaceActions();
+    renderWaveIntel();
   }
 
   let undoHintShown = false;
@@ -913,10 +1006,15 @@ const UI = (function () {
 
       const tw = g.towerAt(cell.x, cell.y);
       if (tw) {
+        hideTilePop();
         if (g.selectedTower === tw) { closeSheets(); }       // tap again = deselect
         else { openTowerPanel(tw); AUDIO.sfx.click(); }
       } else {
         closeSheets();
+        // tap a special tile → explain it (and offer PURGE on corruption)
+        const wasOpen = $('tile-pop').classList.contains('show');
+        hideTilePop();
+        if (!wasOpen) tapTileInfo(cell);
       }
     });
   }
