@@ -37,6 +37,10 @@
   <canvas id="fam" width="920" height="330"></canvas>
   <div class="note">T1 → T4 gain visible <b>mass</b> (armor, twin barrels, skirt). Far right: the two tier-3 branches — <b>GATLING</b> (spinning tri-barrel) and <b>RAILGUN</b> (charge-up glow before each shot). Heads idle-track and recoil.</div>
 
+  <h2>FULL ARSENAL — ALL 12 FAMILIES</h2>
+  <canvas id="ars" width="920" height="1240"></canvas>
+  <div class="note">Every family gets its own <b>silhouette</b> and idle behavior, not a recolor: the tarpit is a bubbling vat, the farm is blinking server racks, the throttler spins suppression rings, the singularity is a caged star. Accent light stays scarce and in each tower's identity color.</div>
+
   <h2>ENEMIES — ICONS VS CREATURES</h2>
   <div class="cmp">
     <div><canvas id="cur-en" width="440" height="300"></canvas><div class="tag">CURRENT</div></div>
@@ -307,6 +311,417 @@ function newSentry(c, x, y, S, t, tier, branch, phase) {
   c.restore();
 }
 
+/* ---------- PROPOSED: the other 11 families ---------- */
+function fract(x) { return x - Math.floor(x); }
+function n1(i) { return fract(Math.sin(i * 127.1) * 43758.55); }
+function emissive(c, fn) { c.save(); c.globalCompositeOperation = 'lighter'; fn(); c.restore(); }
+
+function newScanner(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  // low equipment body
+  c.fillStyle = hullGrad(c, -S * 0.2, -S * 0.1, S * 0.2, S * 0.1, '#161d28', '#2e3b4c');
+  rr(c, -S * 0.2, -S * 0.1, S * 0.4, S * 0.2, S * 0.04); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+  // rotating dish
+  const a = t * 1.3;
+  c.save(); c.rotate(a);
+  // sweep wedge
+  emissive(c, () => {
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, S * 0.44);
+    g.addColorStop(0, 'rgba(127,220,255,0.5)'); g.addColorStop(1, 'rgba(127,220,255,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, S * 0.44, -0.4, 0.06); c.closePath(); c.fill();
+  });
+  // dish: parabolic arc, dark metal with a bright leading edge
+  c.strokeStyle = '#121a26'; c.lineWidth = S * 0.07; c.lineCap = 'round';
+  c.beginPath(); c.arc(-S * 0.1, 0, S * 0.2, -1.1, 1.1); c.stroke();
+  c.strokeStyle = 'rgba(170,210,245,0.85)'; c.lineWidth = S * 0.02;
+  c.beginPath(); c.arc(-S * 0.1, 0, S * 0.238, -1.05, 1.05); c.stroke();
+  // feed strut + emitter tip
+  c.strokeStyle = '#212b38'; c.lineWidth = S * 0.03;
+  c.beginPath(); c.moveTo(-S * 0.05, 0); c.lineTo(S * 0.18, 0); c.stroke();
+  emissive(c, () => {
+    c.fillStyle = '#7fdcff'; c.shadowColor = '#7fdcff'; c.shadowBlur = 10;
+    c.beginPath(); c.arc(S * 0.18, 0, S * 0.035, 0, TAU); c.fill();
+  });
+  c.restore();
+  c.restore();
+}
+function newTarpit(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  // vat rim
+  c.beginPath(); c.arc(0, 0, S * 0.3, 0, TAU);
+  c.fillStyle = hullGrad(c, -S * 0.3, -S * 0.3, S * 0.3, S * 0.3, '#10151f', '#2b3646'); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.02; c.stroke();
+  // goo pool
+  const pg = c.createRadialGradient(0, 0, 0, 0, 0, S * 0.24);
+  pg.addColorStop(0, '#1d2f14'); pg.addColorStop(0.75, '#141f0d'); pg.addColorStop(1, '#0b1207');
+  c.beginPath(); c.arc(0, 0, S * 0.24, 0, TAU); c.fillStyle = pg; c.fill();
+  // faint pool glow + bubbles
+  emissive(c, () => {
+    const gl = c.createRadialGradient(0, 0, 0, 0, 0, S * 0.24);
+    gl.addColorStop(0, 'rgba(156,204,101,0.20)'); gl.addColorStop(1, 'rgba(156,204,101,0)');
+    c.fillStyle = gl; c.beginPath(); c.arc(0, 0, S * 0.24, 0, TAU); c.fill();
+    for (let i = 0; i < 6; i++) {
+      const ph = fract(t * (0.35 + n1(i) * 0.3) + n1(i * 7));
+      const bx = (n1(i * 3) - 0.5) * S * 0.34, by = (n1(i * 5) - 0.5) * S * 0.34;
+      const r = S * 0.012 + ph * S * 0.035;
+      c.strokeStyle = 'rgba(190,235,120,' + (0.55 * (1 - ph)) + ')';
+      c.lineWidth = S * 0.014;
+      c.beginPath(); c.arc(bx, by, r, 0, TAU); c.stroke();
+    }
+  });
+  // grate bars over the pool
+  c.strokeStyle = 'rgba(8,11,16,0.9)'; c.lineWidth = S * 0.028;
+  for (let i = -2; i <= 2; i++) {
+    const gy = i * S * 0.095, hw = Math.sqrt(Math.max(0, 0.24 * 0.24 - (gy / S) * (gy / S))) * S;
+    c.beginPath(); c.moveTo(-hw, gy); c.lineTo(hw, gy); c.stroke();
+  }
+  // feeder pipes
+  c.strokeStyle = '#1c2531'; c.lineWidth = S * 0.05; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(S * 0.34, -S * 0.28); c.lineTo(S * 0.3, -S * 0.12); c.stroke();
+  c.beginPath(); c.moveTo(-S * 0.34, S * 0.28); c.lineTo(-S * 0.3, S * 0.12); c.stroke();
+  c.restore();
+}
+function newMortar(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  // turntable
+  c.beginPath(); c.arc(0, 0, S * 0.26, 0, TAU);
+  c.fillStyle = hullGrad(c, -S * 0.26, -S * 0.26, S * 0.26, S * 0.26, '#121722', '#2a3547'); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.016; c.stroke();
+  const ang = -0.62 + Math.sin(t * 0.4) * 0.1;
+  const per = 2.1, ft = (t % per) / per;
+  const rec = Math.max(0, 1 - ft * 6) * S * 0.06;
+  c.save(); c.rotate(ang); c.translate(-rec, 0);
+  // fat tube
+  const tw2 = S * 0.105;
+  c.fillStyle = hullGrad(c, 0, -tw2, 0, tw2, '#0e131c', '#33404f');
+  rr(c, -S * 0.06, -tw2, S * 0.44, tw2 * 2, tw2 * 0.7); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.016; c.stroke();
+  // reinforcing bands
+  c.fillStyle = '#0d121b';
+  for (const bx of [S * 0.08, S * 0.24]) rr(c, bx, -tw2 * 1.12, S * 0.035, tw2 * 2.24, S * 0.012), c.fill();
+  // painted hazard chevrons near muzzle (matte, not glowing)
+  c.save();
+  c.beginPath(); rr(c, S * 0.3, -tw2, S * 0.075, tw2 * 2, 0); c.clip();
+  c.fillStyle = '#8a6a1c';
+  for (let i = 0; i < 4; i++) {
+    c.save(); c.translate(S * 0.3 + i * S * 0.038 - S * 0.01, 0); c.rotate(0.7);
+    c.fillRect(-S * 0.012, -tw2 * 2, S * 0.024, tw2 * 4); c.restore();
+  }
+  c.restore();
+  // muzzle mouth
+  c.fillStyle = '#07090e';
+  c.beginPath(); c.ellipse(S * 0.38, 0, S * 0.035, tw2 * 0.85, 0, 0, TAU); c.fill();
+  if (ft < 0.09) muzzleFlash(c, S * 0.42, S, 0.8);
+  c.restore();
+  // smoke puffs after the shot
+  if (ft < 0.5) {
+    const sp = ft / 0.5;
+    c.fillStyle = 'rgba(120,130,145,' + (0.2 * (1 - sp)) + ')';
+    c.beginPath();
+    c.arc(Math.cos(ang) * S * (0.42 + sp * 0.25), Math.sin(ang) * S * (0.42 + sp * 0.25) - sp * S * 0.1, S * (0.03 + sp * 0.06), 0, TAU);
+    c.fill();
+  }
+  c.restore();
+}
+function newThrottle(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  // suppression pulse
+  emissive(c, () => {
+    const ph = fract(t * 0.7);
+    c.strokeStyle = 'rgba(100,181,246,' + (0.4 * (1 - ph)) + ')';
+    c.lineWidth = S * 0.02;
+    c.beginPath(); c.arc(0, 0, S * (0.14 + ph * 0.34), 0, TAU); c.stroke();
+  });
+  // central pylon
+  c.fillStyle = hullGrad(c, -S * 0.06, 0, S * 0.06, 0, '#131a26', '#31405a');
+  rr(c, -S * 0.06, -S * 0.2, S * 0.12, S * 0.4, S * 0.05); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+  // two counter-rotating rings with emitter nodes
+  for (const [rad, spd, tilt] of [[S * 0.24, 1.1, 0.42], [S * 0.31, -0.7, 0.32]]) {
+    c.save(); c.rotate(t * spd % TAU);
+    c.strokeStyle = '#1e2836'; c.lineWidth = S * 0.026;
+    c.beginPath(); c.ellipse(0, 0, rad, rad * tilt, 0, 0, TAU); c.stroke();
+    emissive(c, () => {
+      c.fillStyle = 'rgba(100,181,246,0.85)'; c.shadowColor = '#64b5f6'; c.shadowBlur = 8;
+      for (const aa of [0, Math.PI]) {
+        c.beginPath(); c.arc(Math.cos(aa) * rad, Math.sin(aa) * rad * tilt, S * 0.024, 0, TAU); c.fill();
+      }
+    });
+    c.restore();
+  }
+  c.restore();
+}
+function newFarm(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  // two server racks
+  for (const [rx, seed] of [[-S * 0.21, 1], [S * 0.03, 2]]) {
+    c.fillStyle = hullGrad(c, rx, -S * 0.22, rx + S * 0.18, S * 0.22, '#10151f', '#28334a');
+    rr(c, rx, -S * 0.24, S * 0.19, S * 0.48, S * 0.025); c.fill();
+    c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+    // LED rows (this IS the tower's glow: data blinkenlights)
+    emissive(c, () => {
+      for (let ry = 0; ry < 7; ry++) for (let rxx = 0; rxx < 3; rxx++) {
+        const id = seed * 100 + ry * 3 + rxx;
+        const on = fract(t * (0.6 + n1(id) * 1.6) + n1(id * 3)) < 0.5;
+        c.fillStyle = on
+          ? (n1(id * 7) < 0.7 ? 'rgba(255,209,102,0.9)' : 'rgba(120,220,160,0.9)')
+          : 'rgba(60,60,70,0.35)';
+        c.fillRect(rx + S * 0.028 + rxx * S * 0.05, -S * 0.19 + ry * S * 0.058, S * 0.026, S * 0.017);
+      }
+    });
+  }
+  // cooling fan
+  c.save(); c.translate(S * 0.27, 0);
+  c.fillStyle = '#0d121b'; c.beginPath(); c.arc(0, 0, S * 0.085, 0, TAU); c.fill();
+  c.strokeStyle = '#2c3a4c'; c.lineWidth = S * 0.018;
+  c.save(); c.rotate(t * 6);
+  for (let i = 0; i < 4; i++) { c.rotate(TAU / 4); c.beginPath(); c.moveTo(0, 0); c.lineTo(S * 0.065, 0); c.stroke(); }
+  c.restore();
+  c.strokeStyle = '#0a0e15'; c.beginPath(); c.arc(0, 0, S * 0.085, 0, TAU); c.stroke();
+  c.restore();
+  // credit mote drifting up at wave end vibes
+  emissive(c, () => {
+    const ph = fract(t * 0.5);
+    if (ph < 0.6) {
+      c.fillStyle = 'rgba(255,209,102,' + (0.8 * (1 - ph / 0.6)) + ')';
+      c.font = '700 ' + S * 0.12 + 'px system-ui'; c.textAlign = 'center';
+      c.fillText('¤', S * 0.27, -S * 0.14 - ph * S * 0.25);
+    }
+  });
+  c.restore();
+}
+function newPulse(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  // stacked toroid coil
+  for (const [ry, rw] of [[S * 0.1, S * 0.2], [S * 0.0, S * 0.165], [-S * 0.09, S * 0.13]]) {
+    c.fillStyle = hullGrad(c, -rw, ry - S * 0.045, rw, ry + S * 0.045, '#141826', '#33344f');
+    rr(c, -rw, ry - S * 0.045, rw * 2, S * 0.09, S * 0.045); c.fill();
+    c.strokeStyle = '#0a0c15'; c.lineWidth = S * 0.014; c.stroke();
+    c.strokeStyle = 'rgba(179,136,255,0.35)'; c.lineWidth = S * 0.012;
+    c.beginPath(); c.moveTo(-rw * 0.7, ry - S * 0.045); c.lineTo(rw * 0.5, ry - S * 0.045); c.stroke();
+  }
+  // top electrode
+  c.fillStyle = '#181524';
+  c.beginPath(); c.arc(0, -S * 0.19, S * 0.055, 0, TAU); c.fill();
+  c.strokeStyle = '#0a0c15'; c.lineWidth = S * 0.012; c.stroke();
+  // corona + intermittent arcs
+  emissive(c, () => {
+    const pu = 0.5 + 0.5 * Math.sin(t * 3.1);
+    const g = c.createRadialGradient(0, -S * 0.19, 0, 0, -S * 0.19, S * 0.13);
+    g.addColorStop(0, 'rgba(179,136,255,' + (0.5 * pu) + ')'); g.addColorStop(1, 'rgba(179,136,255,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(0, -S * 0.19, S * 0.13, 0, TAU); c.fill();
+    const cyc = fract(t * 1.25);
+    if (cyc < 0.22) {
+      const seed = Math.floor(t * 1.25);
+      const dir = n1(seed) * TAU;
+      c.strokeStyle = 'rgba(210,180,255,' + (1 - cyc / 0.22) + ')';
+      c.lineWidth = S * 0.018; c.beginPath();
+      let ax = 0, ay = -S * 0.19;
+      c.moveTo(ax, ay);
+      for (let sgm = 1; sgm <= 4; sgm++) {
+        ax += Math.cos(dir) * S * 0.09 + (n1(seed * 9 + sgm) - 0.5) * S * 0.08;
+        ay += Math.sin(dir) * S * 0.09 + (n1(seed * 13 + sgm) - 0.5) * S * 0.08;
+        c.lineTo(ax, ay);
+      }
+      c.stroke();
+    }
+  });
+  c.restore();
+}
+function newSniper(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  const aim = Math.sin(t * 0.22) * 0.2;
+  c.rotate(aim);
+  const per = 2.9, ft = (t % per) / per;
+  const rec = Math.max(0, 1 - ft * 5) * S * 0.07;
+  c.translate(-rec, 0);
+  // skeletal mount
+  c.strokeStyle = '#1a2330'; c.lineWidth = S * 0.05; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-S * 0.16, S * 0.14); c.lineTo(0, 0); c.lineTo(-S * 0.16, -S * 0.14); c.stroke();
+  // long thin barrel + muzzle brake
+  c.fillStyle = hullGrad(c, 0, -S * 0.024, 0, S * 0.024, '#10151f', '#31404f');
+  rr(c, -S * 0.05, -S * 0.024, S * 0.62, S * 0.048, S * 0.02); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.012; c.stroke();
+  c.fillStyle = '#0d121b';
+  rr(c, S * 0.5, -S * 0.038, S * 0.09, S * 0.076, S * 0.015); c.fill();
+  c.fillStyle = '#07090e';
+  for (const sy of [-S * 0.02, S * 0.008]) c.fillRect(S * 0.515, sy, S * 0.06, S * 0.012);
+  // receiver + scope
+  c.fillStyle = hullGrad(c, -S * 0.1, -S * 0.08, S * 0.1, S * 0.08, '#161d29', '#3a4a5e');
+  rr(c, -S * 0.12, -S * 0.075, S * 0.26, S * 0.15, S * 0.03); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+  c.fillStyle = '#0d121b';
+  rr(c, -S * 0.06, -S * 0.13, S * 0.15, S * 0.055, S * 0.022); c.fill();
+  // scope lens: brightens as the shot charges
+  emissive(c, () => {
+    const chg = ft > 0.4 ? (ft - 0.4) / 0.6 : 0;
+    c.fillStyle = 'rgba(255,93,138,' + (0.35 + 0.6 * chg) + ')';
+    c.shadowColor = '#ff5d8a'; c.shadowBlur = 6 + 8 * chg;
+    c.beginPath(); c.arc(S * 0.09, -S * 0.102, S * 0.026, 0, TAU); c.fill();
+  });
+  // discharge streak
+  if (ft < 0.06) emissive(c, () => {
+    c.strokeStyle = 'rgba(255,200,220,' + (1 - ft / 0.06) + ')'; c.lineWidth = S * 0.02;
+    c.beginPath(); c.moveTo(S * 0.6, 0); c.lineTo(S * 1.15, 0); c.stroke();
+  });
+  c.restore();
+}
+function newOverclock(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  // amber core glowing between heatsink fins
+  emissive(c, () => {
+    const pu = 0.6 + 0.4 * Math.sin(t * 2.2);
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, S * 0.26);
+    g.addColorStop(0, 'rgba(255,224,122,' + (0.55 * pu) + ')'); g.addColorStop(1, 'rgba(255,190,80,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, S * 0.26, 0, TAU); c.fill();
+  });
+  // heatsink fin stack
+  for (let i = 0; i < 5; i++) {
+    const fy = -S * 0.22 + i * S * 0.105;
+    const fw = S * (0.3 - Math.abs(i - 2) * 0.045);
+    c.fillStyle = hullGrad(c, -fw, fy, fw, fy + S * 0.06, '#141a26', '#3a465a');
+    rr(c, -fw, fy, fw * 2, S * 0.062, S * 0.02); c.fill();
+    c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.012; c.stroke();
+  }
+  // rising heat motes
+  emissive(c, () => {
+    for (let i = 0; i < 5; i++) {
+      const ph = fract(t * (0.5 + n1(i) * 0.4) + n1(i * 11));
+      c.fillStyle = 'rgba(255,224,122,' + (0.6 * (1 - ph)) + ')';
+      c.beginPath();
+      c.arc((n1(i * 3) - 0.5) * S * 0.3, S * 0.1 - ph * S * 0.45, S * 0.016, 0, TAU); c.fill();
+    }
+  });
+  c.restore();
+}
+function newLance(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  const aim = Math.sin(t * 0.3 + 1) * 0.25;
+  c.rotate(aim);
+  const per = 3.2, ft = (t % per) / per;
+  const firing = ft < 0.55, ramp = firing ? Math.min(1, ft / 0.35) : 0;
+  // beam (ramps up while locked)
+  if (firing) emissive(c, () => {
+    c.strokeStyle = 'rgba(47,230,168,' + (0.25 + 0.6 * ramp) + ')';
+    c.lineWidth = S * (0.02 + 0.05 * ramp);
+    c.shadowColor = '#2fe6a8'; c.shadowBlur = 10 * ramp;
+    c.beginPath(); c.moveTo(S * 0.3, 0); c.lineTo(S * 1.1, 0); c.stroke();
+  });
+  // twin prongs
+  c.strokeStyle = '#182230'; c.lineWidth = S * 0.06; c.lineCap = 'round';
+  for (const py of [-1, 1]) {
+    c.beginPath();
+    c.moveTo(-S * 0.1, py * S * 0.05);
+    c.quadraticCurveTo(S * 0.18, py * S * 0.17, S * 0.32, py * S * 0.055);
+    c.stroke();
+  }
+  c.strokeStyle = 'rgba(150,190,220,0.35)'; c.lineWidth = S * 0.016;
+  c.beginPath(); c.moveTo(-S * 0.06, -S * 0.065); c.quadraticCurveTo(S * 0.16, -S * 0.165, S * 0.3, -S * 0.06); c.stroke();
+  // housing
+  c.fillStyle = hullGrad(c, -S * 0.2, -S * 0.08, 0, S * 0.08, '#141b27', '#34435a');
+  rr(c, -S * 0.24, -S * 0.09, S * 0.2, S * 0.18, S * 0.04); c.fill();
+  c.strokeStyle = '#0a0e15'; c.lineWidth = S * 0.014; c.stroke();
+  // floating crystal between the prongs
+  emissive(c, () => {
+    const rot = t * 1.6, cs = S * (0.05 + 0.012 * Math.sin(t * 4));
+    c.save(); c.translate(S * 0.16, 0); c.rotate(rot);
+    c.fillStyle = 'rgba(47,230,168,0.9)'; c.shadowColor = '#2fe6a8'; c.shadowBlur = 12;
+    c.beginPath(); c.moveTo(0, -cs * 1.4); c.lineTo(cs, 0); c.lineTo(0, cs * 1.4); c.lineTo(-cs, 0);
+    c.closePath(); c.fill();
+    c.restore();
+  });
+  c.restore();
+}
+function newEmp(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 3);
+  const per = 2.6, ft = (t % per) / per;
+  // burst rings right after discharge
+  if (ft < 0.3) emissive(c, () => {
+    for (const k of [0, 0.12]) {
+      const ph = Math.max(0, (ft - k) / 0.3);
+      if (ph <= 0) continue;
+      c.strokeStyle = 'rgba(200,107,255,' + (0.55 * (1 - ph)) + ')';
+      c.lineWidth = S * 0.022;
+      c.beginPath(); c.arc(0, 0, S * (0.1 + ph * 0.42), 0, TAU); c.stroke();
+    }
+  });
+  // dome
+  c.beginPath(); c.arc(0, 0, S * 0.24, 0, TAU);
+  const dg = c.createRadialGradient(-S * 0.09, -S * 0.09, S * 0.02, 0, 0, S * 0.26);
+  dg.addColorStop(0, '#3b3550'); dg.addColorStop(0.6, '#1c1930'); dg.addColorStop(1, '#0e0c1a');
+  c.fillStyle = dg; c.fill();
+  c.strokeStyle = '#0a0815'; c.lineWidth = S * 0.018; c.stroke();
+  // dome seams
+  c.strokeStyle = 'rgba(9,7,18,0.8)'; c.lineWidth = S * 0.012;
+  c.beginPath(); c.arc(0, 0, S * 0.155, 0, TAU); c.stroke();
+  c.beginPath(); c.moveTo(-S * 0.24, 0); c.lineTo(S * 0.24, 0); c.stroke();
+  // charge crackle builds up on the dome before the burst
+  emissive(c, () => {
+    const chg = ft > 0.45 ? (ft - 0.45) / 0.55 : 0;
+    if (chg > 0) {
+      const seed = Math.floor(t * 14);
+      c.strokeStyle = 'rgba(200,107,255,' + (0.5 * chg) + ')'; c.lineWidth = S * 0.014;
+      for (let i = 0; i < 3; i++) {
+        const a0 = n1(seed + i * 5) * TAU, rr3 = S * (0.08 + n1(seed + i * 9) * 0.13);
+        c.beginPath();
+        c.moveTo(Math.cos(a0) * rr3, Math.sin(a0) * rr3);
+        c.lineTo(Math.cos(a0 + 0.5) * rr3 * 0.7, Math.sin(a0 + 0.5) * rr3 * 0.7);
+        c.stroke();
+      }
+    }
+    // apex antenna tip
+    c.fillStyle = 'rgba(200,107,255,' + (0.5 + 0.5 * Math.sin(t * 3)) + ')';
+    c.shadowColor = '#c86bff'; c.shadowBlur = 8;
+    c.beginPath(); c.arc(0, 0, S * 0.032, 0, TAU); c.fill();
+  });
+  c.restore();
+}
+function newSingularity(c, x, y, S, t) {
+  c.save(); c.translate(x, y);
+  basePlate(c, S, 4);
+  // three containment arms (Y arrangement)
+  for (let i = 0; i < 3; i++) {
+    c.save(); c.rotate((i / 3) * TAU + t * 0.15);
+    c.strokeStyle = '#1a2230'; c.lineWidth = S * 0.055; c.lineCap = 'round';
+    c.beginPath(); c.arc(0, 0, S * 0.26, -0.5, 0.5); c.stroke();
+    c.strokeStyle = 'rgba(160,190,225,0.3)'; c.lineWidth = S * 0.014;
+    c.beginPath(); c.arc(0, 0, S * 0.295, -0.35, 0.3); c.stroke();
+    c.restore();
+  }
+  // gravitational lensing ring (dark occlusion just outside the glow)
+  c.strokeStyle = 'rgba(0,0,0,0.75)'; c.lineWidth = S * 0.035;
+  c.beginPath(); c.arc(0, 0, S * 0.135, 0, TAU); c.stroke();
+  // the caged star
+  emissive(c, () => {
+    const pu = 0.85 + 0.15 * Math.sin(t * 5.3);
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, S * 0.12);
+    g.addColorStop(0, 'rgba(255,255,255,' + pu + ')');
+    g.addColorStop(0.45, 'rgba(200,220,255,0.55)');
+    g.addColorStop(1, 'rgba(150,180,255,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, S * 0.12, 0, TAU); c.fill();
+    // orbiting captured debris
+    for (let i = 0; i < 3; i++) {
+      const oa = t * (1.6 + i * 0.5) + i * 2.1;
+      c.fillStyle = 'rgba(220,235,255,0.85)';
+      c.beginPath();
+      c.arc(Math.cos(oa) * S * 0.17, Math.sin(oa) * S * 0.17 * 0.45, S * 0.014, 0, TAU); c.fill();
+    }
+  });
+  c.restore();
+}
+
 /* ---------- PROPOSED enemies ---------- */
 function newSpambot(c, x, y, S, t, phase) {
   phase = phase || 0;
@@ -462,6 +877,36 @@ const scenes = [];
     F.c.fillStyle = 'rgba(127,168,201,0.8)'; F.c.font = '700 17px system-ui'; F.c.textAlign = 'center';
     const labels = ['T1', 'T2', 'T3', 'T4', 'GATLING', 'RAILGUN'];
     labels.forEach((L, i) => F.c.fillText(L, xs[i], F.h - 14));
+  });
+}
+// full arsenal grid
+{
+  const R = cv('ars');
+  const roster = [
+    ['SENTRY NODE',   '#4fc3f7', (c, x, y, S, t) => newSentry(c, x, y, S, t, 2, null, 0.4)],
+    ['SCAN ARRAY',    '#7fdcff', newScanner],
+    ['TARPIT',        '#9ccc65', newTarpit],
+    ['PACKET MORTAR', '#ff8a5c', newMortar],
+    ['THROTTLER',     '#64b5f6', newThrottle],
+    ['COMPUTE FARM',  '#ffd166', newFarm],
+    ['PULSE COIL',    '#b388ff', newPulse],
+    ['KERNEL SNIPER', '#ff5d8a', newSniper],
+    ['OVERCLOCKER',   '#ffe07a', newOverclock],
+    ['PHOTON LANCE',  '#2fe6a8', newLance],
+    ['EMP EMITTER',   '#c86bff', newEmp],
+    ['SINGULARITY',   '#ffffff', newSingularity],
+  ];
+  scenes.push(t => {
+    floorPanel(R.c, R.w, R.h, 31);
+    const cw = R.w / 3, ch = R.h / 4, S = 150;
+    roster.forEach(([name, col, fn], i) => {
+      const x = cw * (i % 3) + cw / 2, y = ch * Math.floor(i / 3) + ch / 2 - 16;
+      fn(R.c, x, y, S, t + i * 0.9);
+      R.c.fillStyle = col; R.c.globalAlpha = 0.9;
+      R.c.font = '700 17px system-ui'; R.c.textAlign = 'center';
+      R.c.fillText(name, x, y + ch / 2 - 12);
+      R.c.globalAlpha = 1;
+    });
   });
 }
 // enemies compare
