@@ -639,7 +639,12 @@ const UI = (function () {
       item.onclick = () => {
         if (GAME.phase !== 'build') { toast('DEPLOY ONLY BETWEEN WAVES', 'warn'); AUDIO.sfx.error(); return; }
         if (GAME.placingType === id) { cancelPlacement(); }
-        else { GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null; closeSheets(); hideTilePop(); renderPlaceInfo(id); refreshPlaceActions(); renderWaveIntel(); }
+        else {
+          GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null;
+          closeSheets(); hideTilePop(); renderPlaceInfo(id);
+          renderBuildSheet(id); $('build-panel').classList.add('open');
+          refreshPlaceActions(); renderWaveIntel();
+        }
         refreshBuildBarState();
         AUDIO.sfx.click();
       };
@@ -697,6 +702,63 @@ const UI = (function () {
     if (lv.buffDmg) bits.push('BUFF <b>+' + Math.round(lv.buffDmg * 100) + '% DMG</b>');
     if (lv.buffRate) bits.push('BUFF <b>+' + Math.round(lv.buffRate * 100) + '% RATE</b>');
     return bits.map(b => '<span>' + b + '</span>').join('');
+  }
+
+  // ================================================================ BUILD SHEET
+  // Rich pre-placement sheet: stats plus the full evolution path (tiers +
+  // branch machines) so upgrading has a visible destination. Collapses to the
+  // compact placement card on the first grid tap.
+  function renderBuildSheet(id) {
+    const t = DATA.TOWERS[id];
+    const body = $('build-panel-body');
+    body.innerHTML = '';
+    const head = UTIL.h('div', 'tp-head');
+    const cv = document.createElement('canvas'); cv.width = cv.height = 92;
+    RENDER.paintTowerIcon(cv, id, 0);
+    head.appendChild(cv);
+    const hd = UTIL.h('div');
+    hd.appendChild(UTIL.h('div', 'tp-title', t.name + ' — <span style="color:#ffd166">¤' + GAME.towerCost(id) + '</span>'));
+    const bits = [];
+    if (t.dtype) bits.push('<span style="color:' + DATA.DTYPES[t.dtype].color + '">' + DATA.DTYPES[t.dtype].ico + ' ' + DATA.DTYPES[t.dtype].name + '</span>');
+    bits.push(t.air ? 'HITS AIR' : 'GROUND ONLY');
+    hd.appendChild(UTIL.h('div', 'tp-tier', bits.join(' · ')));
+    head.appendChild(hd);
+    body.appendChild(head);
+    const x = UTIL.h('button', 'sheet-close', '✕');
+    x.onclick = () => { cancelPlacement(); AUDIO.sfx.click(); };
+    body.appendChild(x);
+    body.appendChild(UTIL.h('div', 'tp-stats', statChips(t.levels[0])));
+    body.appendChild(UTIL.h('div', 'bs-desc', t.desc));
+    // evolution path: tier icons growing into the two branch machines
+    const evo = UTIL.h('div', 'evo-row');
+    for (let i = 0; i < 4; i++) {
+      if (i > 0) evo.appendChild(UTIL.h('span', 'evo-arrow', '›'));
+      const ec = document.createElement('canvas');
+      ec.width = ec.height = 64;
+      ec.className = 'evo-ico';
+      RENDER.paintTowerIcon(ec, id, i);
+      evo.appendChild(ec);
+    }
+    body.appendChild(UTIL.h('div', 'bs-label', 'EVOLUTION'));
+    body.appendChild(evo);
+    const brs = DATA.BRANCHES[id];
+    if (brs) {
+      body.appendChild(UTIL.h('div', 'bs-label', 'TIER III SPECIALIZATIONS — PICK ONE'));
+      const row = UTIL.h('div', 'evo-branches');
+      brs.forEach((b, bi) => {
+        const card = UTIL.h('div', 'evo-branch');
+        const bc = document.createElement('canvas');
+        bc.width = bc.height = 72;
+        RENDER.paintTowerIcon(bc, id, 3, bi);
+        card.appendChild(bc);
+        const tx = UTIL.h('div');
+        tx.appendChild(UTIL.h('div', 'eb-name', b.ico + ' ' + b.name));
+        tx.appendChild(UTIL.h('div', 'eb-desc', b.desc));
+        card.appendChild(tx);
+        row.appendChild(card);
+      });
+      body.appendChild(row);
+    }
   }
 
   // ================================================================ TOWER PANEL
@@ -902,8 +964,11 @@ const UI = (function () {
   function refreshPlaceActions() {
     const g = GAME;
     const box = $('place-actions');
+    // once a tile is chosen the build sheet collapses into the compact card
+    if (g.placeCell) $('build-panel').classList.remove('open');
+    const sheetOpen = $('build-panel').classList.contains('open');
     const active = !!(g.active && g.placingType && g.placeCell && g.phase === 'build');
-    box.classList.toggle('show', !!(g.active && g.placingType && g.phase === 'build'));
+    box.classList.toggle('show', !!(g.active && g.placingType && g.phase === 'build' && !sheetOpen));
     if (!g.placingType) return;
     // dodge the card away from the tile being placed
     if (g.placeCell) {
