@@ -2,9 +2,11 @@
 
 **▶ Play: https://shaumik.github.io/ai-tower/**
 
-AI-themed tower defense. 50 levels, 26 enemy types, 5 bosses, 12 towers — build
-between waves, then watch your defense hold. Works offline; add to home screen
-on mobile to install it as an app.
+AI-themed tower defense. 50 levels, 27 enemy types, 5 sector bosses, 12 tower
+families with tier-3 branch specializations — build between waves, then watch
+your defense hold. Damage types with weaknesses and resistances, terrain tiles,
+pre-wave deals, spreading corruption, and status combos keep every node fresh.
+Works offline; add to home screen on mobile to install it as an app.
 
 | | | |
 |---|---|---|
