@@ -486,170 +486,538 @@ const RENDER = (function () {
     });
   }
 
-  // ---- tower drawing: base + head, in 100x100 space ----
-  function drawTowerBase(c, def, tier) {
-    // platform with depth: shadow, gradient body, lit top edge
-    c.save();
-    c.translate(2, 3); c.globalAlpha = 0.45; c.fillStyle = '#000';
-    roundRect(c, -40, -40, 80, 80, 16); c.fill();
-    c.restore(); c.globalAlpha = 1;
-    c.lineWidth = 4;
-    const grd = c.createRadialGradient(0, -22, 8, 0, 6, 62);
-    grd.addColorStop(0, '#1c2c4e');
-    grd.addColorStop(1, '#0a1220');
-    c.fillStyle = grd; c.strokeStyle = 'rgba(140,190,255,0.35)';
-    roundRect(c, -40, -40, 80, 80, 16); c.fill(); c.stroke();
-    c.strokeStyle = 'rgba(210,240,255,0.28)'; c.lineWidth = 2;
-    c.beginPath(); c.moveTo(-26, -38); c.lineTo(26, -38); c.stroke();
-    neon(c, def.color, 8);
-    c.globalAlpha = 0.6; c.lineWidth = 2.5;
-    roundRect(c, -33, -33, 66, 66, 12); c.stroke();
-    c.globalAlpha = 1;
-    // tier pips
-    c.shadowBlur = 6;
-    for (let i = 0; i <= tier; i++) {
-      c.fillStyle = i === 3 ? '#ffd166' : def.color;
-      c.beginPath(); c.arc(-27 + i * 18, 33, 4, 0, 7); c.fill();
-    }
+  // ---- tower drawing: dark-machine style, in 100x100 space ----
+  // Hulls are dark layered metal (gradients + rim light + baked shadow);
+  // each family's identity color is confined to small functional glows.
+  function hullG(c, x0, y0, x1, y1, lo, hi) {
+    const g = c.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, hi); g.addColorStop(1, lo);
+    return g;
   }
+  function octPath(c, x, y, r, k) {
+    k = k || 0.42;
+    c.beginPath();
+    c.moveTo(x - r, y - r * k);
+    c.lineTo(x - r * k, y - r); c.lineTo(x + r * k, y - r);
+    c.lineTo(x + r, y - r * k); c.lineTo(x + r, y + r * k);
+    c.lineTo(x + r * k, y + r); c.lineTo(x - r * k, y + r);
+    c.lineTo(x - r, y + r * k);
+    c.closePath();
+  }
+  function drawTowerBase(c, def, tier) {
+    // soft ground shadow
+    const sh = c.createRadialGradient(2, 4, 4, 2, 4, 46);
+    sh.addColorStop(0, 'rgba(0,0,0,0.5)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sh; c.beginPath(); c.arc(2, 4, 46, 0, 7); c.fill();
+    // octagonal plate
+    octPath(c, 0, 0, 40);
+    c.fillStyle = hullG(c, -40, -40, 40, 40, '#161c28', '#2e3a4b');
+    c.fill();
+    c.strokeStyle = '#0a0e15'; c.lineWidth = 2.4; c.stroke();
+    // top-left bevel light
+    c.strokeStyle = 'rgba(140,170,205,0.45)'; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(-40, -16.8); c.lineTo(-16.8, -40); c.lineTo(16.8, -40); c.stroke();
+    // identity color: painted keel stripe along the lower-right facet
+    c.strokeStyle = def.color; c.globalAlpha = 0.55; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(17.5, 38); c.lineTo(38, 17.5); c.stroke();
+    c.globalAlpha = 1;
+    // inner deck
+    octPath(c, 0, 0, 29);
+    c.fillStyle = hullG(c, -29, -29, 29, 29, '#101520', '#222c3a');
+    c.fill();
+    c.strokeStyle = 'rgba(9,13,20,0.9)'; c.lineWidth = 1.4; c.stroke();
+    // corner bolts
+    c.fillStyle = '#0d1119';
+    for (const [bx, by] of [[-34, 0], [34, 0], [0, -34], [0, 34]]) {
+      c.beginPath(); c.arc(bx, by, 2.6, 0, 7); c.fill();
+    }
+    // tier pips (gold, glowing)
+    c.shadowColor = '#ffd166'; c.shadowBlur = 5;
+    c.fillStyle = '#ffd166';
+    for (let i = 0; i <= tier; i++) c.fillRect(-25 + i * 12, 31.5, 7, 4);
+    c.shadowBlur = 0;
+  }
+
+  // small emissive dot with glow, baked cheaply
+  function glowDot(c, x, y, r, color, alpha) {
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = alpha == null ? 0.95 : alpha;
+    c.fillStyle = color; c.shadowColor = color; c.shadowBlur = r * 2.4;
+    c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+    c.restore();
+  }
+  // gunmetal block with outline + top rim light
+  function plate(c, x, y, w, h, r, hi) {
+    c.fillStyle = hullG(c, x, y, x + w * 0.4, y + h, '#141a25', hi || '#3a4a5e');
+    roundRect(c, x, y, w, h, r); c.fill();
+    c.strokeStyle = '#0a0e15'; c.lineWidth = 1.6; c.stroke();
+    c.strokeStyle = 'rgba(170,200,235,0.6)'; c.lineWidth = 1.3;
+    c.beginPath(); c.moveTo(x + r, y); c.lineTo(x + w * 0.65, y); c.stroke();
+  }
+  function gunBarrel(c, off, len, wdt) {
+    c.fillStyle = hullG(c, 0, -wdt, 0, wdt, '#0e131c', '#2c3a4a');
+    roundRect(c, off, -wdt, len, wdt * 2, wdt * 0.55); c.fill();
+    c.strokeStyle = '#0a0e15'; c.lineWidth = 1.4; c.stroke();
+    c.strokeStyle = 'rgba(150,185,220,0.4)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(off + wdt * 0.5, -wdt * 0.7); c.lineTo(off + len - wdt, -wdt * 0.7); c.stroke();
+    c.fillStyle = '#080b11';
+    roundRect(c, off + len - 3.5, -wdt * 0.78, 5, wdt * 1.56, wdt * 0.3); c.fill();
+  }
+
   function drawTowerHead(c, def, tier, branch) {
     const col = def.color;
-    c.lineWidth = 5; c.lineJoin = 'round'; c.lineCap = 'round';
-    neon(c, col, 10);
     const t = tier;
     const br = (tier === 3 && branch !== null && branch !== undefined) ? branch : -1;
+    c.lineJoin = 'round'; c.lineCap = 'round';
     switch (def.kind) {
       case 'bullet':
-        if (def.reveals) { // scanner: radar dish
-          c.beginPath(); c.arc(0, 0, 20 + t * 2, -1.9, 1.9); c.stroke();
-          if (br === 0) { c.beginPath(); c.arc(0, 0, 30, -1.6, 1.6); c.stroke(); }          // Overscan: extra dish
-          c.beginPath(); c.moveTo(0, 0); c.lineTo(26 + t * 3, 0); c.stroke();
-          if (br === 1) { c.beginPath(); c.moveTo(0, -8); c.lineTo(24, -8); c.moveTo(0, 8); c.lineTo(24, 8); c.stroke(); } // Burst: feeds
-          c.beginPath(); c.arc(0, 0, 7, 0, 7); c.globalAlpha = 0.7; c.fill(); c.globalAlpha = 1;
-        } else if (br === 0) { // GATLING: triple rotary barrels
-          c.beginPath(); c.arc(0, 0, 17, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
-          c.beginPath(); c.arc(0, 0, 17, 0, 7); c.stroke();
-          c.lineWidth = 4.5;
-          for (const yy of [-9, 0, 9]) { c.beginPath(); c.moveTo(10, yy); c.lineTo(36, yy); c.stroke(); }
-          c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 5, 0, 7); c.fill();
-        } else if (br === 1) { // RAILGUN: long finned cannon
-          c.beginPath(); c.arc(0, 0, 15, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
-          c.beginPath(); c.arc(0, 0, 15, 0, 7); c.stroke();
-          c.lineWidth = 8; c.beginPath(); c.moveTo(6, 0); c.lineTo(46, 0); c.stroke();
-          c.lineWidth = 3;
-          c.beginPath(); c.moveTo(18, -9); c.lineTo(30, -9); c.moveTo(18, 9); c.lineTo(30, 9); c.stroke();
-          c.fillStyle = '#fff'; c.shadowBlur = 14; c.beginPath(); c.arc(46, 0, 4.5, 0, 7); c.fill(); neon(c, col, 10);
-        } else { // sentry: barrel(s)
-          c.beginPath(); c.arc(0, 0, 15 + t * 1.5, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
-          c.beginPath(); c.arc(0, 0, 15 + t * 1.5, 0, 7); c.stroke();
-          c.beginPath(); c.moveTo(8, t >= 2 ? -6 : 0); c.lineTo(34 + t * 2, t >= 2 ? -6 : 0); c.stroke();
-          if (t >= 2) { c.beginPath(); c.moveTo(8, 6); c.lineTo(34 + t * 2, 6); c.stroke(); }
+        if (def.reveals) { // SCAN ARRAY: radar dish (sweep drawn live)
+          plate(c, -18, -9, 30, 18, 4);
+          // dish: thick dark parabola with bright leading edge, facing +x
+          c.strokeStyle = '#121a26'; c.lineWidth = 7;
+          c.beginPath(); c.arc(-9, 0, 19 + t * 1.5 + (br === 0 ? 6 : 0), -1.1, 1.1); c.stroke();
+          c.strokeStyle = 'rgba(170,210,245,0.85)'; c.lineWidth = 2;
+          c.beginPath(); c.arc(-9, 0, 22.6 + t * 1.5 + (br === 0 ? 6 : 0), -1.05, 1.05); c.stroke();
+          // feed strut(s)
+          c.strokeStyle = '#212b38'; c.lineWidth = 3;
+          if (br === 1) { // Burst Array: twin feeds
+            c.beginPath(); c.moveTo(-5, -6); c.lineTo(17, -6); c.stroke();
+            c.beginPath(); c.moveTo(-5, 6); c.lineTo(17, 6); c.stroke();
+            glowDot(c, 17, -6, 3, col); glowDot(c, 17, 6, 3, col);
+          } else {
+            c.beginPath(); c.moveTo(-5, 0); c.lineTo(18, 0); c.stroke();
+            glowDot(c, 18, 0, 3.6, col);
+          }
+        } else { // SENTRY: boxy turret
+          const bw = 24 + t * 1.8, bh = 28 + t * 2.4;
+          if (t >= 3 && br === -1) { // pre-branch T3 gets armor cheeks too
+            plate(c, -bw * 0.7, -bh * 0.7, bw * 0.5, bh * 1.4, 3, '#303e50');
+          }
+          if (t >= 2) plate(c, -bw * 0.68, -bh * 0.66, bw * 0.45, bh * 1.32, 3, '#303e50');
+          if (br === 0) { // GATLING: rotary tri-barrel + collar
+            for (const yy of [-5.4, 5.4, 0]) {
+              c.save(); c.translate(0, yy); gunBarrel(c, 8, yy === 0 ? 42 : 37, 2.6); c.restore();
+            }
+            c.fillStyle = '#0d121b'; c.beginPath(); c.arc(12, 0, 7.5, 0, 7); c.fill();
+            c.strokeStyle = '#2c3a4c'; c.lineWidth = 1.6; c.stroke();
+          } else if (br === 1) { // RAILGUN: heavy finned rail
+            gunBarrel(c, 6, 44, 3.4);
+            c.fillStyle = '#0d121b';
+            for (const fy of [-7, 7]) { roundRect(c, 14, fy - 1.5, 26, 3, 1.5); c.fill(); }
+            glowDot(c, 48, 0, 3, '#aee6ff', 0.85);
+          } else if (t >= 3) { // T3+: twin barrels
+            for (const by of [-5.6, 5.6]) {
+              c.save(); c.translate(0, by); gunBarrel(c, 8, 40 + t * 2, 2.9); c.restore();
+            }
+          } else {
+            gunBarrel(c, 8, 38 + t * 3, 3.4 + t * 0.4);
+          }
+          plate(c, -bw * 0.55, -bh * 0.45, bw, bh * 0.9, 4);
+          // identity stripe + status leds
+          c.fillStyle = col; c.globalAlpha = 0.8;
+          c.fillRect(-bw * 0.4, -bh * 0.45 + 2.5, 3, bh * 0.9 - 5);
+          c.globalAlpha = 1;
+          glowDot(c, bw * 0.28, 0, 4.2, col);
+          glowDot(c, -bw * 0.3, -bh * 0.22, 1.8, '#ffd166', 0.8);
         }
         break;
-      case 'snipe':
-        c.beginPath(); c.arc(0, 0, 13, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.arc(0, 0, 13, 0, 7); c.stroke();
-        c.lineWidth = 6; c.beginPath(); c.moveTo(6, 0); c.lineTo(44 + t * 2, 0); c.stroke();
-        c.lineWidth = 3; c.beginPath(); c.moveTo(20, -7); c.lineTo(30, -7); c.stroke();
-        if (br === 0) { // Antimatter: white-hot core
-          c.fillStyle = '#fff'; c.shadowBlur = 16; c.beginPath(); c.arc(0, 0, 6.5, 0, 7); c.fill(); neon(c, col, 10);
-        } else if (br === 1) { // Spotter: twin scopes
-          c.beginPath(); c.moveTo(20, 7); c.lineTo(30, 7); c.stroke();
-          c.beginPath(); c.arc(34, -10, 4, 0, 7); c.stroke();
+      case 'snipe': { // KERNEL SNIPER: skeletal long rifle
+        c.strokeStyle = '#1a2330'; c.lineWidth = 5;
+        c.beginPath(); c.moveTo(-16, 14); c.lineTo(0, 0); c.lineTo(-16, -14); c.stroke();
+        gunBarrel(c, -5, br === 0 ? 50 : 52, 2.4);
+        c.fillStyle = '#0d121b';
+        roundRect(c, 40, -3.8, 9, 7.6, 1.5); c.fill();
+        c.fillStyle = '#07090e';
+        for (const sy of [-2, 0.8]) c.fillRect(41.5, sy, 6, 1.2);
+        plate(c, -12, -7.5, 26, 15, 3);
+        // scope on top (lens glow drawn live from charge)
+        c.fillStyle = '#0d121b'; roundRect(c, -6, -13, 15, 5.5, 2.2); c.fill();
+        if (br === 0) glowDot(c, 1, 0, 4.5, '#ffffff', 0.9);           // Antimatter core
+        else glowDot(c, 1, 0, 3.6, col, 0.85);
+        if (br === 1) { // Spotter Net: second scope
+          c.fillStyle = '#0d121b'; roundRect(c, -2, 8, 12, 5, 2.2); c.fill();
+          glowDot(c, 8.5, 10.5, 2, col, 0.9);
+        }
+        c.fillStyle = col; c.globalAlpha = 0.8; c.fillRect(-10, -6, 2.6, 12); c.globalAlpha = 1;
+        break;
+      }
+      case 'chain': { // PULSE COIL: tesla toroid stack
+        const rings = 2 + t;
+        const topY = 12 - (rings - 1) * 9 - 8;
+        for (let i = 0; i < rings; i++) {
+          const ry = 12 - i * 9;
+          const rw = (15 + t * 1.5) * (1 - i * 0.15);
+          c.fillStyle = hullG(c, -rw, ry - 4.2, rw, ry + 4.2, '#141826', '#333450');
+          roundRect(c, -rw, ry - 4.2, rw * 2, 8.4, 4.2); c.fill();
+          c.strokeStyle = '#0a0c15'; c.lineWidth = 1.4; c.stroke();
+          c.strokeStyle = 'rgba(179,136,255,0.4)'; c.lineWidth = 1.1;
+          c.beginPath(); c.moveTo(-rw * 0.7, ry - 4.2); c.lineTo(rw * 0.45, ry - 4.2); c.stroke();
+        }
+        const heads = br === 0 ? [-11, 11] : [0];
+        for (const hx of heads) {
+          c.fillStyle = '#181524';
+          c.beginPath(); c.arc(hx, topY, 4.6 + t * 0.4, 0, 7); c.fill();
+          c.strokeStyle = '#0a0c15'; c.lineWidth = 1.2; c.stroke();
+          glowDot(c, hx, topY, 3 + t * 0.3, col, 0.8);
+        }
+        if (br === 1) { // Amplifier: glowing delta antenna
+          c.strokeStyle = '#241d38'; c.lineWidth = 3.4;
+          c.beginPath(); c.moveTo(0, topY - 15); c.lineTo(9.5, topY + 0.5); c.lineTo(-9.5, topY + 0.5);
+          c.closePath(); c.stroke();
+          c.save(); c.globalCompositeOperation = 'lighter';
+          c.strokeStyle = col; c.globalAlpha = 0.85; c.lineWidth = 1.4;
+          c.shadowColor = col; c.shadowBlur = 7;
+          c.beginPath(); c.moveTo(0, topY - 12.4); c.lineTo(7.2, topY - 0.6); c.lineTo(-7.2, topY - 0.6);
+          c.closePath(); c.stroke();
+          c.restore();
         }
         break;
-      case 'chain':
-        c.beginPath(); c.moveTo(0, -26 - t * 2); c.lineTo(0, 8); c.stroke();
-        for (let i = 0; i < 3; i++) {
-          c.beginPath(); c.arc(0, 2 - i * (9 + t), 12 - i * 2.5, 0.4, Math.PI - 0.4); c.stroke();
+      }
+      case 'splash': { // PACKET MORTAR: chunky angled tube
+        const ttr = 20 + t * 1.4;
+        c.beginPath(); c.arc(0, 0, ttr, 0, 7);
+        c.fillStyle = hullG(c, -ttr, -ttr, ttr, ttr, '#121722', '#2a3547'); c.fill();
+        c.strokeStyle = '#0a0e15'; c.lineWidth = 1.6; c.stroke();
+        if (br === 0) { // Napalm: strapped fuel tank
+          c.save(); c.rotate(1.15);
+          c.fillStyle = hullG(c, 0, -5, 0, 5, '#241108', '#54301a');
+          roundRect(c, 12, -5.5, 19, 11, 5); c.fill();
+          c.strokeStyle = '#0a0e15'; c.lineWidth = 1.4; c.stroke();
+          c.fillStyle = '#8a4a1c'; c.fillRect(18, -5.5, 3, 11);
+          c.restore();
         }
-        if (br === 0) { // Chain Storm: twin side prongs
-          c.beginPath(); c.moveTo(-12, 4); c.lineTo(-16, -22); c.stroke();
-          c.beginPath(); c.moveTo(12, 4); c.lineTo(16, -22); c.stroke();
-          c.fillStyle = '#fff'; c.beginPath(); c.arc(-16, -22, 3.5, 0, 7); c.arc(16, -22, 3.5, 0, 7); c.fill();
-        } else if (br === 1) { // Amplifier: charged delta
-          c.globalAlpha = 0.5; c.beginPath(); c.moveTo(0, -34); c.lineTo(10, -18); c.lineTo(-10, -18); c.closePath(); c.fill(); c.globalAlpha = 1;
-        }
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(0, -26 - t * 2, 5, 0, 7); c.fill();
-        break;
-      case 'splash':
-        roundRect(c, -12, -14, 24, 28, 6); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
-        roundRect(c, -12, -14, 24, 28, 6); c.stroke();
-        if (br === 0) { // Napalm: fire-glow muzzle
-          c.lineWidth = 8; c.beginPath(); c.moveTo(6, 0); c.lineTo(33, 0); c.stroke();
-          c.fillStyle = '#ffc14d'; c.shadowColor = '#ff8a5c'; c.shadowBlur = 16;
-          c.beginPath(); c.arc(35, 0, 6, 0, 7); c.fill(); neon(c, col, 10);
-        } else if (br === 1) { // Cluster: triple mortar tubes
-          c.lineWidth = 5;
-          c.beginPath(); c.moveTo(6, -8); c.lineTo(30, -12); c.stroke();
-          c.beginPath(); c.moveTo(6, 0); c.lineTo(33, 0); c.stroke();
-          c.beginPath(); c.moveTo(6, 8); c.lineTo(30, 12); c.stroke();
+        const tube = (tw2, len) => {
+          c.fillStyle = hullG(c, 0, -tw2, 0, tw2, '#0e131c', '#33404f');
+          roundRect(c, -6, -tw2, len, tw2 * 2, tw2 * 0.7); c.fill();
+          c.strokeStyle = '#0a0e15'; c.lineWidth = 1.6; c.stroke();
+          c.fillStyle = '#0d121b';
+          for (let i = 0; i < t + 1; i++) { roundRect(c, 4 + i * 6.5, -tw2 * 1.12, 3, tw2 * 2.24, 1.2); c.fill(); }
+          c.fillStyle = br === 0 ? '#5c2c14' : '#5c4a16';
+          for (let i = 0; i < 3; i++) c.fillRect(len - 15 + i * 4, -tw2, 2.2, tw2 * 2);
+          c.fillStyle = '#07090e';
+          c.beginPath(); c.ellipse(len - 6.5, 0, 3.4, tw2 * 0.85, 0, 0, 7); c.fill();
+        };
+        if (br === 1) { // Cluster: parallel triple tubes + drum
+          for (const dy of [-8.5, 8.5, 0]) { c.save(); c.translate(0, dy); tube(4.6, 39); c.restore(); }
+          c.fillStyle = '#0d121b'; c.beginPath(); c.arc(-2, 0, 9, 0, 7); c.fill();
+          c.strokeStyle = '#2c3a4c'; c.lineWidth = 1.4; c.stroke();
         } else {
-          c.lineWidth = 8; c.beginPath(); c.moveTo(6, 0); c.lineTo(30 + t * 3, 0); c.stroke();
+          tube(8 + t * 0.9, 37 + t * 2.5);
         }
+        c.fillStyle = col; c.globalAlpha = 0.7;
+        c.beginPath(); c.arc(0, 0, 3.4, 0, 7); c.fill(); c.globalAlpha = 1;
         break;
-      case 'slowaura':
-        for (let i = 0; i < 3; i++) { c.globalAlpha = 0.9 - i * 0.28; c.beginPath(); c.arc(0, 0, 10 + i * 9 + t, 0, 7); c.stroke(); }
-        c.globalAlpha = 1; c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 5, 0, 7); c.fill();
+      }
+      case 'slowaura': { // THROTTLER: pylon + suppression rings (nodes orbit live)
+        for (const [rad, tilt] of [[22 + t, 0.42], [29 + t, 0.32]]) {
+          c.strokeStyle = '#1e2836'; c.lineWidth = 2.6;
+          c.beginPath(); c.ellipse(0, 0, rad, rad * tilt, 0, 0, 7); c.stroke();
+        }
+        plate(c, -6, -19, 12, 38, 5, '#31405a');
+        c.fillStyle = col; c.globalAlpha = 0.8; c.fillRect(-1.4, -16, 2.8, 8); c.globalAlpha = 1;
+        glowDot(c, 0, -19, 3.6, col, 0.9);
         break;
-      case 'field':
+      }
+      case 'field': { // TARPIT: grated vat of goo (bubbles live)
+        const vr = 26 + t * 1.5;
+        c.beginPath(); c.arc(0, 0, vr, 0, 7);
+        c.fillStyle = hullG(c, -vr, -vr, vr, vr, '#10151f', '#2b3646'); c.fill();
+        c.strokeStyle = '#0a0e15'; c.lineWidth = 2; c.stroke();
+        const pr = vr - 5;
+        const pg = c.createRadialGradient(0, 0, 0, 0, 0, pr);
+        pg.addColorStop(0, '#20351a'); pg.addColorStop(0.75, '#15230e'); pg.addColorStop(1, '#0b1307');
+        c.beginPath(); c.arc(0, 0, pr, 0, 7); c.fillStyle = pg; c.fill();
+        c.save(); c.globalCompositeOperation = 'lighter';
+        const gl = c.createRadialGradient(0, 0, 0, 0, 0, pr);
+        gl.addColorStop(0, 'rgba(156,204,101,0.30)'); gl.addColorStop(1, 'rgba(156,204,101,0)');
+        c.fillStyle = gl; c.beginPath(); c.arc(0, 0, pr, 0, 7); c.fill();
+        c.restore();
+        c.strokeStyle = 'rgba(8,11,16,0.9)'; c.lineWidth = 2.6;
+        for (let i = -2; i <= 2; i++) {
+          const gy = i * pr * 0.38, hw = Math.sqrt(Math.max(0, pr * pr - gy * gy));
+          c.beginPath(); c.moveTo(-hw, gy); c.lineTo(hw, gy); c.stroke();
+        }
+        c.strokeStyle = '#1c2531'; c.lineWidth = 4.6;
+        c.beginPath(); c.moveTo(vr + 6, -vr + 2); c.lineTo(vr - 4, -vr * 0.4); c.stroke();
+        c.beginPath(); c.moveTo(-vr - 6, vr - 2); c.lineTo(-vr + 4, vr * 0.4); c.stroke();
+        break;
+      }
+      case 'income': { // COMPUTE FARM: server racks (LEDs blink live)
+        for (const rx of [-21, 2]) {
+          c.fillStyle = hullG(c, rx, -22, rx + 18, 22, '#10151f', '#28334a');
+          roundRect(c, rx, -24, 19, 48, 2.5); c.fill();
+          c.strokeStyle = '#0a0e15'; c.lineWidth = 1.4; c.stroke();
+          c.strokeStyle = 'rgba(170,200,235,0.5)'; c.lineWidth = 1;
+          c.beginPath(); c.moveTo(rx + 2, -24); c.lineTo(rx + 14, -24); c.stroke();
+        }
+        // fan housing
+        c.fillStyle = '#0d121b'; c.beginPath(); c.arc(27, 0, 8.5, 0, 7); c.fill();
+        c.strokeStyle = '#0a0e15'; c.lineWidth = 1.4; c.stroke();
+        c.fillStyle = col; c.globalAlpha = 0.75; c.fillRect(-21, 26, 42, 2.6); c.globalAlpha = 1;
+        break;
+      }
+      case 'buffaura': { // OVERCLOCKER: heatsink fin stack (core pulses live)
+        c.save(); c.globalCompositeOperation = 'lighter';
+        const g2 = c.createRadialGradient(0, 0, 0, 0, 0, 24);
+        g2.addColorStop(0, 'rgba(255,224,122,0.5)'); g2.addColorStop(1, 'rgba(255,190,80,0)');
+        c.fillStyle = g2; c.beginPath(); c.arc(0, 0, 24, 0, 7); c.fill();
+        c.restore();
         for (let i = 0; i < 5; i++) {
-          const a = i * Math.PI * 2 / 5 - Math.PI / 2;
-          c.beginPath(); c.arc(Math.cos(a) * 17, Math.sin(a) * 17, 6 + t * 0.7, 0, 7);
-          c.globalAlpha = 0.6; c.fill(); c.globalAlpha = 1;
-        }
-        c.beginPath(); c.arc(0, 0, 8, 0, 7); c.stroke();
-        break;
-      case 'income':
-        c.font = 'bold 40px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.globalAlpha = 0.35; hexPath(c, 26 + t * 2); c.fill(); c.globalAlpha = 1;
-        hexPath(c, 26 + t * 2); c.stroke();
-        c.fillStyle = '#fff'; c.fillText('¤', 0, 3);
-        break;
-      case 'buffaura':
-        c.beginPath(); c.moveTo(6, -28); c.lineTo(-10, 4); c.lineTo(2, 4); c.lineTo(-6, 28); c.lineTo(12, -4); c.lineTo(0, -4); c.closePath();
-        c.globalAlpha = 0.5; c.fill(); c.globalAlpha = 1; c.stroke();
-        break;
-      case 'beam':
-        roundRect(c, -10, -18, 36 + t * 3, 12, 5); c.globalAlpha = 0.4; c.fill(); c.globalAlpha = 1;
-        roundRect(c, -10, -18, 36 + t * 3, 12, 5); c.stroke();
-        roundRect(c, -10, 6, 36 + t * 3, 12, 5); c.globalAlpha = 0.4; c.fill(); c.globalAlpha = 1;
-        roundRect(c, -10, 6, 36 + t * 3, 12, 5); c.stroke();
-        if (br === 0) { // Focus Crystal: diamond emitter
-          c.fillStyle = '#fff'; c.shadowBlur = 16;
-          c.beginPath(); c.moveTo(40, 0); c.lineTo(31, -7); c.lineTo(22, 0); c.lineTo(31, 7); c.closePath(); c.fill();
-          neon(c, col, 10);
-        } else if (br === 1) { // Wide Lens: big secondary ring
-          c.beginPath(); c.arc(34, 0, 9, 0, 7); c.stroke();
-        }
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(-14, 0, 8, 0, 7); c.fill();
-        break;
-      case 'emp':
-        c.beginPath(); c.arc(0, 0, 12, 0, 7); c.globalAlpha = 0.5; c.fill(); c.globalAlpha = 1;
-        for (let i = 0; i < 4; i++) {
-          const a = i * Math.PI / 2 + Math.PI / 4;
-          c.beginPath(); c.arc(0, 0, 24 + t, a - 0.5, a + 0.5); c.stroke();
+          const fy = -21 + i * 10.2;
+          const fw = (28 + t * 1.5) - Math.abs(i - 2) * 4.5;
+          c.fillStyle = hullG(c, -fw, fy, fw, fy + 6, '#141a26', '#3a465a');
+          roundRect(c, -fw, fy, fw * 2, 6.1, 2); c.fill();
+          c.strokeStyle = '#0a0e15'; c.lineWidth = 1.2; c.stroke();
         }
         break;
-      case 'orb':
-        c.beginPath(); c.arc(0, 0, 14, 0, 7); c.fillStyle = '#fff'; c.shadowBlur = 18; c.fill();
-        neon(c, col, 10);
-        c.beginPath(); c.ellipse(0, 0, 30, 10, 0.5, 0, 7); c.stroke();
-        c.beginPath(); c.ellipse(0, 0, 30, 10, -0.5, 0, 7); c.stroke();
+      }
+      case 'beam': { // PHOTON LANCE: twin prongs + crystal (rotates live)
+        c.strokeStyle = '#182230'; c.lineWidth = 6;
+        for (const py of [-1, 1]) {
+          c.beginPath();
+          c.moveTo(-10, py * 5);
+          c.quadraticCurveTo(18, py * (17 + t), 32 + t * 2, py * 5.5);
+          c.stroke();
+        }
+        c.strokeStyle = 'rgba(150,190,220,0.4)'; c.lineWidth = 1.6;
+        c.beginPath(); c.moveTo(-6, -6.5); c.quadraticCurveTo(16, -16.5 - t, 30 + t * 2, -6); c.stroke();
+        plate(c, -24, -9, 20, 18, 4);
+        c.fillStyle = col; c.globalAlpha = 0.8; c.fillRect(-22, -6, 2.6, 12); c.globalAlpha = 1;
+        if (br === 1) { // Wide Lens: secondary ring
+          c.strokeStyle = '#1e2836'; c.lineWidth = 2.6;
+          c.beginPath(); c.arc(34, 0, 8, 0, 7); c.stroke();
+          glowDot(c, 34, 0, 2.4, col, 0.7);
+        }
+        glowDot(c, 16, 0, br === 0 ? 5 : 4, br === 0 ? '#b6ffe4' : col, 0.9);
         break;
+      }
+      case 'emp': { // EMP EMITTER: dark dome (crackle + rings live)
+        const dg = c.createRadialGradient(-9, -9, 2, 0, 0, 26);
+        dg.addColorStop(0, '#3b3550'); dg.addColorStop(0.6, '#1c1930'); dg.addColorStop(1, '#0e0c1a');
+        c.beginPath(); c.arc(0, 0, 24 + t, 0, 7);
+        c.fillStyle = dg; c.fill();
+        c.strokeStyle = '#0a0815'; c.lineWidth = 1.8; c.stroke();
+        c.strokeStyle = 'rgba(9,7,18,0.8)'; c.lineWidth = 1.2;
+        c.beginPath(); c.arc(0, 0, (24 + t) * 0.62, 0, 7); c.stroke();
+        c.beginPath(); c.moveTo(-24 - t, 0); c.lineTo(24 + t, 0); c.stroke();
+        c.beginPath(); c.moveTo(0, -24 - t); c.lineTo(0, 24 + t); c.stroke();
+        glowDot(c, 0, 0, 3.4, col, 0.9);
+        break;
+      }
+      case 'orb': { // SINGULARITY: containment arms caging a star (debris live)
+        for (let i = 0; i < 3; i++) {
+          c.save(); c.rotate((i / 3) * Math.PI * 2);
+          c.strokeStyle = '#1a2230'; c.lineWidth = 5.4;
+          c.beginPath(); c.arc(0, 0, 26, -0.5, 0.5); c.stroke();
+          c.strokeStyle = 'rgba(160,190,225,0.35)'; c.lineWidth = 1.4;
+          c.beginPath(); c.arc(0, 0, 29.4, -0.35, 0.3); c.stroke();
+          c.restore();
+        }
+        // gravitational lensing shadow ring
+        c.strokeStyle = 'rgba(0,0,0,0.75)'; c.lineWidth = 3.6;
+        c.beginPath(); c.arc(0, 0, 13.5, 0, 7); c.stroke();
+        c.save(); c.globalCompositeOperation = 'lighter';
+        const sg = c.createRadialGradient(0, 0, 0, 0, 0, 12);
+        sg.addColorStop(0, 'rgba(255,255,255,0.95)');
+        sg.addColorStop(0.45, 'rgba(200,220,255,0.55)');
+        sg.addColorStop(1, 'rgba(150,180,255,0)');
+        c.fillStyle = sg; c.beginPath(); c.arc(0, 0, 12, 0, 7); c.fill();
+        c.restore();
+        break;
+      }
     }
     // universal specialization badge for kinds without bespoke branch art
     if (br >= 0 && ['slowaura', 'field', 'income', 'buffaura', 'emp', 'orb'].indexOf(def.kind) >= 0) {
-      c.shadowBlur = 8;
+      c.shadowBlur = 7;
       c.fillStyle = br === 0 ? '#ffd166' : '#7fdcff';
       c.shadowColor = c.fillStyle;
       if (br === 0) { // gold delta
-        c.beginPath(); c.moveTo(-32, -24); c.lineTo(-24, -38); c.lineTo(-16, -24); c.closePath(); c.fill();
+        c.beginPath(); c.moveTo(-36, -26); c.lineTo(-29, -38); c.lineTo(-22, -26); c.closePath(); c.fill();
       } else {        // cyan diamond
-        c.beginPath(); c.moveTo(-24, -40); c.lineTo(-16, -31); c.lineTo(-24, -22); c.lineTo(-32, -31); c.closePath(); c.fill();
+        c.beginPath(); c.moveTo(-29, -40); c.lineTo(-22, -32); c.lineTo(-29, -24); c.lineTo(-36, -32); c.closePath(); c.fill();
       }
+      c.shadowBlur = 0;
     }
   }
+
+  // ---- live tower accents: cheap per-frame motion on top of baked hulls.
+  // Called inside the head transform (rotated for directional kinds).
+  // No shadowBlur here — it's per-frame. s = pixels per 100-space unit.
+  function fract(x) { return x - Math.floor(x); }
+  function hash1(i) { const v = Math.sin(i * 127.1) * 43758.55; return v - Math.floor(v); }
+  function drawTowerAnim(c, tw, s, now) {
+    const def = tw.def, t = tw.tier, a = tw.anim;
+    c.save();
+    c.scale(s, s);
+    c.globalCompositeOperation = 'lighter';
+    switch (def.kind) {
+      case 'bullet':
+        if (def.reveals) { // scan sweep wedge (spins independent of aim)
+          c.save(); c.rotate(a * 1.6);
+          c.fillStyle = 'rgba(127,220,255,0.15)';
+          c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, 30 + t * 2, -0.5, 0.03); c.closePath(); c.fill();
+          c.strokeStyle = 'rgba(127,220,255,0.5)'; c.lineWidth = 1.6;
+          c.beginPath(); c.moveTo(0, 0); c.lineTo(30 + t * 2, 0); c.stroke();
+          c.restore();
+        } else { // sentry lens blink
+          const bw = 24 + t * 1.8;
+          c.globalAlpha = 0.35 + 0.3 * Math.sin(a * 2.4);
+          c.fillStyle = def.color;
+          c.beginPath(); c.arc(bw * 0.28, 0, 5.5, 0, 7); c.fill();
+          c.globalAlpha = 1;
+        }
+        break;
+      case 'snipe': { // scope charges up between shots
+        const rate = def.levels[t].rate;
+        const chg = Math.max(0, Math.min(1, 1 - tw.cool * rate));
+        c.globalAlpha = 0.25 + 0.65 * chg;
+        c.fillStyle = def.color;
+        c.beginPath(); c.arc(4.5, -10.2, 2 + 1.6 * chg, 0, 7); c.fill();
+        if (chg > 0.92) { // ready: glint
+          c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1;
+          c.beginPath(); c.moveTo(0.5, -10.2); c.lineTo(8.5, -10.2); c.stroke();
+        }
+        c.globalAlpha = 1;
+        break;
+      }
+      case 'chain': { // corona pulse + intermittent idle arc
+        const rings = 2 + t, topY = 12 - (rings - 1) * 9 - 8;
+        const heads = (tw.tier === 3 && tw.branch === 0) ? [-11, 11] : [0];
+        for (const hx of heads) {
+          c.globalAlpha = 0.3 + 0.25 * Math.sin(a * 3.1 + hx);
+          c.fillStyle = def.color;
+          c.beginPath(); c.arc(hx, topY, 7, 0, 7); c.fill();
+          const cyc = fract(a * 1.3 + hx * 0.13);
+          if (cyc < 0.16) {
+            const seed = Math.floor(a * 1.3 + hx * 0.13) * 7 + hx;
+            c.globalAlpha = 1 - cyc / 0.16;
+            c.strokeStyle = '#d9c2ff'; c.lineWidth = 1.6;
+            c.beginPath();
+            let ax = hx, ay = topY;
+            const dir = hash1(seed) * 6.28;
+            c.moveTo(ax, ay);
+            for (let sg2 = 1; sg2 <= 3; sg2++) {
+              ax += Math.cos(dir) * 8 + (hash1(seed * 9 + sg2) - 0.5) * 7;
+              ay += Math.sin(dir) * 8 + (hash1(seed * 13 + sg2) - 0.5) * 7;
+              c.lineTo(ax, ay);
+            }
+            c.stroke();
+          }
+        }
+        c.globalAlpha = 1;
+        break;
+      }
+      case 'slowaura': { // orbiting suppression nodes + expanding pulse
+        for (const [rad, spd, tilt] of [[22 + t, 1.1, 0.42], [29 + t, -0.7, 0.32]]) {
+          const ang = a * spd;
+          c.fillStyle = 'rgba(100,181,246,0.9)';
+          for (const dd of [0, Math.PI]) {
+            c.beginPath();
+            c.arc(Math.cos(ang + dd) * rad, Math.sin(ang + dd) * rad * tilt, 2.4, 0, 7);
+            c.fill();
+          }
+        }
+        const ph = fract(a * 0.65);
+        c.globalAlpha = 0.35 * (1 - ph);
+        c.strokeStyle = def.color; c.lineWidth = 2;
+        c.beginPath(); c.arc(0, 0, 12 + ph * 26, 0, 7); c.stroke();
+        c.globalAlpha = 1;
+        break;
+      }
+      case 'field': { // rising goo bubbles
+        c.lineWidth = 1.6;
+        for (let i = 0; i < 5; i++) {
+          const ph = fract(a * (0.35 + hash1(i) * 0.3) + hash1(i * 7));
+          const bx = (hash1(i * 3) - 0.5) * 30, by = (hash1(i * 5) - 0.5) * 30;
+          c.strokeStyle = 'rgba(190,235,120,' + (0.55 * (1 - ph)).toFixed(3) + ')';
+          c.beginPath(); c.arc(bx, by, 1.2 + ph * 3.4, 0, 7); c.stroke();
+        }
+        break;
+      }
+      case 'income': { // blinking rack LEDs + spinning fan
+        for (const [rx, seed] of [[-21, 1], [2, 2]]) {
+          for (let ry = 0; ry < 6; ry++) for (let cx2 = 0; cx2 < 3; cx2++) {
+            const id = seed * 100 + ry * 3 + cx2;
+            const on = fract(a * (0.6 + hash1(id) * 1.6) + hash1(id * 3)) < 0.5;
+            c.fillStyle = on
+              ? (hash1(id * 7) < 0.7 ? 'rgba(255,209,102,0.9)' : 'rgba(120,220,160,0.9)')
+              : 'rgba(70,70,85,0.4)';
+            c.fillRect(rx + 3 + cx2 * 5, -20 + ry * 7.2, 2.8, 1.9);
+          }
+        }
+        c.save(); c.translate(27, 0); c.rotate(a * 6);
+        c.strokeStyle = 'rgba(120,150,185,0.8)'; c.lineWidth = 1.8;
+        for (let i = 0; i < 4; i++) { c.rotate(Math.PI / 2); c.beginPath(); c.moveTo(0, 0); c.lineTo(6.4, 0); c.stroke(); }
+        c.restore();
+        break;
+      }
+      case 'buffaura': { // pulsing core between fins + rising heat motes
+        const pu = 0.5 + 0.5 * Math.sin(a * 2.2);
+        c.globalAlpha = 0.22 + 0.3 * pu;
+        c.fillStyle = def.color;
+        c.beginPath(); c.arc(0, 0, 15, 0, 7); c.fill();
+        for (let i = 0; i < 4; i++) {
+          const ph = fract(a * (0.5 + hash1(i) * 0.4) + hash1(i * 11));
+          c.globalAlpha = 0.55 * (1 - ph);
+          c.beginPath();
+          c.arc((hash1(i * 3) - 0.5) * 28, 10 - ph * 42, 1.6, 0, 7); c.fill();
+        }
+        c.globalAlpha = 1;
+        break;
+      }
+      case 'beam': { // floating crystal rotates (in aim space, sits between prongs)
+        const rot = a * 1.6, cs = 5 + 1.1 * Math.sin(a * 4);
+        const bright = 0.55 + 0.35 * (tw.beamTarget ? tw.beamRamp / 2.5 : 0);
+        c.save(); c.translate(16, 0); c.rotate(rot);
+        c.globalAlpha = bright;
+        c.fillStyle = (tw.tier === 3 && tw.branch === 0) ? '#b6ffe4' : def.color;
+        c.beginPath(); c.moveTo(0, -cs * 1.4); c.lineTo(cs, 0); c.lineTo(0, cs * 1.4); c.lineTo(-cs, 0);
+        c.closePath(); c.fill();
+        c.restore(); c.globalAlpha = 1;
+        break;
+      }
+      case 'emp': { // charge crackle building to the pulse
+        const rate = def.levels[t].rate;
+        const chg = Math.max(0, Math.min(1, 1 - tw.cool * rate));
+        if (chg > 0.35) {
+          const seed = Math.floor(now * 0.014);
+          c.strokeStyle = 'rgba(200,107,255,' + (0.55 * chg).toFixed(3) + ')';
+          c.lineWidth = 1.4;
+          for (let i = 0; i < 3; i++) {
+            const a0 = hash1(seed + i * 5) * 6.28, rr3 = 7 + hash1(seed + i * 9) * 13;
+            c.beginPath();
+            c.moveTo(Math.cos(a0) * rr3, Math.sin(a0) * rr3);
+            c.lineTo(Math.cos(a0 + 0.5) * rr3 * 0.7, Math.sin(a0 + 0.5) * rr3 * 0.7);
+            c.stroke();
+          }
+        }
+        c.globalAlpha = 0.3 + 0.5 * chg;
+        c.fillStyle = def.color;
+        c.beginPath(); c.arc(0, 0, 4.5, 0, 7); c.fill();
+        c.globalAlpha = 1;
+        break;
+      }
+      case 'orb': { // star pulse + orbiting captured debris
+        const pu = 0.35 + 0.2 * Math.sin(a * 5.3);
+        c.globalAlpha = pu;
+        c.fillStyle = '#ffffff';
+        c.beginPath(); c.arc(0, 0, 7, 0, 7); c.fill();
+        c.globalAlpha = 0.85;
+        c.fillStyle = 'rgba(220,235,255,0.9)';
+        for (let i = 0; i < 3; i++) {
+          const oa = a * (1.6 + i * 0.5) + i * 2.1;
+          c.beginPath();
+          c.arc(Math.cos(oa) * 17, Math.sin(oa) * 17 * 0.45, 1.5, 0, 7); c.fill();
+        }
+        c.globalAlpha = 1;
+        break;
+      }
+    }
+    c.restore();
+    c.globalCompositeOperation = 'source-over';
+  }
+
   const DIRECTIONAL = { bullet: 1, snipe: 1, splash: 1, beam: 1 };
 
   function towerBaseSprite(type, tier) {
@@ -833,15 +1201,23 @@ const RENDER = (function () {
         if (tw.recoil > 0.02) ctx.translate(-tw.recoil * T * 0.09, 0); // recoil kick
       } else if (tw.def.kind === 'orb' || tw.def.kind === 'emp') ctx.rotate(tw.anim * 0.6);
       ctx.drawImage(hs, -sz / 2, -sz / 2, sz, sz);
-      // muzzle flash
+      // live accents (idle animation layer) — skip while blacked out
+      if (tw.disabledT <= 0) drawTowerAnim(ctx, tw, sz / 100, now);
+      // muzzle flash: spiky star + white core
       if (tw.flashT > 0 && DIRECTIONAL[tw.def.kind]) {
         ctx.globalCompositeOperation = 'lighter';
-        const fr = T * (0.10 + tw.flashT * 1.3);
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(T * 0.4, 0, fr * 0.5, 0, 7); ctx.fill();
-        ctx.globalAlpha = 0.6; ctx.fillStyle = tw.def.color;
-        ctx.beginPath(); ctx.arc(T * 0.4, 0, fr, 0, 7); ctx.fill();
-        ctx.globalAlpha = 1;
+        const fr = T * (0.08 + tw.flashT * 1.5);
+        const mx = T * 0.42;
+        ctx.fillStyle = tw.def.color; ctx.globalAlpha = 0.75;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const fa = (i / 8) * 6.283 + tw.anim;
+          const rr2 = (i % 2 ? fr : fr * 0.42);
+          ctx.lineTo(mx + Math.cos(fa) * rr2, Math.sin(fa) * rr2);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1; ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(mx, 0, fr * 0.4, 0, 7); ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
       }
       ctx.restore();
