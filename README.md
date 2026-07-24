@@ -10,4 +10,4 @@ Works offline; add to home screen on mobile to install it as an app.
 
 | | | |
 |---|---|---|
-| ![Menu](docs/screens/menu.png) | ![Combat](docs/screens/combat.png) | ![Tower panel](docs/screens/tower-panel.png) |
+| ![Menu](docs/screens/menu-v18.png) | ![Combat](docs/screens/combat-v18.png) | ![Tower panel](docs/screens/tower-panel-v18.png) |
