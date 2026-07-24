@@ -328,7 +328,8 @@ const UI = (function () {
   function renderWaveIntel() {
     const g = GAME;
     const box = $('wave-intel');
-    if (!g.active || g.phase !== 'build') { box.classList.remove('show'); renderAlertChips(true); return; }
+    // hidden while placing: the placement card owns the bottom of the screen
+    if (!g.active || g.phase !== 'build' || g.placingType) { box.classList.remove('show'); renderAlertChips(true); return; }
     const top = RENDER.boardBottom + 8;
     const bottomEdge = window.innerHeight - 185; // above the build bar block
     if (bottomEdge - top < 66) { box.classList.remove('show'); renderAlertChips(false); return; }
