@@ -285,15 +285,20 @@ button { font-family:inherit; }
 #place-actions .btn { pointer-events:auto; }
 #place-actions.show { display:flex; }
 #place-actions.top { bottom:auto; top:calc(env(safe-area-inset-top) + 58px); } /* dodge when placing low on the map */
-#place-info { display:flex; align-items:center; gap:10px; min-height:36px; }
-#place-info canvas { width:36px; height:36px; flex-shrink:0; }
-.pi-name { font-size:13px; font-weight:800; white-space:nowrap; }
+#place-info { display:flex; align-items:center; gap:10px; min-height:40px; padding-right:42px; }
+#place-info canvas { width:40px; height:40px; flex-shrink:0; }
+.pi-name { font-size:13.5px; font-weight:800; white-space:nowrap; }
 .pi-stats { font-size:10.5px; color:#7fa8c9; line-height:1.35; }
-.pa-buttons { display:flex; gap:8px; }
-.pa-buttons .btn { margin:0; padding:13px 8px; font-size:14px; }
-#btn-place-cancel { flex:0 0 60px; }
-#btn-place-ok { flex:1; letter-spacing:2px; box-shadow:0 0 22px rgba(33,150,216,.55); }
-#btn-place-ok:disabled { opacity:.45; }
+.pa-close {
+  position:absolute; top:8px; right:8px; width:34px; height:34px;
+  border-radius:10px; border:1px solid #1e3a5f; background:#0b1526; color:#9fd4ff;
+  font-size:15px; font-weight:800; cursor:pointer; font-family:inherit;
+  pointer-events:auto;
+}
+/* deploy button exists only once a tile is chosen — no placeholder state */
+#btn-place-ok { display:none; margin:0; padding:13px 8px; font-size:14px; letter-spacing:2px; box-shadow:0 0 22px rgba(33,150,216,.55); }
+#place-actions.armed #btn-place-ok { display:block; }
+#btn-place-ok:disabled { opacity:.45; box-shadow:none; }
 
 .sheet-close {
   position:absolute; top:10px; right:12px; width:38px; height:38px;
@@ -412,4 +417,17 @@ button { font-family:inherit; }
 @media (min-width:700px) {
   .level-grid { grid-template-columns:repeat(10, 1fr); }
   .menu-inner { width:400px; }
+}
+
+/* ---- desktop / wide viewport (portal web view): letterbox the HUD ----
+   The board already centers itself; this pins every UI bar to the same
+   phone-width column so wide iframes (CrazyGames etc.) look intentional. */
+@media (min-width: 700px) {
+  #hud-top, #hud-bottom, #toast-zone { left:calc(50% - 270px); right:calc(50% - 270px); }
+  #wave-intel, #boss-bar { left:calc(50% - 258px); right:calc(50% - 258px); }
+  #place-actions, #tile-pop { left:calc(50% - 258px); right:calc(50% - 258px); }
+  .sheet { left:calc(50% - 270px); right:calc(50% - 270px); border-radius:18px 18px 0 0; }
+  #alert-chips, #chip-ind { left:calc(50% - 258px); }
+  #combo-ind { right:calc(50% - 258px); }
+  #ability-bar { right:calc(50% - 264px); }
 }

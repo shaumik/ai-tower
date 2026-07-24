@@ -911,22 +911,24 @@ const UI = (function () {
     } else {
       box.classList.remove('top');
     }
+    // deploy button only exists once a tile is chosen — no placeholder state
+    box.classList.toggle('armed', !!g.placeCell);
+    if (!g.placeCell) return;
     const ok = $('btn-place-ok');
     const cost = g.towerCost(g.placingType);
     const valid = active && g.cellFree(g.placeCell.x, g.placeCell.y) && g.cash >= cost;
     ok.disabled = !valid;
     let tileTag = '';
-    if (g.placeCell && valid) {
+    if (valid) {
       const tk = g.tileAt(g.placeCell.x, g.placeCell.y);
       if (tk === 'hill') tileTag = '  ▲ +1 RANGE';
       else if (tk === 'power') tileTag = '  ⚡ +25% DMG';
     }
     let blockedLabel = 'BLOCKED TILE';
-    if (g.placeCell && g.corrupt[g.placeCell.x + ',' + g.placeCell.y]) blockedLabel = '☣ CORRUPTED — PURGE FIRST';
-    else if (g.placeCell && g.tileAt(g.placeCell.x, g.placeCell.y) === 'dead') blockedLabel = '▦ DEAD ZONE';
-    ok.textContent = g.placeCell
-      ? (valid ? '✓ DEPLOY  ¤' + cost + tileTag : (g.placeCell && !g.cellFree(g.placeCell.x, g.placeCell.y) ? blockedLabel : 'NEED ¤' + cost))
-      : 'TAP THE GRID…';
+    if (g.corrupt[g.placeCell.x + ',' + g.placeCell.y]) blockedLabel = '☣ CORRUPTED — PURGE FIRST';
+    else if (g.tileAt(g.placeCell.x, g.placeCell.y) === 'dead') blockedLabel = '▦ DEAD ZONE';
+    ok.textContent = valid ? '✓ DEPLOY  ¤' + cost + tileTag
+      : (!g.cellFree(g.placeCell.x, g.placeCell.y) ? blockedLabel : 'NEED ¤' + cost);
   }
 
   function cancelPlacement() {
