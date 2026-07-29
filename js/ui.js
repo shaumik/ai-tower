@@ -289,6 +289,85 @@ const UI = (function () {
     $('chip-overlay').classList.remove('show');
     refreshChipInd();
     bossBar(null);
+    maybeStartOnboarding();
+  }
+
+  // ================================================================ ONBOARDING
+  // First-ever run: three visual beats taught on the live controls.
+  // The layer never blocks input — highlight + hint, the real tap does the work.
+  let obStep = 0, obTimer = null, obCell = null;
+  function maybeStartOnboarding() {
+    if (SAVE.state.onboarded) return;
+    if (GAME.levelN !== 1 || (SAVE.state.stats.towersBuilt || 0) > 0) return;
+    obStep = 1; obCell = null;
+    if (obTimer) clearInterval(obTimer);
+    obTimer = setInterval(obTick, 150);
+  }
+  function endOnboarding(done) {
+    if (obTimer) { clearInterval(obTimer); obTimer = null; }
+    obStep = 0;
+    $('onboard-layer').classList.remove('show');
+    if (done) { SAVE.state.onboarded = true; SAVE.persist(); }
+  }
+  // free cell next to the path, ~30% of the way in (spiral out from there)
+  function obFindCell() {
+    const g = GAME, path = g.level.path;
+    const mid = Math.floor(path.length * 0.3);
+    for (let off = 0; off < path.length; off++) {
+      for (const sgn of (off ? [1, -1] : [1])) {
+        const i = mid + sgn * off;
+        if (i < 0 || i >= path.length) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const x = path[i].x + dx, y = path[i].y + dy;
+          if (g.cellFree(x, y)) return { x, y };
+        }
+      }
+    }
+    return null;
+  }
+  function obPoint(rect, label, arrow) {
+    const ring = $('ob-ring'), lab = $('ob-label'), ar = $('ob-arrow');
+    ring.style.left = (rect.x - 5) + 'px';
+    ring.style.top = (rect.y - 5) + 'px';
+    ring.style.width = (rect.w + 10) + 'px';
+    ring.style.height = (rect.h + 10) + 'px';
+    ar.style.display = arrow ? 'block' : 'none';
+    if (arrow) { ar.style.left = (rect.x + rect.w / 2) + 'px'; ar.style.top = (rect.y - 34) + 'px'; }
+    lab.textContent = label;
+    const half = lab.offsetWidth / 2 + 8;
+    const cx = Math.max(half, Math.min(window.innerWidth - half, rect.x + rect.w / 2));
+    lab.style.left = cx + 'px';
+    lab.style.top = (rect.y - (arrow ? 68 : 44)) + 'px';
+  }
+  function obTick() {
+    const g = GAME;
+    if (obStep === 0) return;
+    if (!g.active || curScreen !== 'screen-game') { endOnboarding(false); return; }
+    const layer = $('onboard-layer');
+    // wait behind blocking overlays (chip picker on level start, pause, end)
+    if ($('chip-overlay').classList.contains('show') || $('pause-overlay').classList.contains('show') ||
+        $('end-overlay').classList.contains('show')) { layer.classList.remove('show'); return; }
+    // advance on real progress
+    if (obStep === 1 && g.placingType) obStep = 2;
+    if (obStep === 2 && !g.placingType && g.towers.length === 0) obStep = 1; // placement cancelled
+    if (obStep <= 2 && g.towers.length > 0) obStep = 3;
+    if (obStep === 3 && g.phase !== 'build') { endOnboarding(true); return; } // wave running — done
+    layer.classList.add('show'); // before positioning: labels measure their own width
+    if (obStep === 1) {
+      const item = document.querySelector('.bb-item');
+      if (!item) return;
+      const r = item.getBoundingClientRect();
+      obPoint({ x: r.left, y: r.top, w: r.width, h: r.height }, 'DEPLOY YOUR FIRST TOWER', false);
+    } else if (obStep === 2) {
+      if (!obCell || !g.cellFree(obCell.x, obCell.y)) obCell = obFindCell();
+      if (!obCell) { layer.classList.remove('show'); return; }
+      const p = RENDER.cellToScreen(obCell.x, obCell.y);
+      obPoint({ x: p.x, y: p.y, w: RENDER.T, h: RENDER.T }, 'TAP THE TILE, THEN ✓', true);
+    } else if (obStep === 3) {
+      const r = $('btn-start-wave').getBoundingClientRect();
+      if (r.width === 0) { layer.classList.remove('show'); return; }
+      obPoint({ x: r.left, y: r.top, w: r.width, h: r.height }, 'START THE WAVE', false);
+    }
   }
 
   function updateHUD() {
@@ -1135,6 +1214,30 @@ const UI = (function () {
     $('btn-resume').onclick = () => togglePause(false);
     $('btn-restart').onclick = () => { togglePause(false); GAME.start(GAME.levelN, GAME.diff, GAME.endless); };
     $('btn-quit').onclick = () => { togglePause(false); GAME.quit(); refreshMenu(); openLevels(); };
+    $('btn-mainmenu').onclick = () => { togglePause(false); GAME.quit(); refreshMenu(); show('screen-menu'); };
+    $('ob-skip').onclick = () => { endOnboarding(true); AUDIO.sfx.click(); };
+
+    // keyboard (desktop / portal reviewers): P or Space pause, Space starts the
+    // wave in build phase, 1/2/3 speed presets. Esc too, where the host allows it.
+    window.addEventListener('keydown', e => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (curScreen !== 'screen-game' || !GAME.active) return;
+      if ($('chip-overlay').classList.contains('show') || $('end-overlay').classList.contains('show')) return;
+      const k = e.key;
+      if (k === 'p' || k === 'P' || k === 'Escape') {
+        e.preventDefault();
+        togglePause(!GAME.paused);
+      } else if (k === ' ') {
+        e.preventDefault();
+        if (GAME.paused) togglePause(false);
+        else if (GAME.phase === 'build') { AUDIO.unlock(); GAME.startWave(); }
+        else togglePause(true);
+      } else if ((k === '1' || k === '2' || k === '3') && !GAME.paused) {
+        GAME.speed = { 1: 1, 2: 2, 3: 4 }[k];
+        $('btn-speed').textContent = GAME.speed + '×';
+      }
+    });
 
     bindCanvas(UTIL.el('game-canvas'));
     refreshMenu();

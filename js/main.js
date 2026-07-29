@@ -8,6 +8,14 @@
   ADS.init();
   ADS.loadingStop();
 
+  // Portal builds (CrazyGames / GD): land in gameplay immediately, zero clicks.
+  // Continue at the furthest unlocked node; the menu stays reachable via pause.
+  if (ADS.provider !== 'none') {
+    let furthest = 1;
+    for (let i = 1; i <= 50; i++) if (SAVE.isUnlocked(i)) furthest = i;
+    GAME.start(furthest, 'standard', false);
+  }
+
   // Offline support (needs http(s); silently skipped on file:// and portal builds)
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.__NO_SW) {
     window.addEventListener('load', () => {

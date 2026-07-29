@@ -100,6 +100,8 @@
   <!-- ============ GAME ============ -->
   <section id="screen-game" class="screen">
     <canvas id="game-canvas"></canvas>
+    <div class="side-dress side-l"></div>
+    <div class="side-dress side-r"></div>
 
     <div id="hud-top">
       <button class="hud-btn" id="btn-pause">☰</button>
@@ -130,6 +132,13 @@
     <div id="tile-pop"></div>
     <div id="alert-chips"></div>
 
+    <div id="onboard-layer">
+      <div id="ob-ring"></div>
+      <div id="ob-arrow">▼</div>
+      <div id="ob-label"></div>
+      <button id="ob-skip">SKIP ✕</button>
+    </div>
+
     <div id="hud-bottom">
       <div id="build-bar"></div>
       <button class="btn btn-primary" id="btn-start-wave">▶ START WAVE</button>
@@ -151,6 +160,7 @@
         <button class="btn btn-primary" id="btn-resume">RESUME</button>
         <button class="btn" id="btn-restart">RESTART NODE</button>
         <button class="btn" id="btn-quit">ABANDON</button>
+        <button class="btn" id="btn-mainmenu">MAIN MENU</button>
         <div class="pause-toggles" id="pause-toggles"></div>
       </div>
     </div>

@@ -430,6 +430,64 @@ button { font-family:inherit; }
   #alert-chips, #chip-ind { left:calc(50% - 258px); }
   #combo-ind { right:calc(50% - 258px); }
   #ability-bar { right:calc(50% - 264px); }
+  #ob-skip { right:calc(50% - 258px); }
+}
+
+/* ---- side dressing: wide iframes get circuit gutters, not black bars ---- */
+.side-dress { display:none; }
+@media (min-width: 700px) {
+  .side-dress {
+    display:block; position:absolute; top:0; bottom:0; z-index:5; pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg, rgba(42,120,190,.07) 0 1px, transparent 1px 36px),
+      repeating-linear-gradient(90deg, rgba(42,120,190,.07) 0 1px, transparent 1px 36px),
+      radial-gradient(110% 90% at 50% 0%, #0a1122 0%, #05070d 65%);
+  }
+  .side-l { left:0; right:calc(50% + 272px); }
+  .side-r { left:calc(50% + 272px); right:0; }
+  .side-l::before, .side-r::before {
+    content:''; position:absolute; top:0; bottom:0; width:2px;
+    background:linear-gradient(180deg, transparent, rgba(42,168,255,.45) 18%, rgba(42,168,255,.45) 82%, transparent);
+    box-shadow:0 0 14px rgba(42,168,255,.35);
+  }
+  .side-l::before { right:0; }
+  .side-r::before { left:0; }
+  .side-l::after, .side-r::after {
+    content:''; position:absolute; top:0; bottom:0; width:120px;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 54px, rgba(42,168,255,.10) 54px 55px),
+      linear-gradient(90deg, transparent, rgba(42,168,255,.05));
+  }
+  .side-l::after { right:2px; }
+  .side-r::after { left:2px; transform:scaleX(-1); }
+}
+
+/* ---- first-run onboarding: highlight + hint, real controls stay live ---- */
+#onboard-layer { position:absolute; inset:0; z-index:19; display:none; pointer-events:none; }
+#onboard-layer.show { display:block; }
+#ob-ring {
+  position:absolute; border:2px solid #7fdcff; border-radius:14px;
+  box-shadow:0 0 20px rgba(42,168,255,.8), inset 0 0 16px rgba(42,168,255,.35);
+  animation:ob-pulse 1.1s ease-in-out infinite;
+}
+@keyframes ob-pulse { 0%,100% { transform:scale(1); opacity:.8; } 50% { transform:scale(1.06); opacity:1; } }
+#ob-arrow {
+  position:absolute; display:none; font-size:24px; color:#7fdcff; line-height:1;
+  text-shadow:0 0 12px #2aa8ff; transform:translateX(-50%);
+  animation:ob-bob 0.9s ease-in-out infinite; pointer-events:none;
+}
+@keyframes ob-bob { 0%,100% { margin-top:0; } 50% { margin-top:9px; } }
+#ob-label {
+  position:absolute; transform:translateX(-50%); white-space:nowrap;
+  padding:8px 15px; border-radius:18px;
+  background:rgba(8,14,26,.94); border:1px solid #2aa8ff; color:#7fdcff;
+  font-size:11px; font-weight:800; letter-spacing:2px;
+  box-shadow:0 0 16px rgba(42,168,255,.4);
+}
+#ob-skip {
+  position:absolute; top:calc(env(safe-area-inset-top) + 58px); right:12px; pointer-events:auto;
+  padding:7px 13px; border-radius:15px; border:1px solid #1e3a5f; background:rgba(11,21,38,.92);
+  color:#5f89ad; font-size:10px; font-weight:800; letter-spacing:2px; cursor:pointer; font-family:inherit;
 }
 
 /* ---- build sheet: evolution preview ---- */
