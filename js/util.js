@@ -35,6 +35,10 @@ const UTIL = (function () {
   }
 
   function el(id) { return document.getElementById(id); }
+  // device-appropriate verb for instructional text (CrazyGames requirement)
+  function tapWord() { return ('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 'TAP' : 'CLICK'; }
+  function tapWordLc() { return tapWord() === 'TAP' ? 'Tap' : 'Click'; }
+
   function h(tag, cls, html) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -45,5 +49,5 @@ const UTIL = (function () {
   // Roman numerals for tiers
   const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
-  return { rng, rint, choice, wchoice, clamp, lerp, dist, dist2, fmt, el, h, ROMAN };
+  return { rng, rint, choice, wchoice, clamp, lerp, dist, dist2, fmt, el, h, ROMAN , tapWord, tapWordLc };
 })();

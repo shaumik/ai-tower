@@ -304,7 +304,7 @@ const DATA = (function () {
   // ------------------------------------------------------------------
   const ABILITIES = {
     strike: { name: 'ORBITAL STRIKE', ico: '✸', cost: 30, unlock: 4,
-      desc: 'Tap anywhere: massive damage + stun in a blast zone.' },
+      desc: 'Target anywhere: massive damage + stun in a blast zone.' },
     surge:  { name: 'OVERCLOCK SURGE', ico: '⚡', cost: 45, unlock: 8,
       desc: 'All towers +80% damage, +30% fire rate for 6s.' },
     patch:  { name: 'EMERGENCY PATCH', ico: '✚', cost: 60, unlock: 12,

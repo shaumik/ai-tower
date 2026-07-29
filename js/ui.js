@@ -362,7 +362,7 @@ const UI = (function () {
       if (!obCell || !g.cellFree(obCell.x, obCell.y)) obCell = obFindCell();
       if (!obCell) { layer.classList.remove('show'); return; }
       const p = RENDER.cellToScreen(obCell.x, obCell.y);
-      obPoint({ x: p.x, y: p.y, w: RENDER.T, h: RENDER.T }, 'TAP THE TILE, THEN ✓', true);
+      obPoint({ x: p.x, y: p.y, w: RENDER.T, h: RENDER.T }, UTIL.tapWord() + ' THE TILE, THEN ✓', true);
     } else if (obStep === 3) {
       const r = $('btn-start-wave').getBoundingClientRect();
       if (r.width === 0) { layer.classList.remove('show'); return; }
@@ -1021,7 +1021,7 @@ const UI = (function () {
     GAME.paused = on;
     $('pause-overlay').classList.toggle('show', on);
     if (on) { renderPauseToggles(); ADS.gameplayStop(); }
-    else if (GAME.phase === 'combat') ADS.gameplayStart();
+    else if (GAME.active) ADS.gameplayStart();
   }
   function renderPauseToggles() {
     const box = $('pause-toggles');
@@ -1093,7 +1093,7 @@ const UI = (function () {
       g.placeCell = null;
       if (!undoHintShown) {
         undoHintShown = true;
-        toast('DEPLOYED — misplaced? Tap it → UNDO for a full refund', 'warn');
+        toast('DEPLOYED — misplaced? ' + UTIL.tapWordLc() + ' it → UNDO for a full refund', 'warn');
       }
       // keep placing while affordable for rapid multi-build
       if (g.cash < g.towerCost(g.placingType)) cancelPlacement();
@@ -1180,6 +1180,10 @@ const UI = (function () {
       t.onclick = () => { codexTab = t.dataset.ctab; renderCodex(); };
     });
 
+    // portal builds have no SW/offline story — hide those affordances entirely
+    if (window.__NO_SW) {
+      const oh = $('offline-hint'); if (oh) oh.textContent = '';
+    }
     // force update: nuke SW + caches, reload fresh (save data untouched)
     const upBtn = UTIL.h('button', 'btn', '⟳ CHECK FOR UPDATES');
     upBtn.onclick = async () => {
@@ -1196,12 +1200,12 @@ const UI = (function () {
       } catch (e) {}
       location.replace(location.pathname + '?u=' + Math.floor(performance.now()));
     };
-    document.querySelector('#screen-settings .settings-danger').insertBefore(upBtn, $('btn-wipe'));
+    if (!window.__NO_SW) document.querySelector('#screen-settings .settings-danger').insertBefore(upBtn, $('btn-wipe'));
 
     // wipe with confirm
     let wipeArmed = false;
     $('btn-wipe').onclick = () => {
-      if (!wipeArmed) { wipeArmed = true; $('btn-wipe').textContent = 'TAP AGAIN TO CONFIRM WIPE'; setTimeout(() => { wipeArmed = false; $('btn-wipe').textContent = 'WIPE SAVE DATA'; }, 2500); return; }
+      if (!wipeArmed) { wipeArmed = true; $('btn-wipe').textContent = UTIL.tapWord() + ' AGAIN TO CONFIRM WIPE'; setTimeout(() => { wipeArmed = false; $('btn-wipe').textContent = 'WIPE SAVE DATA'; }, 2500); return; }
       SAVE.wipe(); refreshMenu(); show('screen-menu');
     };
 

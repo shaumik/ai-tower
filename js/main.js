@@ -1,11 +1,11 @@
 /* NEURAL SIEGE — bootstrap */
 'use strict';
-(function () {
-  ADS.loadingStart();
+(async function () {
+  ADS.loadingStart();          // queued until the SDK is initialized
   SAVE.load();
   RENDER.setup(UTIL.el('game-canvas'));
   UI.init();
-  ADS.init();
+  await ADS.init();            // SDK ready — queued loading events flush here
   ADS.loadingStop();
 
   // Portal builds (CrazyGames / GD): land in gameplay immediately, zero clicks.

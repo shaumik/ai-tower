@@ -96,11 +96,13 @@ const GAME = (function () {
     if (newT.length) setTimeout(() => UI.toast('NEW DEFENSE UNLOCKED: ' + DATA.TOWERS[newT[0]].name.toUpperCase(), 'warn'), 900);
 
     if (!rafId) { lastT = performance.now(); rafId = requestAnimationFrame(loop); }
+    ADS.gameplayStart(); // build phase counts as gameplay for portal metrics
   }
 
   function quit() {
     g.active = false;
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    ADS.gameplayStop();
   }
 
   // ================================================================ GRID
@@ -407,6 +409,7 @@ const GAME = (function () {
     if (g.stats.leaked === 0) SAVE.addStat('perfectWins', 1);
     if (g.diff === 'insane') SAVE.addStat('insaneWins', 1);
     AUDIO.sfx.victory();
+    ADS.happytime();
     UI.showEnd(true, stars, cores);
     UI.checkAchToasts();
   }

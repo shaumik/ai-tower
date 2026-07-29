@@ -85,7 +85,7 @@ button { font-family:inherit; }
   cursor:pointer; position:relative; color:#cfe8ff;
 }
 .lvl-node .n { font-size:17px; font-weight:800; }
-.lvl-node .stars { font-size:9px; color:#ffd166; letter-spacing:1px; margin-top:2px; height:11px; }
+.lvl-node .stars { font-size:10px; color:#ffd166; letter-spacing:1px; margin-top:2px; height:11px; }
 .lvl-node.locked { opacity:.35; }
 .lvl-node.boss { border-color:#c2334d; box-shadow:inset 0 0 14px rgba(255,61,113,.18); }
 .lvl-node.boss .n { color:#ff7d9c; }
@@ -234,7 +234,7 @@ button { font-family:inherit; }
   background:rgba(11,21,38,.94); color:#cfe8ff; cursor:pointer; position:relative;
   font-size:20px; line-height:1;
 }
-.ab-btn .ab-cost { position:absolute; bottom:2px; right:5px; font-size:9px; color:#7fdcff; font-weight:800; }
+.ab-btn .ab-cost { position:absolute; bottom:2px; right:5px; font-size:10px; color:#7fdcff; font-weight:800; }
 .ab-btn.ready { border-color:#2aa8ff; box-shadow:0 0 14px rgba(42,168,255,.55); }
 .ab-btn.armed { border-color:#ffd166; box-shadow:0 0 16px rgba(255,209,102,.8); background:#2c2410; }
 .ab-btn:disabled { opacity:.35; }
@@ -319,7 +319,7 @@ button { font-family:inherit; }
 .wi-enemy { display:flex; align-items:center; gap:5px; }
 .wi-enemy canvas { width:30px; height:30px; }
 .wi-enemy .wc { font-size:12px; font-weight:800; color:#cfe8ff; }
-.wi-enemy .wn { font-size:9px; color:#7fa8c9; }
+.wi-enemy .wn { font-size:10px; color:#7fa8c9; }
 .wi-warn { font-size:11px; font-weight:800; color:#ff8aa8; letter-spacing:1px; }
 .wi-deal { border-top:1px solid #14243d; padding-top:8px; display:flex; flex-direction:column; gap:6px; }
 .wi-btns { display:flex; gap:8px; }
@@ -367,7 +367,7 @@ button { font-family:inherit; }
 }
 .bb-item canvas { width:36px; height:36px; display:block; margin:0 auto; }
 .bb-item .bb-cost { font-size:10px; font-weight:800; color:#ffd166; }
-.bb-item .bb-name { font-size:8px; color:#7fa8c9; letter-spacing:.3px; overflow:hidden; white-space:nowrap; }
+.bb-item .bb-name { font-size:10px; color:#7fa8c9; letter-spacing:.3px; overflow:hidden; white-space:nowrap; }
 .bb-item.selected { border-color:#2aa8ff; box-shadow:0 0 12px rgba(42,168,255,.55); background:#0e2c4a; }
 .bb-item.poor { opacity:.45; }
 .bb-item.disabled { opacity:.3; pointer-events:none; }
@@ -396,7 +396,7 @@ button { font-family:inherit; }
 /* ---------- Overlays ---------- */
 .overlay {
   position:absolute; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
-  background:rgba(3,5,10,.82); backdrop-filter:blur(4px);
+  background:rgba(3,5,10,.82); backdrop-filter:blur(2px);
 }
 .overlay.show { display:flex; }
 .overlay-card {
@@ -492,7 +492,7 @@ button { font-family:inherit; }
 
 /* ---- build sheet: evolution preview ---- */
 .bs-desc { font-size:11px; color:#7fa8c9; line-height:1.5; margin:6px 2px 2px; }
-.bs-label { font-size:9.5px; letter-spacing:2px; color:#5f89ad; font-weight:800; margin:10px 2px 4px; }
+.bs-label { font-size:10px; letter-spacing:2px; color:#5f89ad; font-weight:800; margin:10px 2px 4px; }
 .evo-row { display:flex; align-items:center; gap:4px; }
 .evo-row canvas { width:44px; height:44px; }
 .evo-arrow { color:#2e4a6e; font-size:18px; font-weight:800; }
@@ -504,4 +504,4 @@ button { font-family:inherit; }
 }
 .evo-branch canvas { width:40px; height:40px; flex-shrink:0; }
 .eb-name { font-size:11.5px; font-weight:800; color:#ffd166; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.eb-desc { font-size:9.5px; color:#7fa8c9; line-height:1.35; }
+.eb-desc { font-size:10px; color:#7fa8c9; line-height:1.35; }

@@ -3,13 +3,14 @@
 const AUDIO = (function () {
   let ctx = null, master = null, sfxGain = null, musicGain = null;
   let unlocked = false;
+  let externalMute = false; // portal SDK muteAudio — overrides in-game toggles
   let musicTimer = null, musicStep = 0;
 
   function init() {
     if (ctx) return;
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
-      master = ctx.createGain(); master.gain.value = 0.6; master.connect(ctx.destination);
+      master = ctx.createGain(); master.gain.value = externalMute ? 0 : 0.6; master.connect(ctx.destination);
       sfxGain = ctx.createGain(); sfxGain.connect(master);
       musicGain = ctx.createGain(); musicGain.gain.value = 0.32; musicGain.connect(master);
       applySettings();
@@ -24,9 +25,15 @@ const AUDIO = (function () {
     startMusic();
   }
 
+  function setExternalMute(m) {
+    externalMute = !!m;
+    if (master) master.gain.value = externalMute ? 0 : 0.6;
+  }
+
   function applySettings() {
     if (!ctx) return;
     const s = SAVE.state.settings;
+    if (master) master.gain.value = externalMute ? 0 : 0.6;
     sfxGain.gain.value = s.sfx ? 1 : 0;
     musicGain.gain.value = s.music ? 0.32 : 0;
     if (s.music && unlocked) startMusic(); else stopMusic();
@@ -146,5 +153,5 @@ const AUDIO = (function () {
     if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
   }
 
-  return { unlock, applySettings, sfx: SFX };
+  return { unlock, applySettings, sfx: SFX , setExternalMute };
 })();
