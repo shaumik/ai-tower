@@ -58,6 +58,9 @@ const WAVES = (function () {
     const p = Math.max(0, (wave - 1) / Math.max(1, totalWaves - 1));
     const growth = 2.3 + level * 0.17; // total count growth across the level
     let budget = (20 + level * 1.6) * earlyBoost * Math.pow(growth, Math.min(p, 1)) * (0.9 + 0.2 * r()) * rampIn;
+    // first-session heat: the opening waves of early levels arrive dense and
+    // immediately, so a new player (or a portal reviewer) sees action fast
+    if (level <= 3 && wave <= 2) budget *= 1.35;
     if (ev && ev.countMult) budget *= ev.countMult;
     if (isBossWave) budget *= 0.45; // boss itself is the show
     if (wave > totalWaves) budget *= Math.pow(1.13, wave - totalWaves); // endless overtime compounds
@@ -80,7 +83,8 @@ const WAVES = (function () {
       return w;
     });
 
-    let t = 0.5;
+    let t = wave === 1 ? 0.15 : 0.5;
+    const gapMult = (level <= 3 && wave <= 2) ? 0.7 : 1;
     const groups = 2 + Math.min(3, Math.floor(wave / 4)) + (budget > 300 ? 1 : 0);
     for (let g = 0; g < groups && budget > 2; g++) {
       const type = UTIL.wchoice(r, pool, weights);
@@ -94,7 +98,7 @@ const WAVES = (function () {
       if ((tr.stealth || tr.flying) && !fdef) count = Math.min(count, 3 + Math.floor(wave / 3));
       if (fdef && (tr.stealth || tr.flying)) count = Math.min(count, 9 + Math.floor(wave / 2));
       budget -= count * e.threat;
-      const gap = UTIL.clamp(0.9 / e.speed * (e.size + 0.55), 0.26, 0.95);
+      const gap = UTIL.clamp(0.9 / e.speed * (e.size + 0.55), 0.26, 0.95) * gapMult;
       for (let i = 0; i < count; i++) {
         events.push({ delay: t, type, hpMult: hs });
         t += gap * (0.85 + r() * 0.3);
