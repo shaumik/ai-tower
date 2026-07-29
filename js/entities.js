@@ -53,6 +53,7 @@ class Enemy {
     this.phaseT = this.traits.phaser ? this.traits.phaser.period : 0;
     this.enraged = false;
     this.anim = Math.random() * 10;
+    this.walk = Math.random() * 2;  // visual only: tiles travelled, drives leg/tread cycles
     // status effects for tower combos
     this.chilledT = 0; this.shockT = 0; this.burnT = 0; this.critCd = 0;
     // signal jammer state
@@ -195,7 +196,9 @@ class Enemy {
       g.toast(this.def.name + ' IS ENRAGED', 'warn');
     }
 
-    this.dist += this.speedNow() * dt;
+    const spd = this.speedNow();
+    this.walk += spd * dt;          // visual only: locomotion cycle distance
+    this.dist += spd * dt;
     if (this.dist >= this.totalLen) { this.leaked = true; this.dead = true; return; }
     this.updatePos();
   }

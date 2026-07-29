@@ -246,220 +246,86 @@ const RENDER = (function () {
     return cv;
   }
 
-  function neon(c, color, blur) {
-    c.shadowColor = color; c.shadowBlur = blur === undefined ? 10 : blur;
-    c.strokeStyle = color; c.fillStyle = color;
+  // ================================================== ENEMY CREATURES
+  // Art direction: "dark machines, glowing threats". Every enemy is a living
+  // light source — an emissive body in its roster color under dark carapace
+  // plating, with real anatomy (legs, rotors, jaws, treads) and a baked
+  // 4-frame locomotion cycle. shadowBlur is allowed below because all of it
+  // is baked into cached sprites; per-frame accents live in drawEnemy.
+  const TAU = Math.PI * 2;
+  const EFRAMES = 4;
+
+  const _epal = {};
+  function epal(color) {
+    let p = _epal[color];
+    if (p) return p;
+    const n = parseInt(color.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const mx = (r2, g2, b2, f) => 'rgb(' + Math.round(r + (r2 - r) * f) + ',' +
+      Math.round(g + (g2 - g) * f) + ',' + Math.round(b + (b2 - b) * f) + ')';
+    p = {
+      c: color,
+      hot: mx(255, 255, 255, 0.72),  // white-hot highlight
+      lit: mx(255, 255, 255, 0.38),  // bright flesh
+      dim: mx(6, 8, 14, 0.55),       // shaded flesh
+      dk:  mx(6, 8, 14, 0.74),       // dark limbs
+      sh1: mx(16, 20, 30, 0.86),     // carapace top
+      sh2: mx(5, 7, 13, 0.94),       // carapace bottom
+      a: aa => 'rgba(' + r + ',' + g + ',' + b + ',' + aa + ')',
+    };
+    _epal[color] = p;
+    return p;
   }
 
-  // ---- enemy shape drawing in 100x100 space, facing +x ----
-  function drawEnemyShape(c, shape, color) {
-    c.lineWidth = 6; c.lineJoin = 'round'; c.lineCap = 'round';
-    neon(c, color, 12);
-    switch (shape) {
-      case 'bot':
-        c.globalAlpha = 0.25; c.beginPath(); c.arc(0, 0, 30, 0, 7); c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.arc(0, 0, 30, 0, 7); c.stroke();
-        c.beginPath(); c.arc(10, 0, 8, 0, 7); c.fillStyle = '#fff'; c.fill();
-        c.beginPath(); c.moveTo(-30, -18); c.lineTo(-44, -30); c.moveTo(-30, 18); c.lineTo(-44, 30); c.stroke();
-        break;
-      case 'dart':
-        c.globalAlpha = 0.3; c.beginPath(); c.moveTo(38, 0); c.lineTo(-26, -20); c.lineTo(-14, 0); c.lineTo(-26, 20); c.closePath(); c.fill();
-        c.globalAlpha = 1; c.beginPath(); c.moveTo(38, 0); c.lineTo(-26, -20); c.lineTo(-14, 0); c.lineTo(-26, 20); c.closePath(); c.stroke();
-        break;
-      case 'blob': {
-        c.globalAlpha = 0.3; blobPath(c); c.fill(); c.globalAlpha = 1; blobPath(c); c.stroke();
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(-8, -6, 5, 0, 7); c.arc(10, -2, 5, 0, 7); c.fill();
-        break;
-      }
-      case 'tri':
-        c.beginPath(); c.moveTo(30, 0); c.lineTo(-22, -22); c.lineTo(-22, 22); c.closePath();
-        c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1; c.stroke();
-        break;
-      case 'box':
-        c.globalAlpha = 0.25; c.fillRect(-28, -28, 56, 56); c.globalAlpha = 1;
-        c.strokeRect(-28, -28, 56, 56);
-        c.beginPath(); c.moveTo(-28, -10); c.lineTo(28, -10); c.moveTo(-28, 8); c.lineTo(28, 8); c.stroke();
-        c.fillStyle = '#fff'; c.fillRect(-6, -4, 12, 8);
-        break;
-      case 'worm':
-        for (let i = 0; i < 4; i++) {
-          const x = 24 - i * 17, rr = 16 - i * 2.4;
-          c.globalAlpha = 0.3; c.beginPath(); c.arc(x, Math.sin(i * 1.5) * 6, rr, 0, 7); c.fill();
-          c.globalAlpha = 1; c.beginPath(); c.arc(x, Math.sin(i * 1.5) * 6, rr, 0, 7); c.stroke();
-        }
-        break;
-      case 'wing':
-        c.beginPath(); c.moveTo(34, 0); c.lineTo(-6, -30); c.lineTo(-18, -8); c.lineTo(-18, 8); c.lineTo(-6, 30); c.closePath();
-        c.globalAlpha = 0.3; c.fill(); c.globalAlpha = 1; c.stroke();
-        c.beginPath(); c.arc(6, 0, 7, 0, 7); c.fillStyle = '#fff'; c.fill();
-        break;
-      case 'lock':
-        c.globalAlpha = 0.3; roundRect(c, -26, -14, 52, 40, 8); c.fill(); c.globalAlpha = 1;
-        roundRect(c, -26, -14, 52, 40, 8); c.stroke();
-        c.beginPath(); c.arc(0, -16, 16, Math.PI, 0); c.stroke();
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 6, 7, 0, 7); c.fill();
-        break;
-      case 'leech':
-        c.beginPath(); c.ellipse(0, 0, 34, 16, 0, 0, 7);
-        c.globalAlpha = 0.3; c.fill(); c.globalAlpha = 1; c.stroke();
-        c.beginPath(); c.arc(26, 0, 8, 0, 7); c.fillStyle = '#fff'; c.fill();
-        c.beginPath(); c.moveTo(-34, 0); c.lineTo(-46, -10); c.moveTo(-34, 0); c.lineTo(-46, 10); c.stroke();
-        break;
-      case 'twin':
-        c.globalAlpha = 0.3; c.beginPath(); c.arc(-14, 0, 20, 0, 7); c.arc(14, 0, 20, 0, 7); c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.arc(-14, 0, 20, 0, 7); c.stroke();
-        c.beginPath(); c.arc(14, 0, 20, 0, 7); c.stroke();
-        c.beginPath(); c.moveTo(-14, -20); c.lineTo(14, 20); c.stroke();
-        break;
-      case 'mask':
-        c.globalAlpha = 0.3; c.beginPath(); c.ellipse(0, 0, 24, 30, 0, 0, 7); c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.ellipse(0, 0, 24, 30, 0, 0, 7); c.stroke();
-        c.fillStyle = '#05070d';
-        c.beginPath(); c.ellipse(-9, -8, 6, 9, 0.3, 0, 7); c.fill();
-        c.beginPath(); c.ellipse(9, -8, 6, 9, -0.3, 0, 7); c.fill();
-        c.beginPath(); c.arc(0, 14, 8, 0, Math.PI); c.stroke();
-        break;
-      case 'hub':
-        c.beginPath(); c.arc(0, 0, 16, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1; c.stroke();
-        for (let i = 0; i < 6; i++) {
-          const a = i * Math.PI / 3;
-          c.beginPath(); c.moveTo(Math.cos(a) * 16, Math.sin(a) * 16); c.lineTo(Math.cos(a) * 38, Math.sin(a) * 38); c.stroke();
-          c.beginPath(); c.arc(Math.cos(a) * 38, Math.sin(a) * 38, 6, 0, 7); c.fillStyle = '#fff'; c.fill();
-          neon(c, color, 12);
-        }
-        break;
-      case 'jam':
-        c.beginPath(); c.arc(0, 0, 18, 0, 7); c.globalAlpha = 0.3; c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.arc(0, 0, 18, 0, 7); c.stroke();
-        // radiating interference spikes
-        for (let i = 0; i < 4; i++) {
-          const a = i * Math.PI / 2 + Math.PI / 4;
-          c.beginPath();
-          c.moveTo(Math.cos(a) * 18, Math.sin(a) * 18);
-          c.lineTo(Math.cos(a) * 36, Math.sin(a) * 36);
-          c.stroke();
-          c.beginPath(); c.arc(Math.cos(a) * 36, Math.sin(a) * 36, 4, 0, 7);
-          c.globalAlpha = 0.7; c.fill(); c.globalAlpha = 1;
-        }
-        c.fillStyle = '#fff';
-        c.font = 'bold 22px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillText('✕', 0, 1);
-        break;
-      case 'golem':
-        c.globalAlpha = 0.3; roundRect(c, -30, -26, 60, 52, 10); c.fill(); c.globalAlpha = 1;
-        roundRect(c, -30, -26, 60, 52, 10); c.stroke();
-        roundRect(c, -18, -14, 36, 20, 5); c.stroke();
-        c.fillStyle = '#ffdd55'; c.beginPath(); c.arc(-8, -4, 4, 0, 7); c.arc(8, -4, 4, 0, 7); c.fill();
-        break;
-      case 'hook':
-        c.beginPath(); c.arc(0, -6, 22, -0.5, Math.PI + 0.5); c.stroke();
-        c.beginPath(); c.moveTo(-20, 8); c.lineTo(-20, 26); c.lineTo(-6, 34); c.stroke();
-        c.beginPath(); c.arc(14, -20, 8, 0, 7); c.globalAlpha = 0.5; c.fill(); c.globalAlpha = 1;
-        break;
-      case 'qbit':
-        c.beginPath(); c.arc(0, 0, 12, 0, 7); c.globalAlpha = 0.5; c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.ellipse(0, 0, 34, 13, 0.6, 0, 7); c.stroke();
-        c.beginPath(); c.ellipse(0, 0, 34, 13, -0.6, 0, 7); c.stroke();
-        break;
-      case 'flash':
-        c.beginPath(); c.moveTo(10, -34); c.lineTo(-16, 4); c.lineTo(0, 4); c.lineTo(-10, 34); c.lineTo(18, -6); c.lineTo(2, -6); c.closePath();
-        c.globalAlpha = 0.4; c.fill(); c.globalAlpha = 1; c.stroke();
-        break;
-      case 'hydra':
-        for (let i = -1; i <= 1; i++) {
-          c.beginPath(); c.moveTo(-10, 0); c.quadraticCurveTo(8, i * 22, 30, i * 26);
-          c.stroke();
-          c.beginPath(); c.arc(30, i * 26, 8, 0, 7); c.globalAlpha = 0.5; c.fill(); c.globalAlpha = 1;
-        }
-        c.beginPath(); c.arc(-16, 0, 15, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.arc(-16, 0, 15, 0, 7); c.stroke();
-        break;
-      case 'ghost':
-        c.beginPath();
-        c.arc(0, -6, 24, Math.PI, 0);
-        c.lineTo(24, 22); c.lineTo(12, 12); c.lineTo(0, 24); c.lineTo(-12, 12); c.lineTo(-24, 22);
-        c.closePath();
-        c.globalAlpha = 0.3; c.fill(); c.globalAlpha = 1; c.stroke();
-        c.fillStyle = '#05070d'; c.beginPath(); c.arc(-8, -6, 5, 0, 7); c.arc(8, -6, 5, 0, 7); c.fill();
-        break;
-      case 'tank':
-        c.globalAlpha = 0.3; roundRect(c, -34, -22, 68, 44, 8); c.fill(); c.globalAlpha = 1;
-        roundRect(c, -34, -22, 68, 44, 8); c.stroke();
-        roundRect(c, -40, -30, 80, 10, 4); c.stroke();
-        roundRect(c, -40, 20, 80, 10, 4); c.stroke();
-        c.beginPath(); c.moveTo(0, 0); c.lineTo(40, 0); c.stroke();
-        break;
-      case 'mirror':
-        c.beginPath(); c.moveTo(0, -32); c.lineTo(24, 0); c.lineTo(0, 32); c.lineTo(-24, 0); c.closePath();
-        c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1; c.stroke();
-        c.beginPath(); c.moveTo(0, -32); c.lineTo(0, 32); c.stroke();
-        break;
-      case 'titan':
-        c.globalAlpha = 0.25; hexPath(c, 42); c.fill(); c.globalAlpha = 1;
-        hexPath(c, 42); c.stroke();
-        hexPath(c, 26); c.stroke();
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 8, 0, 7); c.fill();
-        for (let i = 0; i < 6; i++) {
-          const a = i * Math.PI / 3 + Math.PI / 6;
-          c.beginPath(); c.arc(Math.cos(a) * 34, Math.sin(a) * 34, 3.5, 0, 7); c.fill();
-        }
-        break;
-      // -------- bosses --------
-      case 'bosskernel':
-        c.lineWidth = 7; hexPath(c, 40); c.globalAlpha = 0.3; c.fill(); c.globalAlpha = 1; hexPath(c, 40); c.stroke();
-        c.font = 'bold 34px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillStyle = '#fff'; c.fillText('!', 0, 2);
-        c.beginPath(); c.arc(0, 0, 46, 0.3, 1.4); c.stroke();
-        c.beginPath(); c.arc(0, 0, 46, 3.4, 4.6); c.stroke();
-        break;
-      case 'bossmaster':
-        c.lineWidth = 6; c.beginPath(); c.arc(0, 0, 26, 0, 7); c.globalAlpha = 0.35; c.fill(); c.globalAlpha = 1; c.stroke();
-        for (let i = 0; i < 8; i++) {
-          const a = i * Math.PI / 4;
-          c.beginPath(); c.moveTo(Math.cos(a) * 26, Math.sin(a) * 26); c.lineTo(Math.cos(a) * 44, Math.sin(a) * 44); c.stroke();
-          c.beginPath(); c.arc(Math.cos(a) * 44, Math.sin(a) * 44, 5, 0, 7); c.fillStyle = '#fff'; c.fill(); neon(c, color, 12);
-        }
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 9, 0, 7); c.fill();
-        break;
-      case 'bossfake':
-        c.lineWidth = 6;
-        c.beginPath(); c.ellipse(-10, 0, 24, 34, 0.15, 0, 7); c.globalAlpha = 0.25; c.fill(); c.globalAlpha = 1; c.stroke();
-        c.setLineDash([8, 6]); c.beginPath(); c.ellipse(14, 0, 24, 34, -0.15, 0, 7); c.stroke(); c.setLineDash([]);
-        c.fillStyle = '#05070d';
-        c.beginPath(); c.ellipse(-16, -10, 6, 9, 0.3, 0, 7); c.fill();
-        c.beginPath(); c.ellipse(2, -10, 6, 9, -0.3, 0, 7); c.fill();
-        break;
-      case 'bossmind':
-        c.lineWidth = 6; c.beginPath(); c.arc(0, 0, 34, 0, 7); c.globalAlpha = 0.3; c.fill(); c.globalAlpha = 1; c.stroke();
-        c.beginPath(); c.moveTo(-34, 0); c.bezierCurveTo(-12, -30, 12, 30, 34, 0); c.stroke();
-        c.beginPath(); c.moveTo(0, -34); c.bezierCurveTo(-30, -12, 30, 12, 0, 34); c.stroke();
-        c.beginPath(); c.arc(0, 0, 47, 0, 7); c.setLineDash([6, 10]); c.stroke(); c.setLineDash([]);
-        c.fillStyle = '#fff'; c.beginPath(); c.arc(0, 0, 7, 0, 7); c.fill();
-        break;
-      case 'bossagi':
-        c.lineWidth = 6;
-        hexPath(c, 44); c.globalAlpha = 0.25; c.fill(); c.globalAlpha = 1; hexPath(c, 44); c.stroke();
-        c.beginPath(); c.arc(0, 0, 30, 0, 7); c.stroke();
-        // eye
-        c.fillStyle = '#fff'; c.beginPath(); c.ellipse(0, 0, 16, 9, 0, 0, 7); c.fill();
-        c.fillStyle = '#ff2255'; c.beginPath(); c.arc(0, 0, 6, 0, 7); c.fill();
-        for (let i = 0; i < 3; i++) {
-          const a = i * Math.PI * 2 / 3 - Math.PI / 2;
-          c.beginPath(); c.arc(Math.cos(a) * 44, Math.sin(a) * 44, 6, 0, 7); c.fillStyle = '#fff'; c.fill();
-        }
-        break;
-      default:
-        c.beginPath(); c.arc(0, 0, 28, 0, 7); c.stroke();
+  // ambient light the creature casts on the board (additive)
+  function eglow(c, P, x, y, rad, a) {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const g = c.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, P.a(a)); g.addColorStop(1, P.a(0));
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, rad, 0, 7); c.fill();
+    c.restore();
+  }
+  // emissive flesh sphere
+  function eorb(c, P, x, y, rad) {
+    const g = c.createRadialGradient(x - rad * 0.3, y - rad * 0.3, rad * 0.1, x, y, rad);
+    g.addColorStop(0, P.lit); g.addColorStop(0.55, P.c); g.addColorStop(1, P.dim);
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, rad, 0, 7); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 1.6; c.stroke();
+  }
+  // white-hot glowing eye
+  function eeye(c, P, x, y, rad) {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.shadowColor = P.c; c.shadowBlur = rad * 2.6;
+    c.fillStyle = '#fff';
+    c.beginPath(); c.arc(x, y, rad, 0, 7); c.fill();
+    c.restore();
+  }
+  // fill + outline the current path as dark carapace
+  function eshell(c, P, y0, y1) {
+    const g = c.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, P.sh1); g.addColorStop(1, P.sh2);
+    c.fillStyle = g; c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 1.8; c.stroke();
+  }
+  // n walking legs per side, phased sin cycle, glowing knee joints
+  function elegs(c, P, ph, n, x0, dx, hipY, footY, stride, lw) {
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (let s = -1; s <= 1; s += 2) for (let i = 0; i < n; i++) {
+      const sw = Math.sin(ph + i * 2.4 + (s > 0 ? Math.PI : 0));
+      const hx = x0 + i * dx, kx = hx + sw * stride * 0.55, fx = hx + sw * stride;
+      const ky = s * (hipY + (footY - hipY) * 0.55);
+      c.strokeStyle = P.dk; c.lineWidth = lw;
+      c.beginPath(); c.moveTo(hx, s * hipY); c.lineTo(kx, ky); c.lineTo(fx, s * footY); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = P.a(0.85);
+      c.beginPath(); c.arc(kx, ky, lw * 0.42, 0, 7); c.fill();
+      c.restore();
     }
   }
-  function blobPath(c) {
+  function boltPath(c) {
     c.beginPath();
-    c.moveTo(30, 0);
-    c.bezierCurveTo(30, 22, 16, 32, -2, 30);
-    c.bezierCurveTo(-24, 28, -34, 12, -28, -8);
-    c.bezierCurveTo(-22, -28, 2, -34, 16, -26);
-    c.bezierCurveTo(26, -20, 30, -12, 30, 0);
-    c.closePath();
+    c.moveTo(-34, -8); c.lineTo(4, 14); c.lineTo(4, 0); c.lineTo(34, 8);
+    c.lineTo(-6, -16); c.lineTo(-6, -2); c.closePath();
   }
   function hexPath(c, r) {
     c.beginPath();
@@ -471,19 +337,856 @@ const RENDER = (function () {
     c.closePath();
   }
 
-  function enemySprite(type) {
-    const def = DATA.ENEMIES[type];
-    const px = Math.max(20, T * def.size * 2.6);
-    return makeSprite('e_' + type + '_' + Math.round(px), px, c => {
-      // drop shadow pass for depth, then the neon body
-      c.save();
-      c.translate(2.5, 3.5);
-      c.globalAlpha = 0.5;
-      drawEnemyShape(c, def.shape, '#000000');
+  // Painters draw in 100x100 space, centered, facing +x, at cycle phase ph.
+  const CREATURES = {
+    // SPAMBOT — hovering courier drone: glowing envelope body, dark top plate
+    bot(c, P, ph) {
+      eglow(c, P, 0, 0, 42, 0.4);
+      for (const s of [-1, 1]) { // thruster pods (flames drawn live)
+        c.fillStyle = P.sh2;
+        roundRect(c, -30, s * 9 - 4.5, 12, 9, 3.5); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.4; c.stroke();
+      }
+      c.beginPath(); // glowing teardrop body
+      c.moveTo(28, 0);
+      c.quadraticCurveTo(24, -17, 0, -18);
+      c.quadraticCurveTo(-22, -17, -24, 0);
+      c.quadraticCurveTo(-22, 17, 0, 18);
+      c.quadraticCurveTo(24, 17, 28, 0);
+      c.closePath();
+      const g = c.createLinearGradient(-24, 0, 28, 0);
+      g.addColorStop(0, P.dim); g.addColorStop(0.55, P.c); g.addColorStop(1, P.lit);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.8; c.stroke();
+      c.beginPath(); // dark carapace over the rear half
+      c.moveTo(4, -17.4);
+      c.quadraticCurveTo(-22, -17, -24, 0);
+      c.quadraticCurveTo(-22, 17, 4, 17.4);
+      c.quadraticCurveTo(-6, 0, 4, -17.4);
+      c.closePath();
+      eshell(c, P, -17, 17);
+      c.strokeStyle = P.a(0.55); c.lineWidth = 1.3; // rim light on plate edge
+      c.beginPath(); c.moveTo(4, -16); c.quadraticCurveTo(-5.5, 0, 4, 16); c.stroke();
+      c.strokeStyle = P.a(0.3); c.lineWidth = 1.6; // vents
+      for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(-18 + i * 6, -8); c.lineTo(-16 + i * 6, 8); c.stroke(); }
+      eeye(c, P, 17, 0, 4.6);
+      c.strokeStyle = P.dk; c.lineWidth = 2; // antenna with blinking tip
+      c.beginPath(); c.moveTo(-8, -14); c.lineTo(-14, -27); c.stroke();
+      const on = ph < TAU * 0.28;
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = on ? '#ffd166' : 'rgba(255,209,102,0.25)';
+      if (on) { c.shadowColor = '#ffd166'; c.shadowBlur = 7; }
+      c.beginPath(); c.arc(-14.5, -29, 3, 0, 7); c.fill();
       c.restore();
-      c.globalAlpha = 1;
-      drawEnemyShape(c, def.shape, def.color);
-    });
+    },
+    // AD CRAWLER — sleek dart with flapping swept wings
+    dart(c, P, ph) {
+      eglow(c, P, 4, 0, 38, 0.4);
+      const flap = Math.sin(ph) * 3;
+      for (const s of [-1, 1]) {
+        c.beginPath();
+        c.moveTo(8, s * 4);
+        c.quadraticCurveTo(-10, s * 16, -26, s * (22 + flap));
+        c.quadraticCurveTo(-14, s * 10, -18, s * 5);
+        c.closePath();
+        eshell(c, P, 0, s * 22);
+        c.strokeStyle = P.a(0.5); c.lineWidth = 1.2;
+        c.beginPath(); c.moveTo(6, s * 4.5); c.quadraticCurveTo(-12, s * 15, -24, s * (20.6 + flap)); c.stroke();
+      }
+      c.beginPath(); // glowing needle fuselage
+      c.moveTo(36, 0); c.quadraticCurveTo(10, -8, -20, -6);
+      c.lineTo(-24, 0); c.lineTo(-20, 6); c.quadraticCurveTo(10, 8, 36, 0);
+      c.closePath();
+      const g = c.createLinearGradient(-24, 0, 36, 0);
+      g.addColorStop(0, P.dim); g.addColorStop(0.5, P.c); g.addColorStop(1, P.hot);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.5; c.stroke();
+      c.beginPath(); // dark canopy
+      c.moveTo(14, -3.6); c.quadraticCurveTo(0, -8, -14, -5); c.lineTo(-14, 5);
+      c.quadraticCurveTo(0, 8, 14, 3.6); c.closePath();
+      eshell(c, P, -7, 7);
+      eeye(c, P, 20, 0, 3.4);
+      c.fillStyle = P.sh2; roundRect(c, -27, -4, 7, 8, 2.5); c.fill();
+    },
+    // BLOATWARE — wobbling amoeba with crusty plates and stalk eyes
+    blob(c, P, ph) {
+      eglow(c, P, 0, 0, 44, 0.5);
+      c.beginPath();
+      for (let i = 0; i <= 14; i++) {
+        const a = i / 14 * TAU;
+        const r = 28 + Math.sin(a * 3 + ph) * 3.2 + Math.sin(a * 5 - ph) * 1.8;
+        const x = Math.cos(a) * r * 1.08, y = Math.sin(a) * r;
+        i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+      }
+      c.closePath();
+      const g = c.createRadialGradient(6, -4, 3, 0, 0, 32);
+      g.addColorStop(0, P.lit); g.addColorStop(0.55, P.c); g.addColorStop(1, P.dim);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 2; c.stroke();
+      for (const w of [[-12, -12, 8], [-2, 12, 6.5], [-18, 6, 5]]) { // crust plates
+        c.fillStyle = P.sh1;
+        c.beginPath(); c.arc(w[0], w[1], w[2], 0, 7); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 1.2; c.stroke();
+      }
+      c.save(); c.globalCompositeOperation = 'lighter'; // shifting goo bubbles
+      c.fillStyle = P.a(0.5);
+      c.beginPath(); c.arc(Math.sin(ph) * 3, Math.cos(ph) * 2, 9, 0, 7); c.fill();
+      c.fillStyle = P.a(0.7);
+      c.beginPath(); c.arc(10 + Math.sin(ph + 1) * 2, 8, 3, 0, 7); c.fill();
+      c.beginPath(); c.arc(-6, -18 + Math.cos(ph) * 2, 2.4, 0, 7); c.fill();
+      c.restore();
+      eeye(c, P, 20, -7, 3.4); eeye(c, P, 23, 4, 2.6);
+    },
+    // SWARMLING — tiny skittering mite
+    tri(c, P, ph) {
+      eglow(c, P, 0, 0, 36, 0.45);
+      elegs(c, P, ph, 3, -12, 10, 10, 24, 9, 4);
+      c.beginPath(); c.moveTo(26, 0); c.lineTo(-16, -13); c.lineTo(-20, 0); c.lineTo(-16, 13); c.closePath();
+      const g = c.createLinearGradient(-20, 0, 26, 0);
+      g.addColorStop(0, P.dim); g.addColorStop(1, P.lit);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.6; c.stroke();
+      c.beginPath(); c.moveTo(-4, -9); c.lineTo(-16, -12.4); c.lineTo(-19, 0); c.lineTo(-16, 12.4); c.lineTo(-4, 9); c.closePath();
+      eshell(c, P, -12, 12);
+      eeye(c, P, 12, 0, 3.2);
+    },
+    // TROJAN CARRIER — walking crate, payload light leaking from the seams
+    box(c, P, ph) {
+      eglow(c, P, 0, 0, 40, 0.35);
+      elegs(c, P, ph, 2, -12, 18, 16, 27, 8, 5);
+      roundRect(c, -24, -20, 48, 40, 6);
+      eshell(c, P, -20, 20);
+      c.save(); c.globalCompositeOperation = 'lighter'; // glowing seams
+      c.strokeStyle = P.a(0.85); c.lineWidth = 2;
+      c.shadowColor = P.c; c.shadowBlur = 6;
+      c.beginPath(); c.moveTo(-24, -6); c.lineTo(24, -6); c.moveTo(-24, 8); c.lineTo(24, 8); c.stroke();
+      c.beginPath(); c.moveTo(2, -20); c.lineTo(2, 20); c.stroke();
+      c.restore();
+      c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 2;
+      roundRect(c, -24, -20, 48, 40, 6); c.stroke();
+      c.strokeStyle = P.a(0.4); c.lineWidth = 1.3;
+      c.beginPath(); c.moveTo(-18, -20); c.lineTo(14, -20); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; // eye slit
+      c.shadowColor = P.c; c.shadowBlur = 8;
+      c.fillStyle = '#fff';
+      roundRect(c, 16, -5, 5, 10, 2); c.fill();
+      c.restore();
+    },
+    // WORM / WORMLET — segmented undulating crawler with mandibles
+    worm(c, P, ph, def) {
+      const n = def && def.size > 0.25 ? 5 : 4;
+      eglow(c, P, 0, 0, 42, 0.4);
+      for (let i = n - 1; i >= 0; i--) {
+        const x = 26 - i * (48 / (n - 1));
+        const y = Math.sin(ph + i * 1.5) * 8;
+        const r = i === 0 ? 13 : 12 - i * (5.5 / n);
+        eorb(c, P, x, y, r);
+        if (i > 0) { // dark dorsal scute
+          c.beginPath(); c.arc(x, y, r * 0.94, Math.PI * 1.15, Math.PI * 1.85);
+          c.strokeStyle = P.sh1; c.lineWidth = r * 0.55; c.stroke();
+        }
+      }
+      const hy = Math.sin(ph) * 8;
+      c.strokeStyle = P.dk; c.lineWidth = 3; c.lineCap = 'round'; // mandibles
+      c.beginPath(); c.moveTo(34, hy - 5); c.quadraticCurveTo(42, hy - 6, 44, hy - 1); c.stroke();
+      c.beginPath(); c.moveTo(34, hy + 5); c.quadraticCurveTo(42, hy + 6, 44, hy + 1); c.stroke();
+      eeye(c, P, 31, hy - 4, 2.6); eeye(c, P, 31, hy + 4, 2.6);
+    },
+    // RECON DRONE — quadcopter, spinning rotors, glowing sensor core
+    wing(c, P, ph) {
+      eglow(c, P, 0, 0, 40, 0.4);
+      for (const arm of [[15, -15], [15, 15], [-15, -15], [-15, 15]]) {
+        c.strokeStyle = P.sh1; c.lineWidth = 4.5; c.lineCap = 'round';
+        c.beginPath(); c.moveTo(arm[0] * 0.35, arm[1] * 0.35); c.lineTo(arm[0], arm[1]); c.stroke();
+        c.save(); c.translate(arm[0], arm[1]);
+        c.fillStyle = P.a(0.12);
+        c.beginPath(); c.arc(0, 0, 11, 0, 7); c.fill();
+        c.rotate(ph * 0.75 + (arm[0] > 0 ? 0 : 0.8) + (arm[1] > 0 ? 0.4 : 0));
+        c.strokeStyle = P.a(0.75); c.lineWidth = 2;
+        c.beginPath(); c.moveTo(-10, 0); c.lineTo(10, 0); c.moveTo(0, -10); c.lineTo(0, 10); c.stroke();
+        c.fillStyle = P.sh2; c.beginPath(); c.arc(0, 0, 3, 0, 7); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1; c.stroke();
+        c.restore();
+      }
+      eorb(c, P, 0, 0, 12);
+      c.beginPath(); c.moveTo(14, -4); c.lineTo(4, -12); c.lineTo(-12, -8); c.lineTo(-14, 0); c.lineTo(-12, 8); c.lineTo(4, 12); c.lineTo(14, 4); c.closePath();
+      eshell(c, P, -12, 12);
+      c.strokeStyle = P.a(0.5); c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(12, -4.5); c.lineTo(3, -11); c.stroke();
+      eeye(c, P, 9.5, 0, 3.8);
+    },
+    // RANSOMWARE — armored padlock crab, keyhole eye, walking legs
+    lock(c, P, ph) {
+      eglow(c, P, 0, 0, 42, 0.4);
+      elegs(c, P, ph, 3, -14, 13, 17, 30, 9, 5);
+      c.strokeStyle = P.sh1; c.lineWidth = 8; // shackle at the rear
+      c.beginPath(); c.arc(-22, 0, 15, Math.PI * 0.5, Math.PI * 1.5); c.stroke();
+      c.strokeStyle = P.a(0.55); c.lineWidth = 2.2;
+      c.beginPath(); c.arc(-22, 0, 18.5, Math.PI * 0.62, Math.PI * 1.38); c.stroke();
+      roundRect(c, -20, -19, 44, 38, 7); // armored body, glowing toward the face
+      const g = c.createLinearGradient(-20, 0, 24, 0);
+      g.addColorStop(0, P.sh2); g.addColorStop(0.45, P.sh1); g.addColorStop(1, P.c);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 2; c.stroke();
+      c.fillStyle = P.a(0.6); // rivets
+      for (const rv of [[-14, -13], [-14, 13], [16, -13], [16, 13]]) {
+        c.beginPath(); c.arc(rv[0], rv[1], 1.8, 0, 7); c.fill();
+      }
+      c.strokeStyle = P.a(0.5); c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(-14, -18.6); c.lineTo(16, -18.6); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; // keyhole eye
+      c.shadowColor = P.c; c.shadowBlur = 12;
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(8, 0, 6.5, 0, 7); c.fill();
+      c.beginPath(); c.moveTo(8, -3); c.lineTo(-4, -5.5); c.lineTo(-4, 5.5); c.lineTo(8, 3); c.closePath(); c.fill();
+      c.restore();
+    },
+    // DATA LEECH — inching slug, sucker mouth, dorsal scutes
+    leech(c, P, ph) {
+      eglow(c, P, 0, 0, 40, 0.4);
+      const st = Math.sin(ph);
+      const L = 32 + st * 4, Wd = 13 - st * 1.5;
+      c.strokeStyle = P.dk; c.lineWidth = 3.5; c.lineCap = 'round'; // tail fork
+      c.beginPath(); c.moveTo(-L + 4, 0); c.lineTo(-L - 9, -7); c.moveTo(-L + 4, 0); c.lineTo(-L - 9, 7); c.stroke();
+      c.beginPath(); c.ellipse(0, 0, L, Wd, 0, 0, 7);
+      const g = c.createLinearGradient(-L, 0, L, 0);
+      g.addColorStop(0, P.dim); g.addColorStop(0.6, P.c); g.addColorStop(1, P.lit);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.8; c.stroke();
+      c.strokeStyle = P.sh1; c.lineWidth = 5.5; c.lineCap = 'round'; // dorsal scutes
+      for (let i = 0; i < 4; i++) {
+        const x = -L * 0.66 + i * L * 0.36;
+        c.beginPath(); c.arc(x, 4, Wd * (1.02 - i * 0.06), -2.25, -0.89); c.stroke();
+      }
+      c.fillStyle = P.sh2; // sucker mouth
+      c.beginPath(); c.ellipse(L - 4, 0, 6.5, 7.5, 0, 0, 7); c.fill();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.shadowColor = P.c; c.shadowBlur = 8;
+      c.fillStyle = P.hot;
+      c.beginPath(); c.ellipse(L - 3.5, 0, 3.4, 4.4, 0, 0, 7); c.fill();
+      c.restore();
+      c.strokeStyle = 'rgba(0,0,0,0.85)'; c.lineWidth = 1.4; // fangs in the glow
+      c.beginPath(); c.moveTo(L - 6, -3.4); c.lineTo(L - 1.5, 0); c.lineTo(L - 6, 3.4); c.stroke();
+      eeye(c, P, L - 13, -6.5, 2.2); eeye(c, P, L - 13, 6.5, 2.2);
+    },
+    // GAN REGENERATOR — twin orbs trading a healing arc
+    twin(c, P, ph) {
+      eglow(c, P, 0, 0, 44, 0.45);
+      for (const s of [-1, 1]) {
+        const r = s < 0 ? 15 : 13;
+        eorb(c, P, 2, s * 18, r);
+        c.beginPath(); c.arc(2, s * 18, r * 0.9, Math.PI * 0.6, Math.PI * 1.4);
+        c.strokeStyle = P.sh1; c.lineWidth = r * 0.5; c.stroke();
+        eeye(c, P, 2 + r * 0.6, s * 18, 2.8);
+      }
+      c.save(); c.globalCompositeOperation = 'lighter'; // energy tether on top
+      c.strokeStyle = P.a(0.9); c.lineWidth = 2.2;
+      c.shadowColor = P.c; c.shadowBlur = 7;
+      c.beginPath(); c.moveTo(2, -10);
+      for (let i = 1; i <= 4; i++) c.lineTo(2 + (i % 2 ? 5.5 : -5.5) * Math.sin(ph + i), -10 + i * 5);
+      c.stroke();
+      c.fillStyle = '#fff'; // spark travelling along it
+      c.beginPath(); c.arc(2 + Math.sin(ph * 2) * 4, Math.sin(ph) * 10, 2.6, 0, 7); c.fill();
+      c.restore();
+    },
+    // DEEPFAKE — floating hollow-eyed face trailing veil wisps
+    mask(c, P, ph) {
+      eglow(c, P, 0, 0, 40, 0.4);
+      c.strokeStyle = P.a(0.35); c.lineWidth = 3.5; c.lineCap = 'round'; // wisps
+      for (let i = -1; i <= 1; i++) {
+        c.beginPath(); c.moveTo(-10, i * 8);
+        c.quadraticCurveTo(-22, i * 12 + Math.sin(ph + i * 2) * 4, -34, i * 14 + Math.sin(ph + i) * 6);
+        c.stroke();
+      }
+      c.save(); c.globalAlpha = 0.35; c.translate(2.5, -2); // glitch double
+      c.beginPath(); c.ellipse(4, 0, 17, 24, 0.12, 0, 7);
+      c.strokeStyle = P.c; c.lineWidth = 1.6; c.stroke();
+      c.restore();
+      c.beginPath(); c.ellipse(4, 0, 17, 24, 0, 0, 7); // pale glowing face
+      const g = c.createRadialGradient(8, -6, 2, 4, 0, 24);
+      g.addColorStop(0, P.hot); g.addColorStop(0.6, P.c); g.addColorStop(1, P.dim);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 1.8; c.stroke();
+      c.beginPath(); c.ellipse(4, -14, 16.4, 10, 0, Math.PI, 0); c.closePath(); // brow plate
+      eshell(c, P, -24, -4);
+      c.fillStyle = '#05070d'; // slanted hollow eyes
+      c.beginPath(); c.moveTo(3, -10); c.lineTo(14, -6.5); c.lineTo(12, -1); c.lineTo(5, -3); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(-8, -9); c.lineTo(1, -9.6); c.lineTo(-1, -2.6); c.lineTo(-8, -4.4); c.closePath(); c.fill();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = P.a(0.95);
+      c.beginPath(); c.arc(10, -4.5, 1.5, 0, 7); c.arc(-3.5, -5.5, 1.5, 0, 7); c.fill();
+      c.restore();
+      c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 2; // glitch mouth
+      c.beginPath(); c.moveTo(-6, 12); c.lineTo(0, 10); c.lineTo(4, 13); c.lineTo(9, 10.4); c.stroke();
+    },
+    // BOTNET NODE — hexapod relay, command pings running its spokes
+    hub(c, P, ph) {
+      eglow(c, P, 0, 0, 46, 0.45);
+      elegs(c, P, ph, 3, -16, 14, 15, 28, 8, 5);
+      const lit = Math.floor(ph / TAU * 6 + 0.01) % 6;
+      for (let i = 0; i < 6; i++) {
+        const a = i * TAU / 6 + TAU / 12;
+        const cx2 = Math.cos(a), cy2 = Math.sin(a);
+        c.strokeStyle = P.sh1; c.lineWidth = 4;
+        c.beginPath(); c.moveTo(cx2 * 14, cy2 * 14); c.lineTo(cx2 * 30, cy2 * 30); c.stroke();
+        c.save(); c.globalCompositeOperation = 'lighter';
+        const on = i === lit || i === (lit + 3) % 6;
+        c.fillStyle = on ? '#fff' : P.a(0.4);
+        if (on) { c.shadowColor = P.c; c.shadowBlur = 8; }
+        c.beginPath(); c.arc(cx2 * 30, cy2 * 30, on ? 3.6 : 2.6, 0, 7); c.fill();
+        c.restore();
+      }
+      eorb(c, P, 0, 0, 13);
+      c.strokeStyle = P.sh1; c.lineWidth = 6;
+      c.beginPath(); c.arc(0, 0, 16.5, 0, 7); c.stroke();
+      c.strokeStyle = P.a(0.5); c.lineWidth = 1.3;
+      c.beginPath(); c.arc(0, 0, 19.2, -2.4, -0.6); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = P.a(0.5 + 0.3 * Math.sin(ph));
+      c.beginPath(); c.arc(0, 0, 8, 0, 7); c.fill();
+      c.restore();
+    },
+    // SIGNAL JAMMER — tracked crawler, static-spitting spikes, ✕ dish
+    jam(c, P, ph) {
+      eglow(c, P, 0, 0, 42, 0.4);
+      for (const s of [-1, 1]) { // treads with scrolling lugs
+        c.fillStyle = P.sh2;
+        roundRect(c, -22, s * 14 - 5, 44, 10, 4); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 1.6; c.stroke();
+        c.strokeStyle = P.a(0.35); c.lineWidth = 2;
+        const off = ph / TAU * 8;
+        for (let i = 0; i < 6; i++) {
+          const x = -20 + ((i * 8 + off) % 42);
+          c.beginPath(); c.moveTo(x, s * 14 - 4); c.lineTo(x, s * 14 + 4); c.stroke();
+        }
+      }
+      for (let i = 0; i < 4; i++) { // interference spikes
+        const a = i * TAU / 4 + TAU / 8;
+        const cx2 = Math.cos(a), cy2 = Math.sin(a);
+        c.strokeStyle = P.dk; c.lineWidth = 3; c.lineCap = 'round';
+        c.beginPath(); c.moveTo(cx2 * 12, cy2 * 12); c.lineTo(cx2 * 30, cy2 * 30); c.stroke();
+        c.save(); c.globalCompositeOperation = 'lighter';
+        c.strokeStyle = P.a(0.8); c.lineWidth = 1.6;
+        const j = Math.sin(ph + i * 1.7) * 3;
+        c.beginPath();
+        c.moveTo(cx2 * 30 - 4, cy2 * 30 + j);
+        c.lineTo(cx2 * 30 + 1, cy2 * 30 - j);
+        c.lineTo(cx2 * 30 + 5, cy2 * 30 + j * 0.6);
+        c.stroke();
+        c.restore();
+      }
+      eorb(c, P, 0, 0, 15);
+      c.beginPath(); c.arc(0, 0, 15.5, Math.PI * 0.6, Math.PI * 2.4);
+      c.strokeStyle = P.sh1; c.lineWidth = 7; c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; // the ✕ dish
+      c.strokeStyle = '#fff'; c.lineWidth = 3.4; c.lineCap = 'round';
+      c.shadowColor = P.c; c.shadowBlur = 9;
+      c.beginPath(); c.moveTo(-6, -6); c.lineTo(6, 6); c.moveTo(6, -6); c.lineTo(-6, 6); c.stroke();
+      c.restore();
+    },
+    // OVERFIT GOLEM — stone slabs grinding over a molten core
+    golem(c, P, ph) {
+      eglow(c, P, 0, 0, 42, 0.45);
+      const stp = Math.sin(ph);
+      // molten core body peeking out everywhere the plates don't cover
+      c.beginPath(); c.ellipse(0, 0, 27, 24, 0, 0, 7);
+      const cg = c.createRadialGradient(2, 0, 2, 0, 0, 26);
+      cg.addColorStop(0, P.hot); cg.addColorStop(0.5, P.c); cg.addColorStop(1, P.dim);
+      c.fillStyle = cg; c.fill();
+      for (const s of [-1, 1]) { // armor slabs, alternating with the stomp
+        const fw = stp * 4 * s;
+        c.beginPath();
+        c.moveTo(-28 + fw, s * 26); c.lineTo(22 + fw, s * 26);
+        c.lineTo(27 + fw, s * 7); c.lineTo(-24 + fw, s * 5);
+        c.closePath();
+        eshell(c, P, s * 26, s * 5);
+        c.strokeStyle = P.a(0.35); c.lineWidth = 1.4; // plate cracks
+        c.beginPath(); c.moveTo(-12 + fw, s * 25); c.lineTo(-8 + fw, s * 14); c.lineTo(-14 + fw, s * 8); c.stroke();
+        c.beginPath(); c.moveTo(8 + fw, s * 25); c.lineTo(12 + fw, s * 12); c.stroke();
+      }
+      c.save(); c.globalCompositeOperation = 'lighter'; // molten seam
+      c.strokeStyle = P.a(0.95); c.lineWidth = 4.5; c.lineCap = 'round';
+      c.shadowColor = P.c; c.shadowBlur = 12;
+      c.beginPath(); c.moveTo(-25, 0);
+      for (let i = 0; i < 5; i++) c.lineTo(-17 + i * 9, (i % 2 ? -3 : 3));
+      c.lineTo(23, 0); c.stroke();
+      c.restore();
+      roundRect(c, 20, -10, 15, 20, 4); // head block
+      eshell(c, P, -10, 10);
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = '#ffdd55'; c.shadowColor = '#ffb300'; c.shadowBlur = 8;
+      c.beginPath(); c.arc(30, -4, 2.6, 0, 7); c.fill();
+      c.beginPath(); c.arc(30, 4, 2.6, 0, 7); c.fill();
+      c.restore();
+      for (const s of [-1, 1]) { // knuckles
+        c.fillStyle = P.sh1;
+        c.beginPath(); c.arc(28 - stp * 4 * s, s * 19, 7, 0, 7); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.4; c.stroke();
+      }
+    },
+    // PHISHER — angler fish dangling a glowing hook
+    hook(c, P, ph) {
+      eglow(c, P, 10, -6, 36, 0.35);
+      c.save(); c.translate(-18, 0); c.rotate(Math.sin(ph) * 0.35); // tail wag
+      c.beginPath(); c.moveTo(0, 0); c.lineTo(-16, -10); c.lineTo(-12, 0); c.lineTo(-16, 10); c.closePath();
+      eshell(c, P, -10, 10);
+      c.restore();
+      c.beginPath(); // dark fish body, glowing underbelly
+      c.moveTo(20, 0); c.quadraticCurveTo(14, -13, -4, -12); c.quadraticCurveTo(-20, -9, -20, 0);
+      c.quadraticCurveTo(-20, 9, -4, 12); c.quadraticCurveTo(14, 13, 20, 0);
+      c.closePath();
+      const g = c.createLinearGradient(0, -13, 0, 13);
+      g.addColorStop(0, P.sh1); g.addColorStop(0.55, P.sh2); g.addColorStop(1, P.dim);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.65)'; c.lineWidth = 1.8; c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; // toothy jaw
+      c.strokeStyle = P.a(0.75); c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(19, 1);
+      for (let i = 0; i < 4; i++) { c.lineTo(15 - i * 5, 6); c.lineTo(12 - i * 5, 2.6); }
+      c.stroke();
+      c.restore();
+      eeye(c, P, 10, -4.5, 3);
+      const hx = 27 + Math.sin(ph) * 2.5, hy = -14 + Math.cos(ph) * 2; // the lure
+      c.strokeStyle = P.dk; c.lineWidth = 2.4;
+      c.beginPath(); c.moveTo(6, -11); c.quadraticCurveTo(18, -24, hx, hy); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.strokeStyle = '#fff'; c.lineWidth = 2.6; c.lineCap = 'round';
+      c.shadowColor = P.c; c.shadowBlur = 10;
+      c.beginPath(); c.arc(hx, hy + 6, 5, -1.4, 1.9); c.stroke();
+      c.fillStyle = P.hot;
+      c.beginPath(); c.arc(hx, hy, 3, 0, 7); c.fill();
+      c.restore();
+    },
+    // QUANTUM GLITCH — nucleus with orbiting electrons + glitch shards
+    qbit(c, P, ph) {
+      eglow(c, P, 0, 0, 40, 0.5);
+      for (const rot of [0.6, -0.6]) {
+        c.save(); c.rotate(rot);
+        c.strokeStyle = P.sh1; c.lineWidth = 3.4;
+        c.beginPath(); c.ellipse(0, 0, 32, 12, 0, 0, 7); c.stroke();
+        c.strokeStyle = P.a(0.4); c.lineWidth = 1.2;
+        c.beginPath(); c.ellipse(0, 0, 32, 12, 0, -2.2, -0.7); c.stroke();
+        const ea = ph * (rot > 0 ? 1 : -1) + (rot > 0 ? 0 : 2);
+        c.save(); c.globalCompositeOperation = 'lighter';
+        c.fillStyle = '#fff'; c.shadowColor = P.c; c.shadowBlur = 8;
+        c.beginPath(); c.arc(Math.cos(ea) * 32, Math.sin(ea) * 12, 2.8, 0, 7); c.fill();
+        c.restore();
+        c.restore();
+      }
+      c.save(); c.globalAlpha = 0.3; c.fillStyle = P.c; // superposition shards
+      c.fillRect(-16 + Math.sin(ph * 2) * 5, -3, 10, 2.4);
+      c.fillRect(8, 6 + Math.cos(ph * 2) * 4, 9, 2.2);
+      c.restore();
+      eorb(c, P, 0, 0, 10);
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.4 * Math.sin(ph * 2)).toFixed(3) + ')';
+      c.beginPath(); c.arc(0, 0, 4.5, 0, 7); c.fill();
+      c.restore();
+    },
+    // ZERO-DAY — sprinting bolt with afterimages and crackle
+    flash(c, P, ph) {
+      eglow(c, P, 0, 0, 40, 0.5);
+      for (const im of [[-13, 0.14], [-7, 0.26]]) { // afterimages
+        c.save(); c.globalAlpha = im[1]; c.translate(im[0], 0);
+        boltPath(c); c.fillStyle = P.c; c.fill();
+        c.restore();
+      }
+      boltPath(c);
+      const g = c.createLinearGradient(-24, 0, 26, 0);
+      g.addColorStop(0, P.c); g.addColorStop(1, P.hot);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 1.6; c.stroke();
+      c.beginPath(); c.moveTo(30, 4); c.lineTo(16, -2); c.lineTo(12, 6); c.closePath(); // visor
+      eshell(c, P, -2, 6);
+      c.save(); c.globalCompositeOperation = 'lighter'; // crackle
+      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 1.4;
+      const j = Math.sin(ph);
+      c.beginPath(); c.moveTo(-6, -12 + j * 3); c.lineTo(0, -16 - j * 3); c.lineTo(4, -11 + j * 2); c.stroke();
+      c.beginPath(); c.moveTo(-2, 13 - j * 2); c.lineTo(4, 16 + j * 3); c.stroke();
+      c.restore();
+    },
+    // HYDRA PROCESS — three swaying serpent heads on a scaled mound
+    hydra(c, P, ph) {
+      eglow(c, P, 0, 0, 44, 0.4);
+      eorb(c, P, -16, 0, 15);
+      c.strokeStyle = P.sh1; c.lineWidth = 8;
+      c.beginPath(); c.arc(-16, 0, 12.5, Math.PI * 0.55, Math.PI * 1.45); c.stroke();
+      for (let i = -1; i <= 1; i++) {
+        const sway = Math.sin(ph + i * 2.1) * 4;
+        const hx = 25 + (i === 0 ? 5 : 0), hy = i * 21 + sway;
+        c.strokeStyle = P.dk; c.lineWidth = 8; c.lineCap = 'round';
+        c.beginPath(); c.moveTo(-12, i * 4); c.quadraticCurveTo(6, i * 18, hx - 6, hy); c.stroke();
+        c.strokeStyle = P.a(0.5); c.lineWidth = 2.2;
+        c.beginPath(); c.moveTo(-10, i * 4 + 3); c.quadraticCurveTo(6, i * 18 + 3, hx - 7, hy + 3); c.stroke();
+        eorb(c, P, hx, hy, 9.5);
+        c.strokeStyle = P.sh1; c.lineWidth = 5;
+        c.beginPath(); c.arc(hx, hy, 8, Math.PI * 0.7, Math.PI * 1.3); c.stroke();
+        c.strokeStyle = P.dk; c.lineWidth = 2.6; // open jaws
+        c.beginPath(); c.moveTo(hx + 7, hy - 3.5); c.lineTo(hx + 14, hy - 6.5); c.stroke();
+        c.beginPath(); c.moveTo(hx + 7, hy + 3.5); c.lineTo(hx + 14, hy + 6.5); c.stroke();
+        eeye(c, P, hx + 3.5, hy - 3, 2.1);
+      }
+    },
+    // GHOST PROTOCOL — spectral comet with hollow eyes and tattered tail
+    ghost(c, P, ph) {
+      eglow(c, P, 6, 0, 40, 0.45);
+      c.save(); c.globalAlpha = 0.55; // tail streamers
+      for (let i = -1; i <= 1; i++) {
+        c.beginPath();
+        c.moveTo(0, i * 8);
+        c.quadraticCurveTo(-16, i * 12 + Math.sin(ph + i) * 5, -30, i * 10 + Math.sin(ph + i * 2) * 7);
+        c.quadraticCurveTo(-14, i * 14 + 4, 0, i * 8 + 5);
+        c.closePath();
+        c.fillStyle = P.a(0.4); c.fill();
+      }
+      c.restore();
+      c.beginPath(); // body: round front, scalloped rear
+      c.arc(8, 0, 17, -Math.PI / 2, Math.PI / 2);
+      c.lineTo(-4, 12); c.lineTo(-12, 17 - Math.sin(ph) * 3); c.lineTo(-10, 6);
+      c.lineTo(-18, 0); c.lineTo(-10, -6); c.lineTo(-12, -17 + Math.sin(ph) * 3); c.lineTo(-4, -12);
+      c.closePath();
+      const g = c.createRadialGradient(12, 0, 2, 6, 0, 24);
+      g.addColorStop(0, P.hot); g.addColorStop(0.55, P.c); g.addColorStop(1, P.a(0.15));
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = P.a(0.6); c.lineWidth = 1.6; c.stroke();
+      c.beginPath(); c.arc(8, 0, 16, -Math.PI * 0.85, -Math.PI * 0.15); // dark cowl
+      c.strokeStyle = P.sh1; c.lineWidth = 6; c.stroke();
+      c.fillStyle = '#05070d'; // hollow eyes
+      c.beginPath(); c.ellipse(14, -7, 4.4, 6, 0.55, 0, 7); c.fill();
+      c.beginPath(); c.ellipse(14, 7, 4.4, 6, -0.55, 0, 7); c.fill();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(15.5, -6, 1.5, 0, 7); c.arc(15.5, 6, 1.5, 0, 7); c.fill();
+      c.restore();
+    },
+    // JUGGERNAUT — treaded siege platform with reactor slits
+    tank(c, P, ph) {
+      eglow(c, P, 0, 0, 42, 0.3);
+      for (const s of [-1, 1]) { // treads
+        c.fillStyle = P.sh2;
+        roundRect(c, -32, s * 19 - 8, 64, 16, 5); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.75)'; c.lineWidth = 2; c.stroke();
+        c.strokeStyle = P.a(0.3); c.lineWidth = 2.4;
+        const off = ph / TAU * 10;
+        for (let i = 0; i < 7; i++) {
+          const x = -29 + ((i * 10 + off) % 60);
+          c.beginPath(); c.moveTo(x, s * 19 - 6); c.lineTo(x, s * 19 + 6); c.stroke();
+        }
+      }
+      roundRect(c, -28, -16, 56, 32, 6); // hull
+      eshell(c, P, -16, 16);
+      c.strokeStyle = P.a(0.4); c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(-22, -15.2); c.lineTo(18, -15.2); c.stroke();
+      c.beginPath(); c.moveTo(28, -14); c.lineTo(38, -8); c.lineTo(38, 8); c.lineTo(28, 14); c.closePath(); // dozer blade
+      eshell(c, P, -14, 14);
+      c.strokeStyle = P.a(0.5); c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(37, -7); c.lineTo(37, 7); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; // reactor slits
+      c.shadowColor = P.c; c.shadowBlur = 8;
+      c.fillStyle = P.a(0.95);
+      for (let i = 0; i < 3; i++) { roundRect(c, -14 + i * 12, -3, 7, 6, 2); c.fill(); }
+      c.restore();
+      c.fillStyle = P.sh1; c.beginPath(); c.arc(-16, 0, 7, 0, 7); c.fill(); // cupola
+      c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1.6; c.stroke();
+      eeye(c, P, -16, 0, 2.6);
+    },
+    // MIRAGE / DECOY — refracting crystal with orbiting shards
+    mirror(c, P, ph) {
+      eglow(c, P, 0, 0, 40, 0.5);
+      for (let i = 0; i < 2; i++) { // shard satellites
+        const a = ph + i * Math.PI;
+        c.save(); c.translate(Math.cos(a) * 30, Math.sin(a) * 20); c.rotate(a * 2);
+        c.fillStyle = P.a(0.65);
+        c.beginPath(); c.moveTo(0, -5); c.lineTo(3.4, 3); c.lineTo(-3.4, 3); c.closePath(); c.fill();
+        c.restore();
+      }
+      c.beginPath(); c.moveTo(26, 0); c.lineTo(0, -19); c.lineTo(-24, 0); c.lineTo(0, 19); c.closePath();
+      const g = c.createLinearGradient(-24, -10, 26, 10);
+      g.addColorStop(0, P.dim); g.addColorStop(0.5, P.a(0.55)); g.addColorStop(1, P.lit);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = P.a(0.9); c.lineWidth = 2; c.stroke();
+      c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = 1.4; // facets
+      c.beginPath(); c.moveTo(0, -19); c.lineTo(0, 19); c.moveTo(-24, 0); c.lineTo(26, 0); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.shadowColor = P.c; c.shadowBlur = 10;
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(2, 0, 4, 0, 7); c.fill();
+      c.shadowBlur = 0;
+      const ga = ph + 0.7, gx = Math.cos(ga) * 10, gy = Math.sin(ga) * 8; // roaming glint
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(gx - 4, gy); c.lineTo(gx + 4, gy); c.moveTo(gx, gy - 4); c.lineTo(gx, gy + 4); c.stroke();
+      c.restore();
+    },
+    // COMPUTE TITAN — hex fortress striding on six armored legs
+    titan(c, P, ph) {
+      eglow(c, P, 0, 0, 46, 0.4);
+      elegs(c, P, ph, 3, -20, 20, 22, 40, 10, 6);
+      hexPath(c, 40);
+      eshell(c, P, -40, 40);
+      c.save(); c.globalCompositeOperation = 'lighter'; // glowing plate seams
+      c.strokeStyle = P.a(0.55); c.lineWidth = 1.8;
+      for (let i = 0; i < 6; i++) {
+        const a = i * TAU / 6 - Math.PI / 2;
+        c.beginPath(); c.moveTo(Math.cos(a) * 16, Math.sin(a) * 16); c.lineTo(Math.cos(a) * 38, Math.sin(a) * 38); c.stroke();
+      }
+      c.restore();
+      hexPath(c, 22);
+      c.fillStyle = P.sh2; c.fill();
+      c.strokeStyle = P.a(0.35); c.lineWidth = 1.4; c.stroke();
+      eorb(c, P, 0, 0, 9);
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = 'rgba(255,255,255,' + (0.55 + 0.35 * Math.sin(ph)).toFixed(3) + ')';
+      c.beginPath(); c.arc(0, 0, 4, 0, 7); c.fill();
+      const litI = Math.floor(ph / TAU * 6) % 6; // vents pulse in sequence
+      for (let i = 0; i < 6; i++) {
+        const a = i * TAU / 6 - Math.PI / 2;
+        c.fillStyle = i === litI ? '#fff' : P.a(0.5);
+        c.beginPath(); c.arc(Math.cos(a) * 30, Math.sin(a) * 30, i === litI ? 3.4 : 2.4, 0, 7); c.fill();
+      }
+      c.restore();
+    },
+    // -------- BOSSES --------
+    // KERNEL PANIC — cracked hex reactor crawling on six legs
+    bosskernel(c, P, ph) {
+      eglow(c, P, 0, 0, 46, 0.5);
+      elegs(c, P, ph, 3, -18, 17, 26, 43, 10, 6);
+      c.save(); c.rotate(ph * 0.5); // rotating hazard arcs
+      c.strokeStyle = P.a(0.7); c.lineWidth = 3;
+      c.beginPath(); c.arc(0, 0, 46, 0.2, 1.4); c.stroke();
+      c.beginPath(); c.arc(0, 0, 46, Math.PI + 0.2, Math.PI + 1.4); c.stroke();
+      c.restore();
+      hexPath(c, 38);
+      eshell(c, P, -38, 38);
+      c.save(); c.globalCompositeOperation = 'lighter'; // magma cracks
+      c.strokeStyle = P.a(0.9); c.lineWidth = 2.6; c.lineCap = 'round';
+      c.shadowColor = P.c; c.shadowBlur = 8;
+      for (let i = 0; i < 5; i++) {
+        const a = i * TAU / 5 + 0.5;
+        const j = Math.sin(ph + i * 1.9) * 2.5;
+        c.beginPath();
+        c.moveTo(Math.cos(a) * 13, Math.sin(a) * 13);
+        c.lineTo(Math.cos(a + 0.18) * 24 + j, Math.sin(a + 0.18) * 24);
+        c.lineTo(Math.cos(a - 0.1) * 35, Math.sin(a - 0.1) * 35 + j);
+        c.stroke();
+      }
+      c.restore();
+      eorb(c, P, 0, 0, 14);
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = '#fff'; c.shadowColor = P.c; c.shadowBlur = 12;
+      c.font = 'bold 20px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('!', 0, 1);
+      c.restore();
+    },
+    // THE BOTMASTER — spider queen herding the botnet
+    bossmaster(c, P, ph) {
+      eglow(c, P, 0, 0, 46, 0.5);
+      c.lineCap = 'round';
+      for (const s of [-1, 1]) for (let i = 0; i < 4; i++) { // 8 long legs
+        const sw = Math.sin(ph + i * 1.65 + (s > 0 ? Math.PI : 0));
+        const hx = -10 + i * 9;
+        const kx = hx + sw * 5, fx = hx + sw * 11;
+        c.strokeStyle = P.dk; c.lineWidth = 5;
+        c.beginPath(); c.moveTo(hx, s * 12); c.lineTo(kx, s * 30); c.lineTo(fx, s * 44); c.stroke();
+        c.save(); c.globalCompositeOperation = 'lighter';
+        c.fillStyle = P.a(0.8); c.beginPath(); c.arc(kx, s * 30, 2.2, 0, 7); c.fill();
+        c.restore();
+      }
+      eorb(c, P, -16, 0, 17); // abdomen
+      c.strokeStyle = P.sh1; c.lineWidth = 7;
+      c.beginPath(); c.arc(-16, 0, 13, Math.PI * 0.55, Math.PI * 1.45); c.stroke();
+      c.fillStyle = P.sh1;
+      c.beginPath(); c.moveTo(-16, -10); c.lineTo(-10, 0); c.lineTo(-16, 10); c.lineTo(-22, 0); c.closePath(); c.fill();
+      eorb(c, P, 8, 0, 12); // thorax under head carapace
+      c.beginPath(); c.moveTo(20, -5); c.lineTo(12, -12); c.lineTo(-2, -10); c.lineTo(-4, 0); c.lineTo(-2, 10); c.lineTo(12, 12); c.lineTo(20, 5); c.closePath();
+      eshell(c, P, -12, 12);
+      eeye(c, P, 16, -5, 2.6); eeye(c, P, 16, 5, 2.6);
+      eeye(c, P, 12.5, -9, 1.8); eeye(c, P, 12.5, 9, 1.8);
+      const on = Math.floor(ph / TAU * 4) % 4; // crown antennae, blinking
+      for (let i = -1; i <= 1; i++) {
+        c.strokeStyle = P.dk; c.lineWidth = 2;
+        c.beginPath(); c.moveTo(-26, i * 5); c.quadraticCurveTo(-34, i * 10, -40, i * 14); c.stroke();
+        c.save(); c.globalCompositeOperation = 'lighter';
+        const b = on === (i + 1);
+        c.fillStyle = b ? '#fff' : P.a(0.35);
+        if (b) { c.shadowColor = P.c; c.shadowBlur = 8; }
+        c.beginPath(); c.arc(-40, i * 14, 3, 0, 7); c.fill();
+        c.restore();
+      }
+    },
+    // DEEPFAKE PRIME — a true face and its phasing wireframe twin
+    bossfake(c, P, ph) {
+      eglow(c, P, 0, 0, 46, 0.45);
+      for (let i = 0; i < 3; i++) { // orbiting shards
+        const a = ph + i * TAU / 3;
+        c.save(); c.translate(Math.cos(a) * 40, Math.sin(a) * 26); c.rotate(a);
+        c.fillStyle = P.a(0.5);
+        c.beginPath(); c.ellipse(0, 0, 3, 6, 0, 0, 7); c.fill();
+        c.restore();
+      }
+      c.beginPath(); c.ellipse(-8, 0, 22, 32, 0.12, 0, 7); // the true face
+      const g = c.createRadialGradient(-2, -6, 3, -8, 0, 32);
+      g.addColorStop(0, P.hot); g.addColorStop(0.6, P.c); g.addColorStop(1, P.dim);
+      c.fillStyle = g; c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 2; c.stroke();
+      c.beginPath(); c.ellipse(-8, -18, 20, 12, 0.1, Math.PI, 0); c.closePath(); // brow plate
+      eshell(c, P, -32, -8);
+      c.save(); c.globalAlpha = 0.45 + 0.3 * Math.sin(ph); // phasing twin
+      c.setLineDash([7, 5]);
+      c.strokeStyle = P.a(0.9); c.lineWidth = 2.2;
+      c.beginPath(); c.ellipse(14, 0, 22, 32, -0.15, 0, 7); c.stroke();
+      c.beginPath(); c.ellipse(20, -8, 4.5, 7, -0.3, 0, 7); c.stroke();
+      c.setLineDash([]);
+      c.restore();
+      c.fillStyle = '#05070d'; // hollow eyes
+      c.beginPath(); c.ellipse(-14, -8, 5.5, 8.5, 0.3, 0, 7); c.fill();
+      c.beginPath(); c.ellipse(0, -8, 5.5, 8.5, -0.3, 0, 7); c.fill();
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(-13, -6, 1.8, 0, 7); c.arc(1, -6, 1.8, 0, 7); c.fill();
+      c.restore();
+      c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 2; // stitched mouth
+      c.beginPath(); c.moveTo(-18, 14); c.quadraticCurveTo(-8, 20, 2, 14); c.stroke();
+      for (let i = 0; i < 4; i++) {
+        c.beginPath(); c.moveTo(-16 + i * 5.4, 12); c.lineTo(-15 + i * 5.4, 19); c.stroke();
+      }
+    },
+    // THE OVERMIND — armored hive-brain with orbital ring and tendrils
+    bossmind(c, P, ph) {
+      eglow(c, P, 0, 0, 46, 0.5);
+      c.lineCap = 'round';
+      for (let i = 0; i < 5; i++) { // trailing tendrils
+        const a = Math.PI * (0.55 + i * 0.22);
+        const bx = Math.cos(a) * 26, by = Math.sin(a) * 26;
+        const sway = Math.sin(ph + i * 1.3) * 6;
+        c.strokeStyle = P.a(0.5); c.lineWidth = 3.5;
+        c.beginPath(); c.moveTo(bx, by);
+        c.quadraticCurveTo(bx * 1.5, by * 1.5 + sway, bx * 1.85, by * 1.75 - sway);
+        c.stroke();
+      }
+      c.save(); c.rotate(ph * 0.5); // orbital ring
+      c.strokeStyle = P.a(0.45); c.lineWidth = 2;
+      c.setLineDash([5, 9]);
+      c.beginPath(); c.ellipse(0, 0, 46, 30, 0, 0, 7); c.stroke();
+      c.setLineDash([]);
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = '#fff';
+      for (let i = 0; i < 4; i++) {
+        const a = i * TAU / 4;
+        c.beginPath(); c.arc(Math.cos(a) * 46, Math.sin(a) * 30, 2.6, 0, 7); c.fill();
+      }
+      c.restore(); c.restore();
+      eorb(c, P, 0, 0, 26); // the brain
+      c.strokeStyle = P.sh1; c.lineWidth = 4.5; // cortical ridges
+      c.beginPath(); c.moveTo(-24, -6); c.bezierCurveTo(-10, -22, 8, -24, 22, -10); c.stroke();
+      c.beginPath(); c.moveTo(-22, 8); c.bezierCurveTo(-6, -4, 10, 18, 23, 6); c.stroke();
+      c.beginPath(); c.moveTo(-12, 20); c.bezierCurveTo(0, 10, 8, 24, 18, 14); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; // thought pulse
+      c.fillStyle = '#fff'; c.shadowColor = P.c; c.shadowBlur = 8;
+      const tp = ph / TAU;
+      c.beginPath(); c.arc(-24 + 46 * tp, -6 - 4 * tp - Math.sin(tp * Math.PI) * 16, 2.4, 0, 7); c.fill();
+      c.restore();
+      c.save(); c.globalCompositeOperation = 'lighter'; // central eye
+      c.fillStyle = '#fff'; c.shadowColor = P.c; c.shadowBlur = 12;
+      c.beginPath(); c.ellipse(6, 2, 9, 5.5, 0, 0, 7); c.fill();
+      c.restore();
+      c.fillStyle = '#131722';
+      c.beginPath(); c.arc(8, 2, 3, 0, 7); c.fill();
+    },
+    // ROGUE AGI — bladed hex seraph with a white-hot slit eye
+    bossagi(c, P, ph) {
+      eglow(c, P, 0, 0, 47, 0.55);
+      c.save(); c.rotate(ph * 0.5); // rotating blade ring
+      for (let i = 0; i < 3; i++) {
+        c.save(); c.rotate(i * TAU / 3);
+        c.strokeStyle = P.sh1; c.lineWidth = 6;
+        c.beginPath(); c.arc(0, 0, 44, -0.15, 0.85); c.stroke();
+        c.strokeStyle = P.a(0.8); c.lineWidth = 1.8;
+        c.beginPath(); c.arc(0, 0, 46.6, -0.1, 0.6); c.stroke();
+        c.restore();
+      }
+      c.restore();
+      c.save(); c.globalCompositeOperation = 'lighter'; // orbiting pylons
+      for (let i = 0; i < 3; i++) {
+        const a = -ph + i * TAU / 3 + 0.6;
+        c.fillStyle = '#fff'; c.shadowColor = P.c; c.shadowBlur = 8;
+        c.beginPath(); c.arc(Math.cos(a) * 44, Math.sin(a) * 44, 3.2, 0, 7); c.fill();
+      }
+      c.restore();
+      hexPath(c, 34);
+      eshell(c, P, -34, 34);
+      c.save(); c.globalCompositeOperation = 'lighter'; // glowing seams
+      c.strokeStyle = P.a(0.75); c.lineWidth = 2;
+      c.shadowColor = P.c; c.shadowBlur = 6;
+      for (let i = 0; i < 6; i++) {
+        const a = i * TAU / 6 - Math.PI / 2;
+        c.beginPath(); c.moveTo(Math.cos(a) * 15, Math.sin(a) * 15); c.lineTo(Math.cos(a) * 32, Math.sin(a) * 32); c.stroke();
+      }
+      c.restore();
+      c.strokeStyle = P.sh2; c.lineWidth = 5;
+      c.beginPath(); c.arc(0, 0, 20, 0, 7); c.stroke();
+      c.strokeStyle = P.a(0.5); c.lineWidth = 1.4;
+      c.beginPath(); c.arc(0, 0, 23, -2.2, -0.5); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; // THE EYE
+      c.fillStyle = '#fff'; c.shadowColor = P.c; c.shadowBlur = 14;
+      c.beginPath(); c.ellipse(0, 0, 14, 8, 0, 0, 7); c.fill();
+      c.restore();
+      c.fillStyle = P.c;
+      c.beginPath(); c.arc(2, 0, 5, 0, 7); c.fill();
+      c.fillStyle = '#05070d';
+      c.beginPath(); c.ellipse(2, 0, 1.6, 4.4, 0, 0, 7); c.fill();
+    },
+  };
+
+  // per-shape live-motion parameters used by drawEnemy
+  //  mode 'w': cycle keyed to distance walked (rate = cycles/tile)
+  //  mode 't': cycle keyed to time (rate = cycles/sec)
+  //  hover/bob: vertical motion amplitude as a fraction of sprite size
+  //  thr: thruster nozzle positions in 100-space (live flames)
+  const EVIS = {
+    bot:   { mode: 't', rate: 1.1, hover: 0.10, thr: [[-30, 9], [-30, -9]] },
+    dart:  { mode: 't', rate: 2.4, thr: [[-26, 0]] },
+    blob:  { mode: 't', rate: 0.8, squish: 0.05, wob: 0.6 },
+    tri:   { mode: 'w', rate: 2.6, bob: 0.02 },
+    box:   { mode: 'w', rate: 1.1, bob: 0.03 },
+    worm:  { mode: 'w', rate: 1.3 },
+    wing:  { mode: 't', rate: 3.4 },
+    lock:  { mode: 'w', rate: 1.2, bob: 0.02 },
+    leech: { mode: 'w', rate: 1.1 },
+    twin:  { mode: 't', rate: 1.3, hover: 0.09 },
+    mask:  { mode: 't', rate: 1.1, hover: 0.11 },
+    hub:   { mode: 'w', rate: 1.0, bob: 0.02 },
+    jam:   { mode: 'w', rate: 1.6 },
+    golem: { mode: 'w', rate: 0.55, bob: 0.045, wob: 0.45 },
+    hook:  { mode: 't', rate: 1.6, hover: 0.08 },
+    qbit:  { mode: 't', rate: 2.0, hover: 0.10 },
+    flash: { mode: 't', rate: 3.2, thr: [[-24, 0]] },
+    hydra: { mode: 'w', rate: 0.9, bob: 0.03 },
+    ghost: { mode: 't', rate: 1.5 },
+    tank:  { mode: 'w', rate: 1.5, wob: 0.4 },
+    mirror:{ mode: 't', rate: 1.4, hover: 0.10 },
+    titan: { mode: 'w', rate: 0.8, bob: 0.03, wob: 0.35 },
+    bosskernel: { mode: 'w', rate: 0.9, wob: 0.35 },
+    bossmaster: { mode: 'w', rate: 0.8, wob: 0.35 },
+    bossfake:   { mode: 't', rate: 0.9, hover: 0.07, wob: 0.4 },
+    bossmind:   { mode: 't', rate: 1.0, hover: 0.06, wob: 0.4 },
+    bossagi:    { mode: 't', rate: 1.1, hover: 0.06, wob: 0.4 },
+  };
+
+  function drawCreature(c, def, ph) {
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    const P = epal(def.color);
+    // soft baked ground shadow
+    const sg = c.createRadialGradient(2, 5, 4, 2, 5, 34);
+    sg.addColorStop(0, 'rgba(0,0,0,0.48)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sg; c.beginPath(); c.ellipse(2, 5, 34, 29, 0, 0, 7); c.fill();
+    (CREATURES[def.shape] || CREATURES.tri)(c, P, ph, def);
+  }
+
+  function enemySprite(type, frame) {
+    const def = DATA.ENEMIES[type];
+    const px = Math.max(22, T * def.size * 2.6);
+    return makeSprite('e_' + type + '_' + frame + '_' + Math.round(px), px,
+      c => drawCreature(c, def, frame / EFRAMES * TAU));
   }
 
   // ---- tower drawing: dark-machine style, in 100x100 space ----
@@ -1045,7 +1748,7 @@ const RENDER = (function () {
     const s = cv.width;
     c.clearRect(0, 0, s, s);
     c.save(); c.scale(s / 100, s / 100); c.translate(50, 50);
-    drawEnemyShape(c, DATA.ENEMIES[type].shape, DATA.ENEMIES[type].color);
+    drawCreature(c, DATA.ENEMIES[type], TAU * 0.12);
     c.restore();
   }
 
@@ -1419,8 +2122,9 @@ const RENDER = (function () {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffd166';
       ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.lineWidth = 4;
-      ctx.strokeText('☄ TAP TO TARGET ORBITAL STRIKE', W / 2, OY + T * 1.1);
-      ctx.fillText('☄ TAP TO TARGET ORBITAL STRIKE', W / 2, OY + T * 1.1);
+      const strikeMsg = '☄ ' + UTIL.tapWord() + ' TO TARGET ORBITAL STRIKE';
+      ctx.strokeText(strikeMsg, W / 2, OY + T * 1.1);
+      ctx.fillText(strikeMsg, W / 2, OY + T * 1.1);
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // clear shake
@@ -1459,29 +2163,91 @@ const RENDER = (function () {
 
   function drawEnemy(e, now) {
     if (e.y < -0.4) return;
-    const spr = enemySprite(e.type);
+    const def = e.def;
+    const v = EVIS[def.shape] || { mode: 't', rate: 1 };
+    // locomotion cycle: walkers key off distance travelled (legs stop when
+    // stunned/jammed), hoverers and fliers key off time
+    const cyc = v.mode === 'w' ? (e.walk || 0) * v.rate : e.anim * v.rate;
+    const frame = Math.min(EFRAMES - 1, ((cyc - Math.floor(cyc)) * EFRAMES) | 0);
+    const spr = enemySprite(e.type, frame);
     const px = sx(e.x), py = sy(e.y);
-    const dim = T * e.def.size * 2.6;
+    const dim = T * (e.size || def.size) * 2.6;
     let alpha = 1;
     if (e.stealthed) alpha = 0.15 + Math.sin(now * 0.006 + e.anim) * 0.05;
-    else if (e.traits.stealth || e.traits.phaser) alpha = 0.7;
+    else if (e.traits.stealth || e.traits.phaser) alpha = 0.75;
     // engine trail for fliers and speeders
     if (!e.stealthed && (e.flying || e.baseSpeed > 2) && Math.random() < 0.35 && e.g.particles.length < 280) {
       e.g.particles.push({
         x: e.x - Math.cos(e.angle) * e.size, y: e.y - Math.sin(e.angle) * e.size,
         vx: -Math.cos(e.angle) * 0.6, vy: -Math.sin(e.angle) * 0.6,
-        life: 0.3, maxLife: 0.3, size: 2.4, color: e.def.color,
+        life: 0.3, maxLife: 0.3, size: 2.4, color: def.color,
       });
     }
+    const hurt = e.hp < e.maxHp * 0.3 && !e.stealthed;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(px, py);
     if (e.flying) ctx.translate(0, -T * 0.22 + Math.sin(e.anim * 4) * T * 0.05);
-    const wob = Math.sin(e.anim * 6 + e.wobble) * 0.06;
+    else if (v.hover) { // hovering: slow vertical bob
+      const amp = v.hover * dim;
+      ctx.translate(0, -amp * 0.5 + Math.sin(e.anim * 3.1 + e.wobble) * amp * 0.5);
+    } else if (v.bob) { // walkers: footfall bounce synced to the leg cycle
+      ctx.translate(0, -Math.abs(Math.sin(cyc * Math.PI * 2)) * v.bob * dim);
+    }
+    const wob = Math.sin(e.anim * 6 + e.wobble) * 0.06 * (v.wob === undefined ? 1 : v.wob);
     ctx.rotate(e.angle + wob);
-    const sc = 1 + Math.sin(e.anim * 5) * 0.04 + (e.hitT > 0 ? e.hitT * 1.5 : 0);
+    const sc = 1 + (e.hitT > 0 ? e.hitT * 1.5 : 0);
+    if (v.squish) { // gelatinous pulse
+      const q = Math.sin(e.anim * 4 + e.wobble) * v.squish;
+      ctx.scale(1 + q, 1 - q);
+    }
     ctx.drawImage(spr, -dim / 2 * sc, -dim / 2 * sc, dim * sc, dim * sc);
+    // live thruster flames (1 creature unit = dim/100 px); no shadowBlur here
+    if (v.thr && !e.stealthed) {
+      const k = dim / 100;
+      const P = epal(def.color);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < v.thr.length; i++) {
+        const tx2 = v.thr[i][0] * k, ty2 = v.thr[i][1] * k;
+        const fl = (8 + 8 * Math.abs(Math.sin(now * 0.021 + e.wobble * 7 + i * 2.7))) * k;
+        ctx.fillStyle = P.a(0.7);
+        ctx.beginPath();
+        ctx.moveTo(tx2, ty2 - 3.2 * k); ctx.lineTo(tx2, ty2 + 3.2 * k); ctx.lineTo(tx2 - fl, ty2);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.beginPath();
+        ctx.moveTo(tx2, ty2 - 1.5 * k); ctx.lineTo(tx2, ty2 + 1.5 * k); ctx.lineTo(tx2 - fl * 0.5, ty2);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // heavy damage: dark cracks across the carapace
+    if (hurt) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.lineWidth = Math.max(1, dim * 0.035);
+      for (let i = 0; i < 2; i++) {
+        const a0 = hash1(e.wobble * 10 + i * 7) * 6.28;
+        const x0 = Math.cos(a0) * dim * 0.12, y0 = Math.sin(a0) * dim * 0.12;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0 + Math.cos(a0 + 0.9) * dim * 0.14, y0 + Math.sin(a0 + 0.9) * dim * 0.14);
+        ctx.lineTo(x0 + Math.cos(a0 + 0.4) * dim * 0.26, y0 + Math.sin(a0 + 0.4) * dim * 0.26);
+        ctx.stroke();
+      }
+    }
     ctx.restore();
+    // heavy damage: smoke wisps + sparks
+    if (hurt && e.g.particles.length < 280) {
+      if (Math.random() < 0.16) e.g.particles.push({
+        x: e.x + (Math.random() - 0.5) * e.size, y: e.y + (Math.random() - 0.5) * e.size,
+        vx: (Math.random() - 0.5) * 0.2, vy: -0.5 - Math.random() * 0.4,
+        life: 0.55, maxLife: 0.55, size: 2.5 + Math.random() * 2, color: 'rgba(115,115,130,0.6)',
+      });
+      if (Math.random() < 0.1) e.g.particles.push({
+        x: e.x, y: e.y, vx: (Math.random() - 0.5) * 2.4, vy: (Math.random() - 0.5) * 2.4,
+        life: 0.25, maxLife: 0.25, size: 1.8, color: '#ffd166',
+      });
+    }
     // boss aura sparks
     if (e.isBoss && !e.stealthed && Math.random() < 0.2 && e.g.particles.length < 280) {
       const oa = Math.random() * Math.PI * 2;
