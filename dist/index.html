@@ -382,8 +382,9 @@ body {
       occupy defense sockets.</p>
       <p>Between waves, <b>directives</b> offer one-wave economic trades, and
       <b>⚙ SPIRE OS</b> sells permanent upgrades for the run.</p>
-      <p><b>Every run grows a new spire</b> — switchbacks, steep risers and
-      plaza rings change where the good sockets are.</p>
+      <p><b>Every node is a different spire</b> — switchbacks, steep risers
+      and plaza rings change where the good sockets are. Layouts are fixed
+      per node, so lost runs teach you the tower.</p>
       <p><b>Repulsors throw climbers off the spire.</b> The higher the fall,
       the bigger the salvage bonus.</p>
       <p>Fliers ignore the ramp and rise straight up — cover your airspace.</p>
@@ -557,7 +558,7 @@ const CONFIG = (function () {
     {
       n: 5, name: 'BLACKOUT', sub: 'The core is damaged', seed: 3377, waves: 11,
       palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      eco: { powerBase: 5 },
+      eco: { powerBase: 5, startSalvage: 160 },   // enough to seed the grid
       bosses: { 11: 1 },
       spire: { height: 33, socketEvery: 3.2, w: { arc: 0.55, sb: 0.2, riser: 0.15, plaza: 0.1 }, plazaMax: 1 },
       intro: 'Core power is down to 5. Generators are not optional here.',
@@ -575,11 +576,12 @@ const CONFIG = (function () {
     {
       n: 7, name: 'CRACKED MARKET', sub: 'The economy inverts', seed: 8251, waves: 12,
       palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      mods: { interestMult: 2, killMult: 0.7 },
+      mods: { interestMult: 2, killMult: 0.8 },
+      eco: { startSalvage: 200 },   // capital endowment — the hoard strategy needs a seed
       bosses: { 12: 1 },
       spire: { height: 34, socketEvery: 3.3, w: { arc: 0.5, sb: 0.14, riser: 0.11, plaza: 0.25 }, plazaMax: 2 },
-      intro: 'Kills pay −30%, but interest is doubled. Hoard, then strike.',
-      topo: 'TWIN PLAZAS · LONG CLIMB', twist: '¤ KILLS −30% · INTEREST ×2',
+      intro: 'Kills pay −20%, but interest is doubled. Hoard, then strike.',
+      topo: 'TWIN PLAZAS · LONG CLIMB', twist: '¤ KILLS −20% · INTEREST ×2',
     },
     {
       n: 8, name: 'OVERRUN', sub: 'Everything, faster', seed: 2468, waves: 12,
@@ -604,14 +606,25 @@ const CONFIG = (function () {
   // Encounter-budget waves with authored pacing roles:
   //   opener (light) → ramp → surge every 4th → breather before finale →
   //   finale (heavy, + bosses where scripted). Deterministic per (node, wave).
-  function hpMult(L, n) {
-    return (1 + 0.26 * Math.pow(L - 1, 1.06)) * (1 + 0.055 * (n - 1));
+  // Difficulty sawtooth: every node OPENS near a baseline the player can
+  // handle from starting salvage, and the within-node ramp carries most of
+  // the pressure. Node number raises the ramp's slope and the finale's
+  // ceiling, not the opener — so node HP scaling phases in across the level
+  // (40% at wave 1, full strength by ~70% depth).
+  function hpMult(level, n) {
+    const L = level.n, W = level.waves;
+    const ramp = 0.4 + 0.6 * Math.min(1, n / (W * 0.7));
+    return (1 + 0.18 * (L - 1) * ramp) * (1 + 0.05 * (n - 1));
+  }
+  // later nodes open with a bigger endowment — more tools on day one
+  function startSalvage(level) {
+    return (level.eco && level.eco.startSalvage) || (130 + 8 * (level.n - 1));
   }
 
   function wave(level, n) {
     const R = UTIL.rng(level.seed * 7919 + n * 104729);
     const W = level.waves;
-    const hm = hpMult(level.n, n);
+    const hm = hpMult(level, n);
     const groups = [];
     const G = (type, count, gap, delay) => groups.push({ type, count, gap, delay: delay || 0, hpMult: hm });
 
@@ -627,15 +640,19 @@ const CONFIG = (function () {
     else if (n === W) mult *= 1.4;
     else if (n === W - 1 && W > 5) mult *= 0.58;   // breather: bank, breathe, rebuild
     else if (n % 4 === 0) mult *= 1.22;            // surge beat
-    let budget = (9 + level.n * 2.8) * mult * (1 + 0.055 * (n - 1));
+    let budget = (8 + level.n * 1.1) * mult * (1 + Math.min(1.3, (0.05 + 0.011 * level.n) * (n - 1)));
 
     // scripted bosses spend none of the budget; escorts come from what's left
     const nBoss = (level.bosses && level.bosses[n]) || 0;
     for (let b = 0; b < nBoss; b++) G('boss', 1, 0, b * 9);
     if (nBoss) budget *= 0.55;
 
-    // spend the budget on groups drawn from the node's palette
-    const palette = level.palette.filter(t => !level.teach || level.teach.wave < n || level.teach.type !== t || n >= (level.teach.wave));
+    // spend the budget on groups drawn from the node's palette.
+    // Openers are income waves (no heavies before wave 3), and a threat
+    // never appears in a regular wave before its showcase teaches it.
+    let palette = level.palette.filter(t => !(level.teach && level.teach.type === t && n < level.teach.wave));
+    if (n <= 2) palette = palette.filter(t => ENEMIES[t].pts <= 1.5);
+    if (!palette.length) palette = [level.palette[0]];
     let delay = nBoss ? 4 : 0;
     let guard = 0;
     while (budget > 0.9 && guard++ < 12) {
@@ -644,7 +661,7 @@ const CONFIG = (function () {
       const maxN = Math.max(2, Math.floor(budget / def.pts));
       let count = Math.min(maxN, def.pts >= 4 ? 2 + Math.floor(R() * 2) : (level.swarm ? 6 : 4) + Math.floor(R() * 4));
       let gap = def.pts >= 4 ? 2.6 : (def.flying ? 1.1 : 0.85);
-      if (level.swarm) gap *= 0.75;
+      if (level.swarm) gap *= 0.85;
       if (level.hot) gap *= 0.7;
       gap *= Math.max(0.55, 1 - 0.02 * (level.n + n));   // waves pack tighter as pressure rises
       G(type, count, gap, delay);
@@ -679,7 +696,7 @@ const CONFIG = (function () {
     { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
   ];
 
-  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, LEVELS, wave, hpMult, DIRECTIVES, TECH };
+  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, LEVELS, wave, hpMult, startSalvage, DIRECTIVES, TECH };
 })();
 </script>
 <script>
@@ -1809,7 +1826,7 @@ const GAME = (function () {
     for (const t of g.turrets) t.sell();   // removes their meshes from the scene
     g.enemies = []; g.turrets = [];
     g.wave = 1;
-    g.salvage = (g.level && g.level.eco && g.level.eco.startSalvage) || ECO.startSalvage;
+    g.salvage = g.level ? CONFIG.startSalvage(g.level) : ECO.startSalvage;
     g.coreHP = ECO.coreHP;
     g.spawnQueue = [];
     g.combatT = 0; g.time = 0;

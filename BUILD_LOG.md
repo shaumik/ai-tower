@@ -200,8 +200,23 @@ by prompting, against actual TD level-design structure.
   foundation and crowned antenna; threats carry additive glow halos; the
   scene gained a gradient sky dome, hemisphere lighting and a red danger
   light at the spawn portal.
-- Verified: wave-composition dumps for N1 and N8 show the intended curve
-  (N1: 4–20 light units at hp ×1.0–1.4 with a breather at wave 7; N8: dense
-  mixed assaults at hp ×3.0–4.9, mid-boss wave 6, twin-boss finale), and a
-  bot playing like a competent human cleared the campaign curve as designed
-  (see Session 8 test runs). Zero console errors throughout.
+- Verified: wave-composition dumps for N1 and N8 show the intended pacing
+  (N1: 4–20 light units with a breather at wave 7; N8: dense mixed assaults,
+  mid-boss wave 6, twin-boss finale). Zero console errors throughout.
+- **Tuning was playtest-driven, not guessed.** A bot modeling a competent
+  casual (build early, upgrade, take safe directives, overclock under
+  pressure) played nodes headlessly; three real balance defects surfaced and
+  were fixed:
+  1. Cross-node budget scaling inflated *openers* — later nodes collapsed by
+     wave 6 from a fixed-salvage start. Fix: the sawtooth — budget and HP
+     node-scaling now phase in across a level (openers near baseline, ramp
+     carries the pressure), and later nodes open with a larger endowment.
+  2. Heavies headlined income waves — armored brutes in waves 1–2 against
+     two level-1 turrets. Fix: composer rule — no heavy threats before wave
+     3, and no threat in a regular wave before its showcase teaches it.
+  3. CRACKED MARKET starved the strategy it was teaching — −30% kill pay
+     from wave 1 with no capital. Fix: −20% and a ¤200 endowment so
+     hoard-for-interest is playable, not aspirational.
+  After the fixes: N1 cleared flawlessly (3★), N3 and N5 cleared with leaks
+  (the twist nodes bite), and N7/N9 reached their final waves at 10/10 and
+  7/10 core respectively — hard-fought, clearly winnable.
