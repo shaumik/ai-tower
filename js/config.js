@@ -136,6 +136,7 @@ const CONFIG = (function () {
       n: 7, name: 'CRACKED MARKET', sub: 'The economy inverts', seed: 8251, waves: 12,
       palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
       mods: { interestMult: 2, killMult: 0.7 },
+      eco: { startSalvage: 200 },   // capital endowment — the hoard strategy needs a seed
       bosses: { 12: 1 },
       spire: { height: 34, socketEvery: 3.3, w: { arc: 0.5, sb: 0.14, riser: 0.11, plaza: 0.25 }, plazaMax: 2 },
       intro: 'Kills pay −30%, but interest is doubled. Hoard, then strike.',
@@ -198,8 +199,12 @@ const CONFIG = (function () {
     for (let b = 0; b < nBoss; b++) G('boss', 1, 0, b * 9);
     if (nBoss) budget *= 0.55;
 
-    // spend the budget on groups drawn from the node's palette
-    const palette = level.palette.filter(t => !level.teach || level.teach.wave < n || level.teach.type !== t || n >= (level.teach.wave));
+    // spend the budget on groups drawn from the node's palette.
+    // Openers are income waves (no heavies before wave 3), and a threat
+    // never appears in a regular wave before its showcase teaches it.
+    let palette = level.palette.filter(t => !(level.teach && level.teach.type === t && n < level.teach.wave));
+    if (n <= 2) palette = palette.filter(t => ENEMIES[t].pts <= 1.5);
+    if (!palette.length) palette = [level.palette[0]];
     let delay = nBoss ? 4 : 0;
     let guard = 0;
     while (budget > 0.9 && guard++ < 12) {
