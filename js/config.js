@@ -135,12 +135,12 @@ const CONFIG = (function () {
     {
       n: 7, name: 'CRACKED MARKET', sub: 'The economy inverts', seed: 8251, waves: 12,
       palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      mods: { interestMult: 2, killMult: 0.7 },
+      mods: { interestMult: 2, killMult: 0.8 },
       eco: { startSalvage: 200 },   // capital endowment — the hoard strategy needs a seed
       bosses: { 12: 1 },
       spire: { height: 34, socketEvery: 3.3, w: { arc: 0.5, sb: 0.14, riser: 0.11, plaza: 0.25 }, plazaMax: 2 },
-      intro: 'Kills pay −30%, but interest is doubled. Hoard, then strike.',
-      topo: 'TWIN PLAZAS · LONG CLIMB', twist: '¤ KILLS −30% · INTEREST ×2',
+      intro: 'Kills pay −20%, but interest is doubled. Hoard, then strike.',
+      topo: 'TWIN PLAZAS · LONG CLIMB', twist: '¤ KILLS −20% · INTEREST ×2',
     },
     {
       n: 8, name: 'OVERRUN', sub: 'Everything, faster', seed: 2468, waves: 12,
@@ -166,17 +166,24 @@ const CONFIG = (function () {
   //   opener (light) → ramp → surge every 4th → breather before finale →
   //   finale (heavy, + bosses where scripted). Deterministic per (node, wave).
   // Difficulty sawtooth: every node OPENS near a baseline the player can
-  // handle from fixed starting salvage, and the within-node ramp carries
-  // most of the pressure. Node number raises the ramp's slope and the
-  // finale's ceiling, not the opener.
-  function hpMult(L, n) {
-    return (1 + 0.18 * (L - 1)) * (1 + 0.05 * (n - 1));
+  // handle from starting salvage, and the within-node ramp carries most of
+  // the pressure. Node number raises the ramp's slope and the finale's
+  // ceiling, not the opener — so node HP scaling phases in across the level
+  // (40% at wave 1, full strength by ~70% depth).
+  function hpMult(level, n) {
+    const L = level.n, W = level.waves;
+    const ramp = 0.4 + 0.6 * Math.min(1, n / (W * 0.7));
+    return (1 + 0.18 * (L - 1) * ramp) * (1 + 0.05 * (n - 1));
+  }
+  // later nodes open with a bigger endowment — more tools on day one
+  function startSalvage(level) {
+    return (level.eco && level.eco.startSalvage) || (130 + 8 * (level.n - 1));
   }
 
   function wave(level, n) {
     const R = UTIL.rng(level.seed * 7919 + n * 104729);
     const W = level.waves;
-    const hm = hpMult(level.n, n);
+    const hm = hpMult(level, n);
     const groups = [];
     const G = (type, count, gap, delay) => groups.push({ type, count, gap, delay: delay || 0, hpMult: hm });
 
@@ -248,5 +255,5 @@ const CONFIG = (function () {
     { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
   ];
 
-  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, LEVELS, wave, hpMult, DIRECTIVES, TECH };
+  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, LEVELS, wave, hpMult, startSalvage, DIRECTIVES, TECH };
 })();

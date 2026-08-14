@@ -69,7 +69,7 @@ const GAME = (function () {
     for (const t of g.turrets) t.sell();   // removes their meshes from the scene
     g.enemies = []; g.turrets = [];
     g.wave = 1;
-    g.salvage = (g.level && g.level.eco && g.level.eco.startSalvage) || ECO.startSalvage;
+    g.salvage = g.level ? CONFIG.startSalvage(g.level) : ECO.startSalvage;
     g.coreHP = ECO.coreHP;
     g.spawnQueue = [];
     g.combatT = 0; g.time = 0;
