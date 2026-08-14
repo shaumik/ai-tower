@@ -241,6 +241,38 @@ body {
   #hud-top, #hud-bottom, .sheet { left:calc(50% - 240px); right:calc(50% - 240px); }
 }
 
+/* ---- node select ---- */
+#screen-levels { background:rgba(3,5,10,.9); backdrop-filter:blur(6px); padding:0; }
+.levels-card {
+  width:min(420px, 100vw); height:100%; display:flex; flex-direction:column;
+  padding:calc(env(safe-area-inset-top) + 14px) 14px calc(env(safe-area-inset-bottom) + 10px);
+}
+.levels-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.levels-title { font-size:14px; letter-spacing:4px; font-weight:900; }
+.levels-stars { font-size:11px; color:#ffd166; font-weight:800; letter-spacing:1px; }
+.btn-sm { padding:8px 13px; font-size:11px; }
+.levels-scroll { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-bottom:10px; }
+.lvl-card {
+  display:flex; align-items:center; gap:11px; cursor:pointer;
+  border:1px solid #1e3a5f; border-radius:15px; padding:11px 13px;
+  background:rgba(11,21,38,.85);
+}
+.lvl-card.locked { opacity:.42; }
+.lvl-card:active { transform:scale(.985); }
+.lvl-num {
+  width:36px; height:36px; flex-shrink:0; border-radius:11px; display:flex;
+  align-items:center; justify-content:center; font-weight:900; font-size:15px;
+  background:rgba(42,120,190,.18); border:1px solid #2a78be; color:#7fdcff;
+}
+.lvl-card.locked .lvl-num { border-color:#1e3a5f; color:#3a5a7f; background:none; }
+.lvl-body { flex:1; min-width:0; }
+.lvl-name { font-size:12.5px; font-weight:900; letter-spacing:1.5px; }
+.lvl-name small { color:#5f89ad; font-weight:700; letter-spacing:.5px; }
+.lvl-meta { font-size:9.5px; color:#5f89ad; letter-spacing:1px; font-weight:700; margin-top:3px; }
+.lvl-meta .tw { color:#ffd166; }
+.lvl-stars { font-size:13px; color:#ffd166; flex-shrink:0; letter-spacing:1px; }
+.lvl-stars .off { opacity:.22; }
+
 </style>
 </head>
 <body>
@@ -258,10 +290,22 @@ body {
         <div class="logo-sub">VERTICAL TOWER DEFENSE</div>
       </div>
       <p class="title-pitch">Rogue processes are climbing the spire.<br>
-      Hold the summit core. <b>Gravity is a weapon.</b><br>
-      Every run grows a new spire.</p>
+      Hold the summit core. <b>Gravity is a weapon.</b></p>
       <button class="btn btn-primary btn-big" id="btn-start">DEFEND THE SPIRE</button>
+      <button class="btn" id="btn-levels">SELECT NODE</button>
       <div class="title-best" id="title-best"></div>
+    </div>
+  </section>
+
+  <!-- ============ NODE SELECT ============ -->
+  <section id="screen-levels" class="overlay">
+    <div class="levels-card">
+      <div class="levels-head">
+        <button class="btn btn-sm" id="btn-levels-back">‹ BACK</button>
+        <div class="levels-title">SELECT NODE</div>
+        <div class="levels-stars" id="levels-stars"></div>
+      </div>
+      <div class="levels-scroll" id="levels-list"></div>
     </div>
   </section>
 
@@ -398,13 +442,13 @@ const UTIL = (function () {
 'use strict';
 const CONFIG = (function () {
 
-  // ---------------- spire geometry ----------------
+  // ---------------- spire geometry defaults ----------------
+  // Levels override height / socket spacing / segment weights to give each
+  // node a distinct topology (see LEVELS below).
   const SPIRE = {
-    height: 34,        // summit core height
-    turns: 3.6,        // helix revolutions base→summit
+    height: 34,
     rCol: 2.1,         // central column radius (blocks line of sight)
-    rPath: 3.7,        // climb ramp radius
-    rSocket: 4.7,      // build socket radius
+    rPath: 3.7,        // nominal ramp radius
     socketEvery: 3.2,  // ramp arc-length between sockets
   };
 
@@ -412,38 +456,37 @@ const CONFIG = (function () {
   const ECONOMY = {
     startSalvage: 130,
     coreHP: 10,
-    powerBase: 8,        // power supplied by the summit core itself
-    interestRate: 0.10,  // paid on unspent salvage at each wave start
+    powerBase: 8,
+    interestRate: 0.10,
     interestCap: 50,
     sellRefund: 0.7,
-    overclockCost: 25,   // salvage per overclock burst
-    overclockTime: 8,    // seconds of double fire-rate
+    overclockCost: 25,
+    overclockTime: 8,
     overclockCooldown: 18,
-    fallBonusPerUnit: 1.2, // extra salvage per unit of fall height (gravity kills)
+    fallBonusPerUnit: 1.2,
   };
 
   // ---------------- turrets ----------------
-  // upgrade steps apply multiplicatively on top of the base stats
   const TURRETS = {
     blaster: {
       name: 'Blaster', ico: '✛', color: 0x7fdcff,
       cost: 50, power: 2, dmg: 7, rate: 1.7, range: 7.5,
       desc: 'Reliable single-target fire. Backbone of any defense.',
     },
-    tesla: {
-      name: 'Arc Node', ico: '⌁', color: 0xb08cff,
-      cost: 110, power: 3, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
-      desc: 'Lightning forks between up to 3 climbers. Shreds swarms.',
+    stasis: {
+      name: 'Stasis Well', ico: '❉', color: 0x7fffd4,
+      cost: 70, power: 2, dmg: 0, rate: 0, range: 5.6, slow: 0.48,
+      desc: 'Aura that slows every climber in range. Pairs with anything.',
     },
     repulsor: {
       name: 'Repulsor', ico: '◎', color: 0xffd166,
       cost: 90, power: 3, dmg: 3, rate: 0.45, range: 5.2, knock: 9,
       desc: 'Shockwave hurls climbers off the spire. Fall height pays salvage bonus. Fliers and bosses resist.',
     },
-    stasis: {
-      name: 'Stasis Well', ico: '❉', color: 0x7fffd4,
-      cost: 70, power: 2, dmg: 0, rate: 0, range: 5.6, slow: 0.48,
-      desc: 'Aura that slows every climber in range. Pairs with anything.',
+    tesla: {
+      name: 'Arc Node', ico: '⌁', color: 0xb08cff,
+      cost: 110, power: 3, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
+      desc: 'Lightning forks between up to 3 climbers. Shreds swarms.',
     },
     generator: {
       name: 'Generator', ico: '⚡', color: 0xffe9a0,
@@ -452,47 +495,163 @@ const CONFIG = (function () {
     },
   };
   const TURRET_ORDER = ['blaster', 'stasis', 'repulsor', 'tesla', 'generator'];
-  const UPGRADES = [                       // level 2 and level 3
+  const UPGRADES = [
     { cost: 0.9, dmg: 1.65, rate: 1.12, range: 1.12, gen: 1.5, slow: 1.12, knock: 1.25 },
     { cost: 1.6, dmg: 1.65, rate: 1.12, range: 1.12, gen: 1.5, slow: 1.12, knock: 1.25 },
   ];
 
   // ---------------- enemies ----------------
+  // pts = encounter-budget cost used by the wave composer
   const ENEMIES = {
-    crawler:  { name: 'Crawler',  ico: '●', color: 0xff6a4d, hp: 22,  speed: 1.15, salvage: 8,  size: 0.42, dmg: 1 },
-    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 13,  speed: 2.1,  salvage: 10, size: 0.34, dmg: 1 },
-    brute:    { name: 'Brute',    ico: '■', color: 0xff3d6e, hp: 120, speed: 0.62, salvage: 26, size: 0.62, dmg: 2, armor: 3 },
-    gnat:     { name: 'Gnat',     ico: '✦', color: 0x9dff5d, hp: 18,  speed: 1.25, salvage: 12, size: 0.30, dmg: 1, flying: true },
-    boss:     { name: 'ARCHON',   ico: '◆', color: 0xff2255, hp: 950, speed: 0.5,  salvage: 160, size: 1.0, dmg: 3, armor: 4, boss: true, knockImmune: true },
+    crawler:  { name: 'Crawler',  ico: '●', color: 0xff6a4d, hp: 22,  speed: 1.15, salvage: 8,  size: 0.42, dmg: 1, pts: 1.0 },
+    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 13,  speed: 2.1,  salvage: 10, size: 0.34, dmg: 1, pts: 1.4 },
+    gnat:     { name: 'Gnat',     ico: '✦', color: 0x9dff5d, hp: 18,  speed: 1.25, salvage: 12, size: 0.30, dmg: 1, flying: true, pts: 1.8 },
+    brute:    { name: 'Brute',    ico: '■', color: 0xff3d6e, hp: 120, speed: 0.62, salvage: 26, size: 0.62, dmg: 2, armor: 3, pts: 4.5 },
+    boss:     { name: 'ARCHON',   ico: '◆', color: 0xff2255, hp: 800, speed: 0.5,  salvage: 160, size: 1.0, dmg: 3, armor: 4, boss: true, knockImmune: true, pts: 0 },
   };
 
-  // ---------------- waves ----------------
-  const MAX_WAVE = 15;
-  // scripted early waves teach one thing each; later waves scale by formula
-  function wave(n) {
-    const hpMult = 1 + Math.pow(Math.max(0, n - 1), 1.22) * 0.16;
-    const W = (type, count, gap, delay) => ({ type, count, gap, delay: delay || 0, hpMult });
-    switch (n) {
-      case 1: return [W('crawler', 6, 1.6)];
-      case 2: return [W('crawler', 9, 1.2)];
-      case 3: return [W('crawler', 6, 1.3), W('sprinter', 4, 0.9, 6)];
-      case 4: return [W('crawler', 7, 1.1), W('gnat', 4, 1.4, 4)];
-      case 5: return [W('boss', 1, 0, 0), W('crawler', 8, 1.4, 3)];
-      case 6: return [W('sprinter', 10, 0.7), W('gnat', 5, 1.2, 5)];
-      case 7: return [W('brute', 3, 3.2), W('crawler', 10, 0.9, 2)];
-      case 8: return [W('gnat', 9, 0.8), W('sprinter', 8, 0.8, 5)];
-      default: {
-        // 9+: formulaic escalation with themed mixes
-        const list = [];
-        const theme = n % 3;
-        const c = Math.min(26, 6 + n * 1.3);
-        if (theme === 0) { list.push(W('brute', Math.floor(2 + n * 0.4), 2.6), W('crawler', Math.floor(c), 0.8, 3)); }
-        if (theme === 1) { list.push(W('sprinter', Math.floor(c), 0.55), W('gnat', Math.floor(4 + n * 0.7), 0.8, 4)); }
-        if (theme === 2) { list.push(W('crawler', Math.floor(c), 0.75), W('gnat', Math.floor(3 + n * 0.5), 1.0, 3), W('brute', Math.floor(n * 0.3), 3, 6)); }
-        if (n % 5 === 0) list.unshift(W('boss', Math.max(1, Math.floor(n / 10)), 8, 0));
-        return list;
-      }
+  // ---------------- the campaign: 9 authored nodes ----------------
+  // Design intent per node, following classic TD level-design structure:
+  //   - fixed seed: each node IS its spire — attempts are learnable
+  //   - one new element per node (threat, turret, or twist), taught in a
+  //     low-pressure showcase wave before it appears under pressure
+  //   - topology is a difficulty knob: path length buys DPS time, socket
+  //     spacing buys build room, plazas showcase repulsors
+  //   - a breather wave precedes every finale so the player can re-invest
+  const LEVELS = [
+    {
+      n: 1, name: 'BOOTSTRAP', sub: 'Learn the climb', seed: 4021, waves: 8,
+      palette: ['crawler', 'sprinter'], turrets: ['blaster', 'stasis', 'generator'],
+      spire: { height: 30, socketEvery: 2.9, w: { arc: 0.62, sb: 0.14, riser: 0.09, plaza: 0.15 }, plazaMax: 1 },
+      eco: { startSalvage: 150 },
+      intro: 'A gentle spiral with generous sockets. Hold the line.',
+      topo: 'WIDE SPIRAL · DENSE SOCKETS',
+    },
+    {
+      n: 2, name: 'AIRGAP', sub: 'They can fly', seed: 7712, waves: 9,
+      palette: ['crawler', 'sprinter', 'gnat'], turrets: ['blaster', 'stasis', 'generator', 'repulsor'],
+      teach: { wave: 4, type: 'gnat', text: '✦ GNATS SKIP THE RAMP — THEY RISE STRAIGHT UP. COVER YOUR AIRSPACE.' },
+      unlockNote: '◎ REPULSOR UNLOCKED — THROW CLIMBERS OFF THE SPIRE',
+      spire: { height: 32, socketEvery: 3.0, w: { arc: 0.5, sb: 0.15, riser: 0.1, plaza: 0.25 }, plazaMax: 2 },
+      intro: 'Plaza rings are repulsor country. Fliers ignore all of it.',
+      topo: 'TWIN PLAZAS · OPEN AIR',
+    },
+    {
+      n: 3, name: 'SWARM PROTOCOL', sub: 'Quantity is a quality', seed: 1583, waves: 10,
+      palette: ['crawler', 'sprinter', 'gnat'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      unlockNote: '⌁ ARC NODE UNLOCKED — LIGHTNING FORKS THROUGH SWARMS',
+      bosses: { 10: 1 },
+      swarm: true,   // composer: more, weaker enemies in tighter packs
+      spire: { height: 32, socketEvery: 3.1, w: { arc: 0.66, sb: 0.2, riser: 0.07, plaza: 0.07 }, plazaMax: 1 },
+      intro: 'Dense packs, tight spiral. First ARCHON at the summit push.',
+      topo: 'TIGHT COIL · SWARM WAVES',
+    },
+    {
+      n: 4, name: 'SIEGE', sub: 'Armor climbs slow', seed: 9034, waves: 10,
+      palette: ['crawler', 'sprinter', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      teach: { wave: 3, type: 'brute', text: '■ BRUTES SHRUG OFF WEAK HITS — ARMOR 3. UPGRADE OR OUTSMART.' },
+      spire: { height: 27, socketEvery: 3.6, w: { arc: 0.34, sb: 0.16, riser: 0.44, plaza: 0.06 }, plazaMax: 1 },
+      intro: 'A short, steep climb and few sockets. Every placement counts.',
+      topo: 'SHORT ASCENT · SPARSE SOCKETS',
+    },
+    {
+      n: 5, name: 'BLACKOUT', sub: 'The core is damaged', seed: 3377, waves: 11,
+      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      eco: { powerBase: 5 },
+      bosses: { 11: 1 },
+      spire: { height: 33, socketEvery: 3.2, w: { arc: 0.55, sb: 0.2, riser: 0.15, plaza: 0.1 }, plazaMax: 1 },
+      intro: 'Core power is down to 5. Generators are not optional here.',
+      topo: 'STANDARD SPIRE · POWER CRISIS', twist: '⚡ CORE POWER 5 (NORMALLY 8)',
+    },
+    {
+      n: 6, name: 'STORMFRONT', sub: 'Updraft', seed: 6119, waves: 11,
+      palette: ['sprinter', 'gnat', 'crawler'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      mods: { gnatSpeedMult: 1.3 },
+      bosses: { 11: 1 },
+      spire: { height: 29, socketEvery: 3.2, w: { arc: 0.5, sb: 0.26, riser: 0.18, plaza: 0.06 }, plazaMax: 1 },
+      intro: 'An updraft carries gnats 30% faster, and the spire is short.',
+      topo: 'SHORT SPIRE · FLIER SURGE', twist: '✦ GNATS +30% CLIMB SPEED',
+    },
+    {
+      n: 7, name: 'CRACKED MARKET', sub: 'The economy inverts', seed: 8251, waves: 12,
+      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      mods: { interestMult: 2, killMult: 0.7 },
+      bosses: { 12: 1 },
+      spire: { height: 34, socketEvery: 3.3, w: { arc: 0.5, sb: 0.14, riser: 0.11, plaza: 0.25 }, plazaMax: 2 },
+      intro: 'Kills pay −30%, but interest is doubled. Hoard, then strike.',
+      topo: 'TWIN PLAZAS · LONG CLIMB', twist: '¤ KILLS −30% · INTEREST ×2',
+    },
+    {
+      n: 8, name: 'OVERRUN', sub: 'Everything, faster', seed: 2468, waves: 12,
+      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      bosses: { 6: 1, 12: 2 },
+      hot: true,     // composer: shorter gaps, denser openers
+      spire: { height: 28, socketEvery: 3.3, w: { arc: 0.6, sb: 0.25, riser: 0.12, plaza: 0.03 }, plazaMax: 1 },
+      intro: 'Short spire, relentless waves, twin ARCHONs at the end.',
+      topo: 'SHORT COIL · RELENTLESS', twist: '☠ TWIN ARCHON FINALE',
+    },
+    {
+      n: 9, name: 'APEX', sub: 'The full stack', seed: 5555, waves: 13,
+      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      bosses: { 7: 1, 13: 2 },
+      spire: { height: 38, socketEvery: 3.4, w: { arc: 0.42, sb: 0.2, riser: 0.24, plaza: 0.14 }, plazaMax: 2 },
+      intro: 'The tallest spire and every threat in the codex. Hold it all.',
+      topo: 'MEGASPIRE · BOSS GAUNTLET', twist: '☠ ARCHON AT 7 · TWINS AT 13',
+    },
+  ];
+
+  // ---------------- wave composer ----------------
+  // Encounter-budget waves with authored pacing roles:
+  //   opener (light) → ramp → surge every 4th → breather before finale →
+  //   finale (heavy, + bosses where scripted). Deterministic per (node, wave).
+  function hpMult(L, n) {
+    return (1 + 0.26 * Math.pow(L - 1, 1.06)) * (1 + 0.055 * (n - 1));
+  }
+
+  function wave(level, n) {
+    const R = UTIL.rng(level.seed * 7919 + n * 104729);
+    const W = level.waves;
+    const hm = hpMult(level.n, n);
+    const groups = [];
+    const G = (type, count, gap, delay) => groups.push({ type, count, gap, delay: delay || 0, hpMult: hm });
+
+    // teaching wave: the new threat appears alone, in a readable line
+    if (level.teach && level.teach.wave === n) {
+      G(level.teach.type, 5 + level.n, ENEMIES[level.teach.type].flying ? 1.6 : 1.3, 0.5);
+      return groups;
     }
+
+    // pacing role
+    let mult = 0.62 + 0.78 * (n / W);
+    if (n === 1) mult *= 0.55;
+    else if (n === W) mult *= 1.4;
+    else if (n === W - 1 && W > 5) mult *= 0.58;   // breather: bank, breathe, rebuild
+    else if (n % 4 === 0) mult *= 1.22;            // surge beat
+    let budget = (9 + level.n * 2.8) * mult * (1 + 0.055 * (n - 1));
+
+    // scripted bosses spend none of the budget; escorts come from what's left
+    const nBoss = (level.bosses && level.bosses[n]) || 0;
+    for (let b = 0; b < nBoss; b++) G('boss', 1, 0, b * 9);
+    if (nBoss) budget *= 0.55;
+
+    // spend the budget on groups drawn from the node's palette
+    const palette = level.palette.filter(t => !level.teach || level.teach.wave < n || level.teach.type !== t || n >= (level.teach.wave));
+    let delay = nBoss ? 4 : 0;
+    let guard = 0;
+    while (budget > 0.9 && guard++ < 12) {
+      const type = palette[Math.floor(R() * palette.length)];
+      const def = ENEMIES[type];
+      const maxN = Math.max(2, Math.floor(budget / def.pts));
+      let count = Math.min(maxN, def.pts >= 4 ? 2 + Math.floor(R() * 2) : (level.swarm ? 6 : 4) + Math.floor(R() * 4));
+      let gap = def.pts >= 4 ? 2.6 : (def.flying ? 1.1 : 0.85);
+      if (level.swarm) gap *= 0.75;
+      if (level.hot) gap *= 0.7;
+      gap *= Math.max(0.55, 1 - 0.02 * (level.n + n));   // waves pack tighter as pressure rises
+      G(type, count, gap, delay);
+      budget -= count * def.pts;
+      delay += 2 + R() * 3;
+    }
+    return groups;
   }
 
   // ---------------- wave directives ----------------
@@ -511,7 +670,6 @@ const CONFIG = (function () {
   ];
 
   // ---------------- SPIRE OS: in-run tech tree ----------------
-  // One-time purchases: long-term investment vs. the next turret.
   const TECH = [
     { id: 'coretap',  ico: '⚡', name: 'CORE TAP',          cost: 150, desc: '+3 power from the summit core.' },
     { id: 'compound', ico: '¤',  name: 'COMPOUND PROTOCOL', cost: 200, desc: 'Interest 10% → 14%, cap ¤50 → ¤90.' },
@@ -521,16 +679,16 @@ const CONFIG = (function () {
     { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
   ];
 
-  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, MAX_WAVE, wave, DIRECTIVES, TECH };
+  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, LEVELS, wave, hpMult, DIRECTIVES, TECH };
 })();
 </script>
 <script>
 /* ====================== js/save.js ====================== */
-/* NEURAL SPIRE — tiny localStorage persistence (best run + sound pref) */
+/* NEURAL SPIRE — localStorage persistence: campaign progress + sound pref */
 'use strict';
 const SAVE = (function () {
-  const KEY = 'neural-spire-v1';
-  let state = { bestWave: 0, victories: 0, muted: false };
+  const KEY = 'neural-spire-v2';
+  let state = { furthest: 1, levels: {}, muted: false };
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
@@ -540,12 +698,23 @@ const SAVE = (function () {
   function persist() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
   }
-  function recordRun(wave, won) {
-    if (wave > state.bestWave) state.bestWave = wave;
-    if (won) state.victories++;
+  function recordLevel(n, stars, won) {
+    const cur = state.levels[n] || { stars: 0, attempts: 0 };
+    cur.attempts++;
+    if (won) {
+      cur.stars = Math.max(cur.stars, stars);
+      if (n + 1 > state.furthest && n + 1 <= CONFIG.LEVELS.length) state.furthest = n + 1;
+    }
+    state.levels[n] = cur;
     persist();
   }
-  return { load, persist, recordRun, get state() { return state; } };
+  function starsFor(n) { return (state.levels[n] && state.levels[n].stars) || 0; }
+  function clearedCount() {
+    let c = 0;
+    for (const k in state.levels) if (state.levels[k].stars > 0) c++;
+    return c;
+  }
+  return { load, persist, recordLevel, starsFor, clearedCount, get state() { return state; } };
 })();
 </script>
 <script>
@@ -628,46 +797,50 @@ const AUDIO = (function () {
 </script>
 <script>
 /* ====================== js/spire.js ====================== */
-/* NEURAL SPIRE — the tower: scene, procedurally generated climb path, build sockets.
-   Every run rolls a new spire: winding arcs, switchbacks, steep risers and flat
-   plaza rings, with the ramp radius swelling and tightening as it climbs. */
+/* NEURAL SPIRE — the tower: scene, generated climb path, build sockets.
+   Each campaign node owns a fixed seed + topology parameters, so every node
+   IS its spire: same layout on every attempt (learnable), different between
+   nodes (tall lazy spirals, short steep risers, plaza-ring kill boxes). */
 'use strict';
 const SPIRE = (function () {
   const S = CONFIG.SPIRE;
   let scene = null, group = null;
-  let sockets = [];     // { i, pos, mesh, turret|null }
-  let path = null;      // { points[], cum[], total }
-  let coreMesh = null, coreLight = null, coreBasePos = null;
-  let curSeed = 1;
+  let sockets = [];
+  let path = null;
+  let coreMesh = null, coreLight = null, coreBasePos = null, crownLamp = null;
+  let curSeed = 1, H = S.height;
 
-  // ---------------- procedural helix path ----------------
-  // The path is a chain of segments. Each segment turns (arc / switchback /
-  // riser / plaza) while climbing, and drifts toward its own target radius.
-  function buildPath(seed) {
+  // ---------------- path generation ----------------
+  function buildPath(seed, params) {
     const R = UTIL.rng(seed);
+    const w = (params && params.w) || { arc: 0.55, sb: 0.16, riser: 0.14, plaza: 0.15 };
+    const plazaMax = (params && params.plazaMax !== undefined) ? params.plazaMax : 2;
+    H = (params && params.height) || S.height;
+
     path = { points: [], cum: [], total: 0 };
     let ang = R() * Math.PI * 2;
     let y = 0.6;
-    let dir = R() < 0.5 ? 1 : -1;      // winding direction, flips at switchbacks
+    let dir = R() < 0.5 ? 1 : -1;
     let radius = S.rPath;
     let plazas = 0, segsSinceFlip = 0;
 
     const segs = [];
-    while (y < S.height - 1.2) {
-      const roll = R();
-      let type;
-      if (roll < 0.52) type = 'arc';
-      else if (roll < 0.68 && segsSinceFlip >= 1) type = 'switchback';
-      else if (roll < 0.85) type = 'riser';
-      else if (plazas < 2 && y > 6 && y < S.height - 8) type = 'plaza';
-      else type = 'arc';
+    while (y < H - 1.2) {
+      // weighted segment pick
+      let type = 'arc';
+      const total = w.arc + w.sb + w.riser + w.plaza;
+      let roll = R() * total;
+      if ((roll -= w.arc) < 0) type = 'arc';
+      else if ((roll -= w.sb) < 0) type = segsSinceFlip >= 1 ? 'switchback' : 'arc';
+      else if ((roll -= w.riser) < 0) type = 'riser';
+      else type = (plazas < plazaMax && y > 5 && y < H - 7) ? 'plaza' : 'arc';
 
       let dAng, dY, rTarget = 3.2 + R() * 1.3;
       if (type === 'arc') { dAng = (Math.PI * 0.6 + R() * Math.PI * 0.6) * dir; dY = 3.2 + R() * 1.6; segsSinceFlip++; }
       else if (type === 'switchback') { dir = -dir; segsSinceFlip = 0; dAng = (Math.PI * 0.7 + R() * Math.PI * 0.5) * dir; dY = 2.6 + R() * 1.2; }
       else if (type === 'riser') { dAng = (Math.PI * 0.2 + R() * Math.PI * 0.15) * dir; dY = 4.2 + R() * 1.6; segsSinceFlip++; }
       else { plazas++; dAng = Math.PI * 2 * dir; dY = 1.3; rTarget = 3.9 + R() * 0.7; segsSinceFlip++; }
-      dY = Math.min(dY, S.height - 1.0 - y);
+      dY = Math.min(dY, H - 1.0 - y);
       segs.push({ ang0: ang, dAng, y0: y, dY, r0: radius, r1: rTarget });
       ang += dAng; y += dY; radius = rTarget;
     }
@@ -678,7 +851,6 @@ const SPIRE = (function () {
       for (let i = 0; i < steps; i++) {
         const t = i / steps;
         const a = sg.ang0 + sg.dAng * t;
-        // ease the radius between segment targets so the ramp flows
         const r = UTIL.lerp(sg.r0, sg.r1, t * t * (3 - 2 * t));
         const p = new THREE.Vector3(Math.sin(a) * r, sg.y0 + sg.dY * t, Math.cos(a) * r);
         if (prev) d += p.distanceTo(prev);
@@ -690,7 +862,6 @@ const SPIRE = (function () {
     path.total = d;
   }
 
-  // position + tangent at distance d along the ramp
   function at(d) {
     d = UTIL.clamp(d, 0, path.total);
     let lo = 0, hi = path.cum.length - 1;
@@ -702,7 +873,6 @@ const SPIRE = (function () {
     return { pos, tangent };
   }
 
-  // line-of-sight: is the straight segment a→b blocked by the central column?
   function losBlocked(a, b) {
     const ax = a.x, az = a.z, bx = b.x, bz = b.z;
     const dx = bx - ax, dz = bz - az;
@@ -713,105 +883,199 @@ const SPIRE = (function () {
     return (cx * cx + cz * cz) < S.rCol * S.rCol * 0.92;
   }
 
-  // ---------------- visuals ----------------
-  function disposeGroup() {
-    if (!group) return;
-    scene.remove(group);
-    group.traverse(o => {
-      if (o.geometry) o.geometry.dispose();
-      if (o.material) {
-        if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
-        else o.material.dispose();
+  // ---------------- procedural textures ----------------
+  function columnTexture() {
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 1024;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#0e1728';
+    c.fillRect(0, 0, 512, 1024);
+    // panel plates with slight tonal variation
+    for (let py = 0; py < 1024; py += 64) {
+      for (let px = 0; px < 512; px += 128) {
+        c.fillStyle = Math.random() < 0.5 ? '#101a2e' : '#0c1524';
+        c.fillRect(px + 2, py + 2, 124, 60);
       }
-    });
-    group = null;
-    sockets = [];
-    coreMesh = null; coreLight = null;
+    }
+    // seams
+    c.strokeStyle = '#070d1a'; c.lineWidth = 3;
+    for (let py = 0; py <= 1024; py += 64) { c.beginPath(); c.moveTo(0, py); c.lineTo(512, py); c.stroke(); }
+    for (let px = 0; px <= 512; px += 128) { c.beginPath(); c.moveTo(px, 0); c.lineTo(px, 1024); c.stroke(); }
+    // lit windows — sparse, in loose bands so it reads as a live machine
+    for (let i = 0; i < 260; i++) {
+      const px = 8 + Math.random() * 496;
+      const py = 8 + Math.random() * 1008;
+      const on = Math.random();
+      if (on < 0.55) c.fillStyle = 'rgba(42,120,190,0.85)';
+      else if (on < 0.8) c.fillStyle = 'rgba(127,220,255,0.9)';
+      else if (on < 0.9) c.fillStyle = 'rgba(255,209,102,0.85)';
+      else c.fillStyle = 'rgba(20,40,70,0.9)';
+      c.fillRect(px, py, 3 + Math.random() * 3, 5 + Math.random() * 4);
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.set(2, 1);
+    return tex;
   }
 
-  function regen(seed) {
-    curSeed = seed;
-    disposeGroup();
-    group = new THREE.Group();
-    scene.add(group);
-    buildPath(seed);
+  function skyTexture() {
+    const cv = document.createElement('canvas');
+    cv.width = 16; cv.height = 512;
+    const c = cv.getContext('2d');
+    const g = c.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, '#03040a');
+    g.addColorStop(0.45, '#0a1430');
+    g.addColorStop(0.75, '#0d1a3d');
+    g.addColorStop(1, '#050810');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 16, 512);
+    return new THREE.CanvasTexture(cv);
+  }
 
-    const matCol = new THREE.MeshStandardMaterial({ color: 0x1c2a45, roughness: 0.65, metalness: 0.5, emissive: 0x060d1c, emissiveIntensity: 1 });
-    const matDark = new THREE.MeshStandardMaterial({ color: 0x131e33, roughness: 0.85, metalness: 0.3 });
-
-    // central column: stacked, slightly tapered segments with glowing seams
-    const segs = 9;
-    for (let i = 0; i < segs; i++) {
-      const y0 = (i / segs) * S.height;
-      const h = S.height / segs - 0.25;
-      const r0 = S.rCol * (1 - 0.14 * (i / segs));
-      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 0.94, r0, h, 20, 1), matCol);
-      cyl.position.y = y0 + h / 2;
-      group.add(cyl);
-      const seam = new THREE.Mesh(
-        new THREE.TorusGeometry(r0 * 0.97, 0.045, 6, 40),
-        new THREE.MeshBasicMaterial({ color: 0x2a78be })
-      );
-      seam.rotation.x = Math.PI / 2;
-      seam.position.y = y0 + h + 0.12;
-      group.add(seam);
-    }
-    // vertical circuit strips on the column
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2;
-      const strip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.07, S.height * 0.92, 0.07),
-        new THREE.MeshBasicMaterial({ color: k % 2 ? 0x1d4a75 : 0x2a78be, transparent: true, opacity: 0.65 })
-      );
-      const rr = S.rCol * 0.965;
-      strip.position.set(Math.sin(a) * rr, S.height * 0.47, Math.cos(a) * rr);
-      group.add(strip);
-    }
-
-    // climb ramp: ribbon following the generated path, width around each
-    // point's own radius (the radius varies along the tower)
-    const verts = [], norms = [], idx = [];
-    const N = path.points.length;
-    const HALF = 0.55;
-    for (let i = 0; i < N; i++) {
-      const p = path.points[i];
-      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
-      const ang = Math.atan2(p.x, p.z);
-      const ri = pr - HALF, ro = pr + HALF;
-      verts.push(Math.sin(ang) * ri, p.y, Math.cos(ang) * ri, Math.sin(ang) * ro, p.y, Math.cos(ang) * ro);
-      norms.push(0, 1, 0, 0, 1, 0);
+  // quad strip between two polylines, normals computed
+  function strip(ptsA, ptsB, material) {
+    const verts = [], idx = [];
+    for (let i = 0; i < ptsA.length; i++) {
+      verts.push(ptsA[i].x, ptsA[i].y, ptsA[i].z, ptsB[i].x, ptsB[i].y, ptsB[i].z);
       if (i) {
         const a = (i - 1) * 2, b = a + 1, c = i * 2, e = c + 1;
         idx.push(a, b, c, b, e, c);
       }
     }
-    const ribbonG = new THREE.BufferGeometry();
-    ribbonG.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    ribbonG.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
-    ribbonG.setIndex(idx);
-    const ribbon = new THREE.Mesh(ribbonG, new THREE.MeshStandardMaterial({
-      color: 0x24406b, roughness: 0.55, metalness: 0.4, side: THREE.DoubleSide,
-      emissive: 0x0a1a33, emissiveIntensity: 1,
-    }));
-    group.add(ribbon);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return new THREE.Mesh(g, material);
+  }
 
-    // glowing edges of the ramp (outer = the railing enemies get thrown over)
-    const outPts = [], inPts = [];
-    for (let i = 0; i < N; i += 2) {
+  // ---------------- build / regen ----------------
+  function disposeGroup() {
+    if (!group) return;
+    scene.remove(group);
+    group.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+      for (const m of mats) {
+        if (m.map) m.map.dispose();
+        if (m.emissiveMap && m.emissiveMap !== m.map) m.emissiveMap.dispose();
+        m.dispose();
+      }
+    });
+    group = null;
+    sockets = [];
+    coreMesh = null; coreLight = null; crownLamp = null;
+  }
+
+  function regen(seed, params) {
+    curSeed = seed;
+    disposeGroup();
+    group = new THREE.Group();
+    scene.add(group);
+    buildPath(seed, params);
+    const socketEvery = (params && params.socketEvery) || S.socketEvery;
+
+    // ---- sky dome ----
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(130, 24, 16),
+      new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false })
+    );
+    sky.position.y = 10;
+    group.add(sky);
+
+    // ---- central column: tapered, panel-textured, window lights ----
+    const colTex = columnTexture();
+    const colMat = new THREE.MeshStandardMaterial({
+      map: colTex, emissiveMap: colTex, emissive: 0xffffff, emissiveIntensity: 0.35,
+      roughness: 0.7, metalness: 0.45,
+    });
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(S.rCol * 0.72, S.rCol * 1.06, H, 24, 1), colMat);
+    col.position.y = H / 2;
+    group.add(col);
+    // seam rings at thirds
+    for (const f of [0.25, 0.5, 0.75]) {
+      const rr = UTIL.lerp(S.rCol * 1.06, S.rCol * 0.72, f);
+      const seam = new THREE.Mesh(
+        new THREE.TorusGeometry(rr + 0.02, 0.05, 6, 40),
+        new THREE.MeshBasicMaterial({ color: 0x2a78be, transparent: true, opacity: 0.85 })
+      );
+      seam.rotation.x = Math.PI / 2;
+      seam.position.y = H * f;
+      group.add(seam);
+    }
+    // base skirt + foundation
+    const skirt = new THREE.Mesh(
+      new THREE.CylinderGeometry(S.rCol * 1.06, S.rCol * 1.8, 1.6, 24),
+      new THREE.MeshStandardMaterial({ color: 0x111c30, roughness: 0.8, metalness: 0.4 })
+    );
+    skirt.position.y = 0.8;
+    group.add(skirt);
+    const found = new THREE.Mesh(
+      new THREE.CylinderGeometry(S.rCol * 2.4, S.rCol * 2.7, 0.5, 28),
+      new THREE.MeshStandardMaterial({ color: 0x0d1626, roughness: 0.9 })
+    );
+    found.position.y = 0.25;
+    group.add(found);
+    // crown antenna
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.1, 3.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x1c2a45, roughness: 0.5, metalness: 0.7 })
+    );
+    mast.position.y = H + 3.2;
+    group.add(mast);
+    crownLamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff3d6e })
+    );
+    crownLamp.position.y = H + 4.8;
+    group.add(crownLamp);
+
+    // ---- ramp: extruded (top / walls / bottom), with center lane + rails ----
+    const N = path.points.length;
+    const HALF = 0.55, THICK = 0.30;
+    const topIn = [], topOut = [], botIn = [], botOut = [], laneIn = [], laneOut = [], railPts = [];
+    for (let i = 0; i < N; i++) {
       const p = path.points[i];
       const pr = Math.max(0.6, Math.hypot(p.x, p.z));
-      const ang = Math.atan2(p.x, p.z);
-      outPts.push(new THREE.Vector3(Math.sin(ang) * (pr + HALF), p.y + 0.05, Math.cos(ang) * (pr + HALF)));
-      inPts.push(new THREE.Vector3(Math.sin(ang) * (pr - HALF), p.y + 0.05, Math.cos(ang) * (pr - HALF)));
+      const sa = Math.sin(Math.atan2(p.x, p.z)), ca = Math.cos(Math.atan2(p.x, p.z));
+      topIn.push(new THREE.Vector3(sa * (pr - HALF), p.y, ca * (pr - HALF)));
+      topOut.push(new THREE.Vector3(sa * (pr + HALF), p.y, ca * (pr + HALF)));
+      botIn.push(new THREE.Vector3(sa * (pr - HALF), p.y - THICK, ca * (pr - HALF)));
+      botOut.push(new THREE.Vector3(sa * (pr + HALF), p.y - THICK, ca * (pr + HALF)));
+      laneIn.push(new THREE.Vector3(sa * (pr - 0.22), p.y + 0.02, ca * (pr - 0.22)));
+      laneOut.push(new THREE.Vector3(sa * (pr + 0.22), p.y + 0.02, ca * (pr + 0.22)));
+      if (i % 2 === 0) railPts.push(new THREE.Vector3(sa * (pr + HALF), p.y + 0.06, ca * (pr + HALF)));
     }
-    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outPts), new THREE.LineBasicMaterial({ color: 0x3f9be8 })));
-    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(inPts), new THREE.LineBasicMaterial({ color: 0x2a5a8e, transparent: true, opacity: 0.8 })));
+    group.add(strip(topIn, topOut, new THREE.MeshStandardMaterial({ color: 0x24344f, roughness: 0.55, metalness: 0.5 })));
+    group.add(strip(topOut, botOut, new THREE.MeshStandardMaterial({ color: 0x141f33, roughness: 0.7, metalness: 0.4 })));
+    group.add(strip(botIn, topIn, new THREE.MeshStandardMaterial({ color: 0x141f33, roughness: 0.7, metalness: 0.4 })));
+    group.add(strip(botOut, botIn, new THREE.MeshStandardMaterial({ color: 0x0e1626, roughness: 0.8, metalness: 0.3 })));
+    // glowing center lane: the enemy route reads at a glance
+    group.add(strip(laneIn, laneOut, new THREE.MeshBasicMaterial({ color: 0x1b5288, transparent: true, opacity: 0.9 })));
+    // outer rail glow
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(railPts), new THREE.LineBasicMaterial({ color: 0x3f9be8 })));
 
-    // build sockets: hex pads riding just outside the ramp
-    const padG = new THREE.CylinderGeometry(0.52, 0.6, 0.16, 6);
-    const nSock = Math.floor(path.total / S.socketEvery) - 1;
+    // support struts from ramp underside to the column
+    const strutMat = new THREE.MeshStandardMaterial({ color: 0x16233b, roughness: 0.7, metalness: 0.5 });
+    for (let i = 6; i < N - 4; i += 16) {
+      const p = path.points[i];
+      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
+      const sa = p.x / pr, ca = p.z / pr;
+      const a = new THREE.Vector3(sa * (pr - HALF * 0.5), p.y - THICK, ca * (pr - HALF * 0.5));
+      const b = new THREE.Vector3(sa * S.rCol * 0.95, p.y - 1.5, ca * S.rCol * 0.95);
+      const len = a.distanceTo(b);
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, len), strutMat);
+      strut.position.copy(a).lerp(b, 0.5);
+      strut.lookAt(b);
+      group.add(strut);
+    }
+
+    // ---- build sockets ----
+    const padG = new THREE.CylinderGeometry(0.52, 0.62, 0.18, 6);
+    const nSock = Math.floor(path.total / socketEvery) - 1;
+    const armMat = new THREE.MeshStandardMaterial({ color: 0x131e33, roughness: 0.8, metalness: 0.3 });
     for (let i = 1; i <= nSock; i++) {
-      const d = i * S.socketEvery;
+      const d = i * socketEvery;
       const { pos } = at(d);
       const pr = Math.max(0.6, Math.hypot(pos.x, pos.z));
       const ang = Math.atan2(pos.x, pos.z);
@@ -821,7 +1085,7 @@ const SPIRE = (function () {
         emissive: 0x0a2038, emissiveIntensity: 1,
       }));
       pad.position.copy(sp);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 1.0), matDark);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 1.1), armMat);
       arm.position.copy(sp).lerp(pos, 0.5);
       arm.lookAt(pos.x, arm.position.y, pos.z);
       group.add(arm);
@@ -830,8 +1094,8 @@ const SPIRE = (function () {
       sockets.push({ i: sockets.length, pos: sp, mesh: pad, turret: null });
     }
 
-    // summit core
-    coreBasePos = new THREE.Vector3(0, S.height + 1.3, 0);
+    // ---- summit core ----
+    coreBasePos = new THREE.Vector3(0, H + 1.3, 0);
     coreMesh = new THREE.Mesh(
       new THREE.IcosahedronGeometry(1.05, 1),
       new THREE.MeshStandardMaterial({ color: 0x66ddff, emissive: 0x2299dd, emissiveIntensity: 1.6, roughness: 0.25 })
@@ -849,40 +1113,53 @@ const SPIRE = (function () {
     coreLight.position.copy(coreBasePos);
     group.add(coreLight);
 
-    // base: spawn portal ring at the path start + ground
+    // ---- base: spawn portal + danger light + ground ----
     const p0 = path.points[0];
     const portal = new THREE.Mesh(
-      new THREE.TorusGeometry(1.4, 0.14, 8, 40),
+      new THREE.TorusGeometry(1.3, 0.13, 8, 40),
       new THREE.MeshBasicMaterial({ color: 0xff3d6e })
     );
     portal.rotation.x = Math.PI / 2;
-    portal.position.set(p0.x, 0.25, p0.z);
+    portal.position.set(p0.x, 0.28, p0.z);
     group.add(portal);
+    const baseLight = new THREE.PointLight(0xff3050, 0.9, 14);
+    baseLight.position.set(p0.x, 2, p0.z);
+    group.add(baseLight);
+
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(30, 48),
-      new THREE.MeshStandardMaterial({ color: 0x060a14, roughness: 1 })
+      new THREE.CircleGeometry(60, 48),
+      new THREE.MeshStandardMaterial({ color: 0x05080f, roughness: 1 })
     );
     ground.rotation.x = -Math.PI / 2;
     group.add(ground);
-    const grid = new THREE.PolarGridHelper(30, 12, 8, 48, 0x14263f, 0x0e1a2e);
+    const grid = new THREE.PolarGridHelper(30, 12, 8, 48, 0x10203a, 0x0a1422);
     grid.position.y = 0.02;
     group.add(grid);
+    const glow = new THREE.Mesh(
+      new THREE.RingGeometry(S.rCol * 2.7, S.rCol * 2.75, 40),
+      new THREE.MeshBasicMaterial({ color: 0x2a78be, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+    );
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.06;
+    group.add(glow);
 
-    // starfield
+    // ---- starfield ----
     const starPts = [];
     for (let i = 0; i < 420; i++) {
-      const r = 45 + Math.random() * 55, th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 1.6 - 0.8);
+      const r = 55 + Math.random() * 60, th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 1.6 - 0.8);
       starPts.push(new THREE.Vector3(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) + 14, r * Math.sin(ph) * Math.sin(th)));
     }
-    group.add(new THREE.Points(
+    const stars = new THREE.Points(
       new THREE.BufferGeometry().setFromPoints(starPts),
       new THREE.PointsMaterial({ color: 0x9fc3e8, size: 0.16, transparent: true, opacity: 0.8 })
-    ));
+    );
+    stars.material.fog = false;
+    group.add(stars);
   }
 
-  function build(sc, seed) {
+  function build(sc, seed, params) {
     scene = sc;
-    regen(seed);
+    regen(seed, params);
   }
 
   // idle animation + socket affordance pulse
@@ -897,6 +1174,7 @@ const SPIRE = (function () {
       coreMesh.scale.setScalar(s);
       coreLight.intensity = 1.4 + Math.sin(t * 2.2) * 0.25;
     }
+    if (crownLamp) crownLamp.material.color.setHex(Math.sin(t * 3) > 0 ? 0xff3d6e : 0x571225);
     const pulse = 0.5 + Math.sin(t * 3.5) * 0.5;
     for (const s of sockets) {
       if (!s.turret && canAfford) s.mesh.material.emissiveIntensity = 1 + pulse * 1.6;
@@ -915,7 +1193,7 @@ const SPIRE = (function () {
     get sockets() { return sockets; },
     get pathTotal() { return path.total; },
     get corePos() { return coreBasePos; },
-    get height() { return S.height; },
+    get height() { return H; },
     get rPath() { return S.rPath; },
     get seed() { return curSeed; },
   };
@@ -1038,6 +1316,24 @@ const FX = (function () {
 'use strict';
 const ENEMY = (function () {
 
+  // shared radial-glow texture: every threat carries an additive halo so it
+  // reads instantly against the dark spire
+  let glowTex = null;
+  function getGlowTex() {
+    if (glowTex) return glowTex;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const c = cv.getContext('2d');
+    const grad = c.createRadialGradient(32, 32, 2, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 64, 64);
+    glowTex = new THREE.CanvasTexture(cv);
+    return glowTex;
+  }
+
   function makeMesh(def) {
     const g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({
@@ -1064,6 +1360,12 @@ const ENEMY = (function () {
       body = new THREE.Mesh(new THREE.IcosahedronGeometry(def.size, 1), mat);
     }
     g.add(body);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.55,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    halo.scale.setScalar(def.size * (def.boss ? 6 : 4.5));
+    g.add(halo);
     g.userData.body = body;
     g.userData.mat = mat;
     return g;
@@ -1456,7 +1758,7 @@ const GAME = (function () {
     endless: false,
     stats: null,
     comboThrows: 0, comboT: 0,
-    seed: 1,
+    level: null,             // the current campaign node (CONFIG.LEVELS entry)
     tech: {},                // purchased SPIRE OS nodes, by id
     permPower: 0,            // permanent grid bonuses from directives
     activeDirs: [],          // [{ def, mods, wavesLeft }]
@@ -1464,9 +1766,12 @@ const GAME = (function () {
     waveEarn: null,          // per-wave income breakdown for the report
   };
 
-  // combined modifier across active directives: 'mult' keys multiply, others add
+  // combined modifier: level twist mods first, then active directives.
+  // 'Mult' keys multiply, everything else adds.
   function mod(key, base) {
     let v = base === undefined ? (key.endsWith('Mult') ? 1 : 0) : base;
+    const lm = g.level && g.level.mods && g.level.mods[key];
+    if (lm !== undefined) { if (key.endsWith('Mult')) v *= lm; else v += lm; }
     for (const d of g.activeDirs) {
       const m = d.mods[key];
       if (m === undefined) continue;
@@ -1483,9 +1788,15 @@ const GAME = (function () {
   function fallBonusMult() { return (g.tech.massdrv ? 1.5 : 1) * mod('fallMult', 1); }
 
   function powerCap() {
-    let cap = ECO.powerBase + g.permPower + (g.tech.coretap ? 3 : 0);
+    const base = (g.level && g.level.eco && g.level.eco.powerBase !== undefined) ? g.level.eco.powerBase : ECO.powerBase;
+    let cap = base + g.permPower + (g.tech.coretap ? 3 : 0);
     for (const t of g.turrets) cap += t.stat('gen') || 0;
     return Math.round(cap);
+  }
+
+  // turrets available on the current node (unlock chain across the campaign)
+  function availableTurrets() {
+    return (g.level && g.level.turrets) || CONFIG.TURRET_ORDER;
   }
   function powerUsed() {
     let used = 0;
@@ -1498,7 +1809,7 @@ const GAME = (function () {
     for (const t of g.turrets) t.sell();   // removes their meshes from the scene
     g.enemies = []; g.turrets = [];
     g.wave = 1;
-    g.salvage = ECO.startSalvage;
+    g.salvage = (g.level && g.level.eco && g.level.eco.startSalvage) || ECO.startSalvage;
     g.coreHP = ECO.coreHP;
     g.spawnQueue = [];
     g.combatT = 0; g.time = 0;
@@ -1513,15 +1824,17 @@ const GAME = (function () {
     g.stats = { kills: 0, throws: 0, fallSalvage: 0, interest: 0, leaked: 0, built: 0, bestCombo: 0 };
   }
 
-  function start() {
-    // every run grows a fresh spire from a new seed
-    g.seed = 1 + Math.floor(Math.random() * 99999);
-    SPIRE.regen(g.seed);
+  function start(levelN) {
+    // each node IS its spire: fixed seed + topology, learnable across attempts
+    g.level = CONFIG.LEVELS[UTIL.clamp(levelN, 1, CONFIG.LEVELS.length) - 1];
+    SPIRE.regen(g.level.seed, g.level.spire);
     reset();
     g.phase = 'build';
     rollDirectives();
     UI.onPhase();
-    UI.banner('SPIRE #' + g.seed + ' — BUILD YOUR DEFENSE', false);
+    UI.banner('NODE ' + g.level.n + ' — ' + g.level.name, false);
+    if (g.level.unlockNote) setTimeout(() => UI.toast(g.level.unlockNote, 'warn'), 1100);
+    setTimeout(() => UI.toast(g.level.intro, ''), 2300);
     UI.updateHUD();
   }
 
@@ -1568,7 +1881,7 @@ const GAME = (function () {
   // ---------------- economy actions ----------------
   function canAffordAny() {
     const cap = powerCap(), used = powerUsed();
-    for (const id of CONFIG.TURRET_ORDER) {
+    for (const id of availableTurrets()) {
       const d = CONFIG.TURRETS[id];
       if (g.salvage >= d.cost && used + d.power <= cap) return true;
     }
@@ -1577,6 +1890,7 @@ const GAME = (function () {
 
   function build(socket, type) {
     const def = CONFIG.TURRETS[type];
+    if (!availableTurrets().includes(type)) return false;
     if (socket.turret || g.salvage < def.cost) return false;
     if (powerUsed() + def.power > powerCap()) { UI.toast('⚡ NOT ENOUGH POWER — BUILD A GENERATOR', 'bad'); AUDIO.sfx.error(); return false; }
     g.salvage -= def.cost;
@@ -1636,19 +1950,25 @@ const GAME = (function () {
     g.spawnQueue = [];
     const hpDirMult = mod('enemyHpMult', 1);
     const spdDirMult = mod('enemySpeedMult', 1);
-    const comp = CONFIG.wave(g.wave);
+    const gnatMult = mod('gnatSpeedMult', 1);
+    const comp = CONFIG.wave(g.level, g.wave);
     for (const grp of comp) {
       for (let i = 0; i < grp.count; i++) {
+        const flying = CONFIG.ENEMIES[grp.type].flying;
         g.spawnQueue.push({
           type: grp.type, at: grp.delay + i * grp.gap,
-          hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - CONFIG.MAX_WAVE) * 0.25 : 1),
-          spdMult: spdDirMult,
+          hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - g.level.waves) * 0.25 : 1),
+          spdMult: spdDirMult * (flying ? gnatMult : 1),
         });
       }
     }
     g.spawnQueue.sort((a, b) => a.at - b.at);
     AUDIO.sfx.waveStart();
-    UI.banner('WAVE ' + g.wave + (g.wave > CONFIG.MAX_WAVE ? ' — OVERTIME' : ''), g.wave % 5 === 0);
+    if (g.level.teach && g.level.teach.wave === g.wave) {
+      UI.banner(g.level.teach.text, true);
+    } else {
+      UI.banner('WAVE ' + g.wave + (g.wave > g.level.waves ? ' — OVERTIME' : ''), !!(g.level.bosses && g.level.bosses[g.wave]));
+    }
     UI.onPhase();
     UI.updateHUD();
   }
@@ -1666,7 +1986,7 @@ const GAME = (function () {
     for (const d of g.activeDirs) d.wavesLeft--;
     g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
-    if (!g.endless && g.wave > CONFIG.MAX_WAVE) { victoryEnd(); return; }
+    if (!g.endless && g.wave > g.level.waves) { victoryEnd(); return; }
     g.phase = 'build';
     rollDirectives();
     UI.banner('WAVE CLEAR — REINFORCE', false);
@@ -1674,16 +1994,24 @@ const GAME = (function () {
     UI.updateHUD();
   }
 
+  // stars: an authored mastery target, not a participation prize
+  function starRating() {
+    if (g.stats.leaked === 0) return 3;
+    if (g.stats.leaked <= 3) return 2;
+    return 1;
+  }
+
   function victoryEnd() {
     g.phase = 'won';
-    SAVE.recordRun(CONFIG.MAX_WAVE, true);
+    g.stars = starRating();
+    SAVE.recordLevel(g.level.n, g.stars, true);
     AUDIO.sfx.victory();
     UI.showEnd(true);
   }
 
   function defeat() {
     g.phase = 'lost';
-    SAVE.recordRun(g.wave, false);
+    SAVE.recordLevel(g.level.n, 0, false);
     AUDIO.sfx.defeat();
     UI.showEnd(false);
   }
@@ -1772,6 +2100,7 @@ const GAME = (function () {
   g.overclockCost = overclockCost;
   g.interestRate = interestRate;
   g.interestCap = interestCap;
+  g.availableTurrets = availableTurrets;
   return g;
 })();
 </script>
@@ -1934,8 +2263,10 @@ const UI = (function () {
     $('build-socket-n').textContent = '#' + (selSocket.i + 1);
     const cards = $('build-cards');
     cards.innerHTML = '';
+    const avail = GAME.availableTurrets();
+    if (!avail.includes(selType)) selType = avail[0];
     const cap = GAME.powerCap(), used = GAME.powerUsed();
-    for (const id of CONFIG.TURRET_ORDER) {
+    for (const id of avail) {
       const d = CONFIG.TURRETS[id];
       const afford = GAME.salvage >= d.cost && used + d.power <= cap;
       const card = UTIL.h('div', 'b-card' + (selType === id ? ' sel' : '') + (afford ? '' : ' cant'),
@@ -2009,7 +2340,10 @@ const UI = (function () {
     const used = GAME.powerUsed(), cap = GAME.powerCap();
     $('v-power').textContent = used + '/' + cap;
     $('hud-power').classList.toggle('full', used >= cap);
-    $('v-wave').textContent = 'W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : CONFIG.MAX_WAVE) + (GAME.endless ? '·∞' : '/' + CONFIG.MAX_WAVE);
+    const W = GAME.level ? GAME.level.waves : 0;
+    $('v-wave').textContent = GAME.level
+      ? ('N' + GAME.level.n + '·W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
+      : '';
     // refresh open sheets so costs stay truthful
     if (selSocket && $('sheet-build').classList.contains('open')) renderBuildSheet();
     if ($('sheet-tech').classList.contains('open')) renderTech();
@@ -2082,7 +2416,7 @@ const UI = (function () {
   function renderPreview() {
     const box = $('wave-preview');
     box.innerHTML = '<span style="opacity:.7">NEXT:</span>';
-    const comp = CONFIG.wave(GAME.wave);
+    const comp = CONFIG.wave(GAME.level, GAME.wave);
     const totals = {};
     for (const grp of comp) totals[grp.type] = (totals[grp.type] || 0) + grp.count;
     for (const type in totals) {
@@ -2127,41 +2461,105 @@ const UI = (function () {
   function showEnd(won) {
     const card = $('end-card');
     const s = GAME.stats;
+    const lvl = GAME.level;
     card.innerHTML = '';
-    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'SPIRE HELD' : 'CORE BREACHED'));
+    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'NODE SECURED' : 'CORE BREACHED'));
+    if (won) {
+      const st = GAME.stars;
+      card.appendChild(UTIL.h('div', '', '<span style="font-size:30px;letter-spacing:4px;color:#ffd166">' +
+        '★'.repeat(st) + '<span style="opacity:.22">' + '★'.repeat(3 - st) + '</span></span>' +
+        '<div style="font-size:9.5px;color:#5f89ad;letter-spacing:1px;margin-top:2px">' +
+        (st === 3 ? 'FLAWLESS — ZERO LEAKS' : st === 2 ? '3 LEAKS OR FEWER' : 'SECURED, BARELY') + '</div>'));
+    }
     card.appendChild(UTIL.h('div', 'end-line',
-      'SPIRE #' + GAME.seed + ' — ' +
-      (won ? 'all ' + CONFIG.MAX_WAVE + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + CONFIG.MAX_WAVE + '.') +
+      'NODE ' + lvl.n + ' · ' + lvl.name + ' — ' +
+      (won ? 'all ' + lvl.waves + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + lvl.waves + '.') +
       '<br><b>' + s.kills + '</b> threats destroyed · <b>' + s.throws + '</b> thrown off the spire' +
       '<br>gravity paid <b>¤ ' + s.fallSalvage + '</b> · interest paid <b>¤ ' + s.interest + '</b>' +
-      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked +
-      '<br><span style="opacity:.7">Next run grows a different spire.</span>'));
+      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked));
+    if (won && lvl.n < CONFIG.LEVELS.length) {
+      const next = CONFIG.LEVELS[lvl.n];
+      const nx = UTIL.h('button', 'btn btn-primary', '▶ NODE ' + next.n + ' — ' + next.name);
+      nx.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(next.n); INPUT.focusBase(); };
+      card.appendChild(nx);
+    }
     if (won) {
-      const cont = UTIL.h('button', 'btn btn-primary', '∞ CONTINUE — OVERTIME');
+      const cont = UTIL.h('button', 'btn', '∞ OVERTIME — WAVES COMPOUND');
       cont.onclick = () => {
         $('end-overlay').classList.remove('show');
         GAME.endless = true;
         GAME.phase = 'build';
-        banner('OVERTIME — WAVES COMPOUND FOREVER', true);
+        banner('OVERTIME — NO RETREAT', true);
         onPhase(); updateHUD();
       };
       card.appendChild(cont);
     }
-    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ ' + (won ? 'NEW RUN' : 'RETRY'));
-    again.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
+    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ RETRY NODE ' + lvl.n);
+    again.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(lvl.n); INPUT.focusBase(); };
     card.appendChild(again);
+    const sel = UTIL.h('button', 'btn', 'NODE SELECT');
+    sel.onclick = () => { $('end-overlay').classList.remove('show'); openLevels(); };
+    card.appendChild(sel);
     $('end-overlay').classList.add('show');
+  }
+
+  // ---------------- node select ----------------
+  function renderLevels() {
+    const list = $('levels-list');
+    list.innerHTML = '';
+    let totalStars = 0;
+    for (const lvl of CONFIG.LEVELS) {
+      const stars = SAVE.starsFor(lvl.n);
+      totalStars += stars;
+      const locked = lvl.n > SAVE.state.furthest;
+      const threats = lvl.palette.map(t => {
+        const d = CONFIG.ENEMIES[t];
+        return '<span style="color:#' + d.color.toString(16).padStart(6, '0') + '">' + d.ico + '</span>';
+      }).join(' ');
+      const card = UTIL.h('div', 'lvl-card' + (locked ? ' locked' : ''),
+        '<div class="lvl-num">' + (locked ? '🔒' : lvl.n) + '</div>' +
+        '<div class="lvl-body">' +
+          '<div class="lvl-name">' + lvl.name + ' <small>· ' + lvl.sub + '</small></div>' +
+          '<div class="lvl-meta">' + lvl.topo + ' · ' + lvl.waves + ' WAVES · ' + threats +
+          (lvl.twist ? ' · <span class="tw">' + lvl.twist + '</span>' : '') + '</div>' +
+        '</div>' +
+        '<div class="lvl-stars">' + '★'.repeat(stars) + '<span class="off">' + '★'.repeat(3 - stars) + '</span></div>');
+      if (!locked) {
+        card.onclick = () => {
+          AUDIO.unlock(); AUDIO.sfx.click();
+          $('screen-levels').classList.remove('show');
+          $('screen-title').classList.remove('show');
+          $('hud').classList.remove('hidden');
+          GAME.start(lvl.n);
+          INPUT.focusBase();
+          if (lvl.n === 1 && !SAVE.starsFor(1)) $('help-overlay').classList.add('show');
+        };
+      }
+      list.appendChild(card);
+    }
+    $('levels-stars').textContent = '★ ' + totalStars + '/' + CONFIG.LEVELS.length * 3;
+  }
+  function openLevels() {
+    renderLevels();
+    $('screen-levels').classList.add('show');
   }
 
   // ---------------- wiring ----------------
   function init() {
     $('btn-start').onclick = () => {
       AUDIO.unlock();
+      const n = SAVE.state.furthest;
       $('screen-title').classList.remove('show');
       $('hud').classList.remove('hidden');
-      GAME.start();
+      GAME.start(n);
       INPUT.focusBase();
-      if (!SAVE.state.bestWave) $('help-overlay').classList.add('show');
+      if (n === 1 && !SAVE.starsFor(1)) $('help-overlay').classList.add('show');
+    };
+    $('btn-levels').onclick = () => { AUDIO.unlock(); AUDIO.sfx.click(); openLevels(); };
+    $('btn-levels-back').onclick = () => {
+      AUDIO.sfx.click();
+      $('screen-levels').classList.remove('show');
+      if (!GAME.level) $('screen-title').classList.add('show');
     };
     $('btn-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
     $('btn-tech').onclick = () => {
@@ -2170,7 +2568,7 @@ const UI = (function () {
     };
     $('btn-pause').onclick = () => { GAME.paused = true; $('pause-overlay').classList.add('show'); syncMuteLabel(); };
     $('btn-resume').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); };
-    $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
+    $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(GAME.level ? GAME.level.n : 1); INPUT.focusBase(); };
     $('btn-mute').onclick = () => { AUDIO.setMuted(!SAVE.state.muted); syncMuteLabel(); };
     $('btn-help').onclick = () => { $('pause-overlay').classList.remove('show'); $('help-overlay').classList.add('show'); };
     $('btn-help-close').onclick = () => { $('help-overlay').classList.remove('show'); GAME.paused = false; };
@@ -2179,12 +2577,13 @@ const UI = (function () {
       $('btn-speed').textContent = GAME.speed + '×';
       AUDIO.sfx.click();
     };
-    const best = SAVE.state.bestWave;
-    $('title-best').textContent = best ? 'BEST: WAVE ' + best + (SAVE.state.victories ? ' · ' + SAVE.state.victories + ' VICTORIES' : '') : '';
+    const cleared = SAVE.clearedCount();
+    $('btn-start').textContent = cleared ? '▶ CONTINUE — NODE ' + SAVE.state.furthest : 'DEFEND THE SPIRE';
+    $('title-best').textContent = cleared ? cleared + '/' + CONFIG.LEVELS.length + ' NODES SECURED' : '';
   }
   function syncMuteLabel() { $('btn-mute').textContent = 'SOUND: ' + (SAVE.state.muted ? 'OFF' : 'ON'); }
 
-  return { init, onTap, updateHUD, onPhase, banner, toast, combo, hurt, showEnd, clearSel };
+  return { init, onTap, updateHUD, onPhase, banner, toast, combo, hurt, showEnd, clearSel, openLevels };
 })();
 </script>
 <script>
@@ -2204,17 +2603,19 @@ const UI = (function () {
 
   const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 200);
 
-  // lighting: cool ambient, warm key, cold rim
-  scene.add(new THREE.AmbientLight(0x506884, 1.25));
-  const key = new THREE.DirectionalLight(0xb8d4f0, 1.35);
+  // lighting: soft sky/ground hemisphere, cool key, blue rim
+  scene.add(new THREE.HemisphereLight(0x4a6a9a, 0x0a0e1a, 0.95));
+  scene.add(new THREE.AmbientLight(0x33455e, 0.55));
+  const key = new THREE.DirectionalLight(0xb8d4f0, 1.25);
   key.position.set(8, 20, 12);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x3366cc, 0.9);
+  const rim = new THREE.DirectionalLight(0x3366cc, 0.85);
   rim.position.set(-10, 8, -8);
   scene.add(rim);
 
   GAME.scene = scene;
-  SPIRE.build(scene, 1 + Math.floor(Math.random() * 99999)); // title backdrop spire
+  // title backdrop: node 1's spire
+  SPIRE.build(scene, CONFIG.LEVELS[0].seed, CONFIG.LEVELS[0].spire);
   FX.init(scene);
   UI.init();
   INPUT.init(camera, canvas, UI.onTap);

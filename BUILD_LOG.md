@@ -160,3 +160,48 @@ few waves, and the economy was mostly passive — real, but the player rarely
   (upgrades + tech + directives) holds all 15 waves at 10/10 core on a random
   procedural spire; tech effects checked numerically (power 8→11, overclock
   ¤25→¤15, interest 10%→14%); zero external requests, zero console errors.
+
+## Session 8 — 2026-08-14 — the level-design pass
+
+Direction feedback was blunt: the game looked rough, and "one endless
+survival with an HP formula" is not level design. This session rebuilt both,
+by prompting, against actual TD level-design structure.
+
+- **A 9-node authored campaign replaces the single survival run.** Each node
+  has a fixed seed — the node IS its spire, identical on every attempt, so
+  layouts are learnable (the Kingdom Rush model) — plus its own topology
+  parameters, threat palette, wave count, and at most one new element:
+  - N1 BOOTSTRAP: wide spiral, dense sockets, crawlers/sprinters — learn the
+    loop with three turret types.
+  - N2 AIRGAP: repulsor unlocks; twin plaza rings showcase it; gnats are
+    taught in an isolated showcase wave before they appear under pressure.
+  - N3 SWARM PROTOCOL: arc node unlocks against dense packs; first ARCHON.
+  - N4 SIEGE: brutes taught; short steep spire with sparse sockets makes
+    placement the puzzle.
+  - N5 BLACKOUT: economy twist — core power 5, generators mandatory.
+  - N6 STORMFRONT: flier surge, +30% gnat speed, short spire.
+  - N7 CRACKED MARKET: kills −30%, interest ×2 — the hoard-vs-spend node.
+  - N8 OVERRUN: relentless pacing, mid-boss, twin-ARCHON finale.
+  - N9 APEX: tallest spire, everything, boss gauntlet.
+- **Waves are composed, not scaled.** A deterministic encounter-budget
+  composer gives every wave a pacing role: light opener → ramp → surge every
+  4th wave → a deliberate breather before the finale (bank interest, rebuild)
+  → climax with scripted bosses. Difficulty across nodes moves on real knobs:
+  budget, HP/speed scaling, path length (short spire = less DPS time), socket
+  density, power budget, economy twists.
+- **Node select screen** shows what makes each node different before you
+  enter it: topology tag, wave count, threat icons, twist, and a 3-star
+  rating (3 = zero leaks) with campaign-wide progress. Nodes unlock in
+  sequence; progress persists.
+- **Visual overhaul** (the "looks like a toy" fix): the ramp is now an
+  extruded deck with side walls, underside, glowing center lane, edge rail
+  and support struts anchoring it to the tower; the column is a single
+  tapered shaft with a procedural panel texture and lit windows, base skirt,
+  foundation and crowned antenna; threats carry additive glow halos; the
+  scene gained a gradient sky dome, hemisphere lighting and a red danger
+  light at the spawn portal.
+- Verified: wave-composition dumps for N1 and N8 show the intended curve
+  (N1: 4–20 light units at hp ×1.0–1.4 with a breather at wave 7; N8: dense
+  mixed assaults at hp ×3.0–4.9, mid-boss wave 6, twin-boss finale), and a
+  bot playing like a competent human cleared the campaign curve as designed
+  (see Session 8 test runs). Zero console errors throughout.

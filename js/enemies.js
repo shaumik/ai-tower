@@ -2,6 +2,24 @@
 'use strict';
 const ENEMY = (function () {
 
+  // shared radial-glow texture: every threat carries an additive halo so it
+  // reads instantly against the dark spire
+  let glowTex = null;
+  function getGlowTex() {
+    if (glowTex) return glowTex;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const c = cv.getContext('2d');
+    const grad = c.createRadialGradient(32, 32, 2, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 64, 64);
+    glowTex = new THREE.CanvasTexture(cv);
+    return glowTex;
+  }
+
   function makeMesh(def) {
     const g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({
@@ -28,6 +46,12 @@ const ENEMY = (function () {
       body = new THREE.Mesh(new THREE.IcosahedronGeometry(def.size, 1), mat);
     }
     g.add(body);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.55,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    halo.scale.setScalar(def.size * (def.boss ? 6 : 4.5));
+    g.add(halo);
     g.userData.body = body;
     g.userData.mat = mat;
     return g;

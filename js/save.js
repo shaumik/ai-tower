@@ -1,8 +1,8 @@
-/* NEURAL SPIRE — tiny localStorage persistence (best run + sound pref) */
+/* NEURAL SPIRE — localStorage persistence: campaign progress + sound pref */
 'use strict';
 const SAVE = (function () {
-  const KEY = 'neural-spire-v1';
-  let state = { bestWave: 0, victories: 0, muted: false };
+  const KEY = 'neural-spire-v2';
+  let state = { furthest: 1, levels: {}, muted: false };
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
@@ -12,10 +12,21 @@ const SAVE = (function () {
   function persist() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
   }
-  function recordRun(wave, won) {
-    if (wave > state.bestWave) state.bestWave = wave;
-    if (won) state.victories++;
+  function recordLevel(n, stars, won) {
+    const cur = state.levels[n] || { stars: 0, attempts: 0 };
+    cur.attempts++;
+    if (won) {
+      cur.stars = Math.max(cur.stars, stars);
+      if (n + 1 > state.furthest && n + 1 <= CONFIG.LEVELS.length) state.furthest = n + 1;
+    }
+    state.levels[n] = cur;
     persist();
   }
-  return { load, persist, recordRun, get state() { return state; } };
+  function starsFor(n) { return (state.levels[n] && state.levels[n].stars) || 0; }
+  function clearedCount() {
+    let c = 0;
+    for (const k in state.levels) if (state.levels[k].stars > 0) c++;
+    return c;
+  }
+  return { load, persist, recordLevel, starsFor, clearedCount, get state() { return state; } };
 })();

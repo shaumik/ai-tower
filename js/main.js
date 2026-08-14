@@ -13,17 +13,19 @@
 
   const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 200);
 
-  // lighting: cool ambient, warm key, cold rim
-  scene.add(new THREE.AmbientLight(0x506884, 1.25));
-  const key = new THREE.DirectionalLight(0xb8d4f0, 1.35);
+  // lighting: soft sky/ground hemisphere, cool key, blue rim
+  scene.add(new THREE.HemisphereLight(0x4a6a9a, 0x0a0e1a, 0.95));
+  scene.add(new THREE.AmbientLight(0x33455e, 0.55));
+  const key = new THREE.DirectionalLight(0xb8d4f0, 1.25);
   key.position.set(8, 20, 12);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x3366cc, 0.9);
+  const rim = new THREE.DirectionalLight(0x3366cc, 0.85);
   rim.position.set(-10, 8, -8);
   scene.add(rim);
 
   GAME.scene = scene;
-  SPIRE.build(scene, 1 + Math.floor(Math.random() * 99999)); // title backdrop spire
+  // title backdrop: node 1's spire
+  SPIRE.build(scene, CONFIG.LEVELS[0].seed, CONFIG.LEVELS[0].spire);
   FX.init(scene);
   UI.init();
   INPUT.init(camera, canvas, UI.onTap);

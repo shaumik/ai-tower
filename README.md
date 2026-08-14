@@ -5,24 +5,30 @@
 Vertical tower defense built with Three.js for the **MHCP Creator Competition**
 (Tower Defense & Strategy). Single-player, portrait, zero network requests.
 
-The map is a literal tower — and **every run grows a new one**. The climb
-path is procedurally generated from winding arcs, switchbacks, steep risers
-and plaza rings, so where the good sockets are changes each run. Rogue
-processes climb toward the summit core; you mount defenses on sockets
-spiraling up the outside. **Gravity is a weapon** — Repulsor turrets hurl
-climbers off the spire, and fall height pays a salvage bonus. The spire
-blocks its own defenses (no shooting through the column) and fliers skip the
-ramp entirely.
+The map is a literal tower. Rogue processes climb a winding ramp toward the
+summit core; you mount defenses on sockets spiraling up the outside.
+**Gravity is a weapon** — Repulsor turrets hurl climbers off the spire, and
+fall height pays a salvage bonus. The spire blocks its own defenses (no
+shooting through the column) and fliers skip the ramp entirely.
 
-The economy is the second front: salvage from kills, **interest on unspent
-reserves** each wave, a hard **power grid** fed by socket-hungry generators,
-**pick-one wave directives** (market-style trades like Bull Market, War
-Bonds, Insurance), the **SPIRE OS tech tree** competing with turret spending,
-overclock bursts, and a wave-end income report.
+**A nine-node authored campaign**, built on classic TD level-design
+structure: each node is a fixed, learnable spire with its own topology
+(wide teaching spiral → short steep socket-starved climbs → the APEX
+megaspire), a threat palette that grows one element at a time with isolated
+showcase waves, twist nodes that bend the rules (power crisis, flier
+updraft, inverted economy), and encounter-budget waves with authored pacing
+— openers, surge beats, a breather before every finale, scripted bosses.
+Three-star ratings (3★ = zero leaks), sequential unlocks, persistent
+progress.
+
+The economy is the second front: salvage + interest on reserves, a hard
+power grid fed by socket-hungry generators, pick-one wave directives
+(Bull Market, War Bonds, Insurance…), the SPIRE OS tech tree, overclock
+bursts, and a wave-end income report.
 
 | | | |
 |---|---|---|
-| ![Spire](docs/screens/spire.png) | ![Directives](docs/screens/directives.png) | ![SPIRE OS](docs/screens/spireos.png) |
+| ![Node select](docs/screens/select.png) | ![Spire](docs/screens/spire.png) | ![Combat](docs/screens/combat.png) |
 
 ## Competition submission
 

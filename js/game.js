@@ -18,7 +18,7 @@ const GAME = (function () {
     endless: false,
     stats: null,
     comboThrows: 0, comboT: 0,
-    seed: 1,
+    level: null,             // the current campaign node (CONFIG.LEVELS entry)
     tech: {},                // purchased SPIRE OS nodes, by id
     permPower: 0,            // permanent grid bonuses from directives
     activeDirs: [],          // [{ def, mods, wavesLeft }]
@@ -26,9 +26,12 @@ const GAME = (function () {
     waveEarn: null,          // per-wave income breakdown for the report
   };
 
-  // combined modifier across active directives: 'mult' keys multiply, others add
+  // combined modifier: level twist mods first, then active directives.
+  // 'Mult' keys multiply, everything else adds.
   function mod(key, base) {
     let v = base === undefined ? (key.endsWith('Mult') ? 1 : 0) : base;
+    const lm = g.level && g.level.mods && g.level.mods[key];
+    if (lm !== undefined) { if (key.endsWith('Mult')) v *= lm; else v += lm; }
     for (const d of g.activeDirs) {
       const m = d.mods[key];
       if (m === undefined) continue;
@@ -45,9 +48,15 @@ const GAME = (function () {
   function fallBonusMult() { return (g.tech.massdrv ? 1.5 : 1) * mod('fallMult', 1); }
 
   function powerCap() {
-    let cap = ECO.powerBase + g.permPower + (g.tech.coretap ? 3 : 0);
+    const base = (g.level && g.level.eco && g.level.eco.powerBase !== undefined) ? g.level.eco.powerBase : ECO.powerBase;
+    let cap = base + g.permPower + (g.tech.coretap ? 3 : 0);
     for (const t of g.turrets) cap += t.stat('gen') || 0;
     return Math.round(cap);
+  }
+
+  // turrets available on the current node (unlock chain across the campaign)
+  function availableTurrets() {
+    return (g.level && g.level.turrets) || CONFIG.TURRET_ORDER;
   }
   function powerUsed() {
     let used = 0;
@@ -60,7 +69,7 @@ const GAME = (function () {
     for (const t of g.turrets) t.sell();   // removes their meshes from the scene
     g.enemies = []; g.turrets = [];
     g.wave = 1;
-    g.salvage = ECO.startSalvage;
+    g.salvage = (g.level && g.level.eco && g.level.eco.startSalvage) || ECO.startSalvage;
     g.coreHP = ECO.coreHP;
     g.spawnQueue = [];
     g.combatT = 0; g.time = 0;
@@ -75,15 +84,17 @@ const GAME = (function () {
     g.stats = { kills: 0, throws: 0, fallSalvage: 0, interest: 0, leaked: 0, built: 0, bestCombo: 0 };
   }
 
-  function start() {
-    // every run grows a fresh spire from a new seed
-    g.seed = 1 + Math.floor(Math.random() * 99999);
-    SPIRE.regen(g.seed);
+  function start(levelN) {
+    // each node IS its spire: fixed seed + topology, learnable across attempts
+    g.level = CONFIG.LEVELS[UTIL.clamp(levelN, 1, CONFIG.LEVELS.length) - 1];
+    SPIRE.regen(g.level.seed, g.level.spire);
     reset();
     g.phase = 'build';
     rollDirectives();
     UI.onPhase();
-    UI.banner('SPIRE #' + g.seed + ' — BUILD YOUR DEFENSE', false);
+    UI.banner('NODE ' + g.level.n + ' — ' + g.level.name, false);
+    if (g.level.unlockNote) setTimeout(() => UI.toast(g.level.unlockNote, 'warn'), 1100);
+    setTimeout(() => UI.toast(g.level.intro, ''), 2300);
     UI.updateHUD();
   }
 
@@ -130,7 +141,7 @@ const GAME = (function () {
   // ---------------- economy actions ----------------
   function canAffordAny() {
     const cap = powerCap(), used = powerUsed();
-    for (const id of CONFIG.TURRET_ORDER) {
+    for (const id of availableTurrets()) {
       const d = CONFIG.TURRETS[id];
       if (g.salvage >= d.cost && used + d.power <= cap) return true;
     }
@@ -139,6 +150,7 @@ const GAME = (function () {
 
   function build(socket, type) {
     const def = CONFIG.TURRETS[type];
+    if (!availableTurrets().includes(type)) return false;
     if (socket.turret || g.salvage < def.cost) return false;
     if (powerUsed() + def.power > powerCap()) { UI.toast('⚡ NOT ENOUGH POWER — BUILD A GENERATOR', 'bad'); AUDIO.sfx.error(); return false; }
     g.salvage -= def.cost;
@@ -198,19 +210,25 @@ const GAME = (function () {
     g.spawnQueue = [];
     const hpDirMult = mod('enemyHpMult', 1);
     const spdDirMult = mod('enemySpeedMult', 1);
-    const comp = CONFIG.wave(g.wave);
+    const gnatMult = mod('gnatSpeedMult', 1);
+    const comp = CONFIG.wave(g.level, g.wave);
     for (const grp of comp) {
       for (let i = 0; i < grp.count; i++) {
+        const flying = CONFIG.ENEMIES[grp.type].flying;
         g.spawnQueue.push({
           type: grp.type, at: grp.delay + i * grp.gap,
-          hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - CONFIG.MAX_WAVE) * 0.25 : 1),
-          spdMult: spdDirMult,
+          hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - g.level.waves) * 0.25 : 1),
+          spdMult: spdDirMult * (flying ? gnatMult : 1),
         });
       }
     }
     g.spawnQueue.sort((a, b) => a.at - b.at);
     AUDIO.sfx.waveStart();
-    UI.banner('WAVE ' + g.wave + (g.wave > CONFIG.MAX_WAVE ? ' — OVERTIME' : ''), g.wave % 5 === 0);
+    if (g.level.teach && g.level.teach.wave === g.wave) {
+      UI.banner(g.level.teach.text, true);
+    } else {
+      UI.banner('WAVE ' + g.wave + (g.wave > g.level.waves ? ' — OVERTIME' : ''), !!(g.level.bosses && g.level.bosses[g.wave]));
+    }
     UI.onPhase();
     UI.updateHUD();
   }
@@ -228,7 +246,7 @@ const GAME = (function () {
     for (const d of g.activeDirs) d.wavesLeft--;
     g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
-    if (!g.endless && g.wave > CONFIG.MAX_WAVE) { victoryEnd(); return; }
+    if (!g.endless && g.wave > g.level.waves) { victoryEnd(); return; }
     g.phase = 'build';
     rollDirectives();
     UI.banner('WAVE CLEAR — REINFORCE', false);
@@ -236,16 +254,24 @@ const GAME = (function () {
     UI.updateHUD();
   }
 
+  // stars: an authored mastery target, not a participation prize
+  function starRating() {
+    if (g.stats.leaked === 0) return 3;
+    if (g.stats.leaked <= 3) return 2;
+    return 1;
+  }
+
   function victoryEnd() {
     g.phase = 'won';
-    SAVE.recordRun(CONFIG.MAX_WAVE, true);
+    g.stars = starRating();
+    SAVE.recordLevel(g.level.n, g.stars, true);
     AUDIO.sfx.victory();
     UI.showEnd(true);
   }
 
   function defeat() {
     g.phase = 'lost';
-    SAVE.recordRun(g.wave, false);
+    SAVE.recordLevel(g.level.n, 0, false);
     AUDIO.sfx.defeat();
     UI.showEnd(false);
   }
@@ -334,5 +360,6 @@ const GAME = (function () {
   g.overclockCost = overclockCost;
   g.interestRate = interestRate;
   g.interestCap = interestCap;
+  g.availableTurrets = availableTurrets;
   return g;
 })();

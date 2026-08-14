@@ -60,8 +60,10 @@ const UI = (function () {
     $('build-socket-n').textContent = '#' + (selSocket.i + 1);
     const cards = $('build-cards');
     cards.innerHTML = '';
+    const avail = GAME.availableTurrets();
+    if (!avail.includes(selType)) selType = avail[0];
     const cap = GAME.powerCap(), used = GAME.powerUsed();
-    for (const id of CONFIG.TURRET_ORDER) {
+    for (const id of avail) {
       const d = CONFIG.TURRETS[id];
       const afford = GAME.salvage >= d.cost && used + d.power <= cap;
       const card = UTIL.h('div', 'b-card' + (selType === id ? ' sel' : '') + (afford ? '' : ' cant'),
@@ -135,7 +137,10 @@ const UI = (function () {
     const used = GAME.powerUsed(), cap = GAME.powerCap();
     $('v-power').textContent = used + '/' + cap;
     $('hud-power').classList.toggle('full', used >= cap);
-    $('v-wave').textContent = 'W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : CONFIG.MAX_WAVE) + (GAME.endless ? '·∞' : '/' + CONFIG.MAX_WAVE);
+    const W = GAME.level ? GAME.level.waves : 0;
+    $('v-wave').textContent = GAME.level
+      ? ('N' + GAME.level.n + '·W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
+      : '';
     // refresh open sheets so costs stay truthful
     if (selSocket && $('sheet-build').classList.contains('open')) renderBuildSheet();
     if ($('sheet-tech').classList.contains('open')) renderTech();
@@ -208,7 +213,7 @@ const UI = (function () {
   function renderPreview() {
     const box = $('wave-preview');
     box.innerHTML = '<span style="opacity:.7">NEXT:</span>';
-    const comp = CONFIG.wave(GAME.wave);
+    const comp = CONFIG.wave(GAME.level, GAME.wave);
     const totals = {};
     for (const grp of comp) totals[grp.type] = (totals[grp.type] || 0) + grp.count;
     for (const type in totals) {
@@ -253,41 +258,105 @@ const UI = (function () {
   function showEnd(won) {
     const card = $('end-card');
     const s = GAME.stats;
+    const lvl = GAME.level;
     card.innerHTML = '';
-    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'SPIRE HELD' : 'CORE BREACHED'));
+    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'NODE SECURED' : 'CORE BREACHED'));
+    if (won) {
+      const st = GAME.stars;
+      card.appendChild(UTIL.h('div', '', '<span style="font-size:30px;letter-spacing:4px;color:#ffd166">' +
+        '★'.repeat(st) + '<span style="opacity:.22">' + '★'.repeat(3 - st) + '</span></span>' +
+        '<div style="font-size:9.5px;color:#5f89ad;letter-spacing:1px;margin-top:2px">' +
+        (st === 3 ? 'FLAWLESS — ZERO LEAKS' : st === 2 ? '3 LEAKS OR FEWER' : 'SECURED, BARELY') + '</div>'));
+    }
     card.appendChild(UTIL.h('div', 'end-line',
-      'SPIRE #' + GAME.seed + ' — ' +
-      (won ? 'all ' + CONFIG.MAX_WAVE + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + CONFIG.MAX_WAVE + '.') +
+      'NODE ' + lvl.n + ' · ' + lvl.name + ' — ' +
+      (won ? 'all ' + lvl.waves + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + lvl.waves + '.') +
       '<br><b>' + s.kills + '</b> threats destroyed · <b>' + s.throws + '</b> thrown off the spire' +
       '<br>gravity paid <b>¤ ' + s.fallSalvage + '</b> · interest paid <b>¤ ' + s.interest + '</b>' +
-      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked +
-      '<br><span style="opacity:.7">Next run grows a different spire.</span>'));
+      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked));
+    if (won && lvl.n < CONFIG.LEVELS.length) {
+      const next = CONFIG.LEVELS[lvl.n];
+      const nx = UTIL.h('button', 'btn btn-primary', '▶ NODE ' + next.n + ' — ' + next.name);
+      nx.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(next.n); INPUT.focusBase(); };
+      card.appendChild(nx);
+    }
     if (won) {
-      const cont = UTIL.h('button', 'btn btn-primary', '∞ CONTINUE — OVERTIME');
+      const cont = UTIL.h('button', 'btn', '∞ OVERTIME — WAVES COMPOUND');
       cont.onclick = () => {
         $('end-overlay').classList.remove('show');
         GAME.endless = true;
         GAME.phase = 'build';
-        banner('OVERTIME — WAVES COMPOUND FOREVER', true);
+        banner('OVERTIME — NO RETREAT', true);
         onPhase(); updateHUD();
       };
       card.appendChild(cont);
     }
-    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ ' + (won ? 'NEW RUN' : 'RETRY'));
-    again.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
+    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ RETRY NODE ' + lvl.n);
+    again.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(lvl.n); INPUT.focusBase(); };
     card.appendChild(again);
+    const sel = UTIL.h('button', 'btn', 'NODE SELECT');
+    sel.onclick = () => { $('end-overlay').classList.remove('show'); openLevels(); };
+    card.appendChild(sel);
     $('end-overlay').classList.add('show');
+  }
+
+  // ---------------- node select ----------------
+  function renderLevels() {
+    const list = $('levels-list');
+    list.innerHTML = '';
+    let totalStars = 0;
+    for (const lvl of CONFIG.LEVELS) {
+      const stars = SAVE.starsFor(lvl.n);
+      totalStars += stars;
+      const locked = lvl.n > SAVE.state.furthest;
+      const threats = lvl.palette.map(t => {
+        const d = CONFIG.ENEMIES[t];
+        return '<span style="color:#' + d.color.toString(16).padStart(6, '0') + '">' + d.ico + '</span>';
+      }).join(' ');
+      const card = UTIL.h('div', 'lvl-card' + (locked ? ' locked' : ''),
+        '<div class="lvl-num">' + (locked ? '🔒' : lvl.n) + '</div>' +
+        '<div class="lvl-body">' +
+          '<div class="lvl-name">' + lvl.name + ' <small>· ' + lvl.sub + '</small></div>' +
+          '<div class="lvl-meta">' + lvl.topo + ' · ' + lvl.waves + ' WAVES · ' + threats +
+          (lvl.twist ? ' · <span class="tw">' + lvl.twist + '</span>' : '') + '</div>' +
+        '</div>' +
+        '<div class="lvl-stars">' + '★'.repeat(stars) + '<span class="off">' + '★'.repeat(3 - stars) + '</span></div>');
+      if (!locked) {
+        card.onclick = () => {
+          AUDIO.unlock(); AUDIO.sfx.click();
+          $('screen-levels').classList.remove('show');
+          $('screen-title').classList.remove('show');
+          $('hud').classList.remove('hidden');
+          GAME.start(lvl.n);
+          INPUT.focusBase();
+          if (lvl.n === 1 && !SAVE.starsFor(1)) $('help-overlay').classList.add('show');
+        };
+      }
+      list.appendChild(card);
+    }
+    $('levels-stars').textContent = '★ ' + totalStars + '/' + CONFIG.LEVELS.length * 3;
+  }
+  function openLevels() {
+    renderLevels();
+    $('screen-levels').classList.add('show');
   }
 
   // ---------------- wiring ----------------
   function init() {
     $('btn-start').onclick = () => {
       AUDIO.unlock();
+      const n = SAVE.state.furthest;
       $('screen-title').classList.remove('show');
       $('hud').classList.remove('hidden');
-      GAME.start();
+      GAME.start(n);
       INPUT.focusBase();
-      if (!SAVE.state.bestWave) $('help-overlay').classList.add('show');
+      if (n === 1 && !SAVE.starsFor(1)) $('help-overlay').classList.add('show');
+    };
+    $('btn-levels').onclick = () => { AUDIO.unlock(); AUDIO.sfx.click(); openLevels(); };
+    $('btn-levels-back').onclick = () => {
+      AUDIO.sfx.click();
+      $('screen-levels').classList.remove('show');
+      if (!GAME.level) $('screen-title').classList.add('show');
     };
     $('btn-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
     $('btn-tech').onclick = () => {
@@ -296,7 +365,7 @@ const UI = (function () {
     };
     $('btn-pause').onclick = () => { GAME.paused = true; $('pause-overlay').classList.add('show'); syncMuteLabel(); };
     $('btn-resume').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); };
-    $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
+    $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(GAME.level ? GAME.level.n : 1); INPUT.focusBase(); };
     $('btn-mute').onclick = () => { AUDIO.setMuted(!SAVE.state.muted); syncMuteLabel(); };
     $('btn-help').onclick = () => { $('pause-overlay').classList.remove('show'); $('help-overlay').classList.add('show'); };
     $('btn-help-close').onclick = () => { $('help-overlay').classList.remove('show'); GAME.paused = false; };
@@ -305,10 +374,11 @@ const UI = (function () {
       $('btn-speed').textContent = GAME.speed + '×';
       AUDIO.sfx.click();
     };
-    const best = SAVE.state.bestWave;
-    $('title-best').textContent = best ? 'BEST: WAVE ' + best + (SAVE.state.victories ? ' · ' + SAVE.state.victories + ' VICTORIES' : '') : '';
+    const cleared = SAVE.clearedCount();
+    $('btn-start').textContent = cleared ? '▶ CONTINUE — NODE ' + SAVE.state.furthest : 'DEFEND THE SPIRE';
+    $('title-best').textContent = cleared ? cleared + '/' + CONFIG.LEVELS.length + ' NODES SECURED' : '';
   }
   function syncMuteLabel() { $('btn-mute').textContent = 'SOUND: ' + (SAVE.state.muted ? 'OFF' : 'ON'); }
 
-  return { init, onTap, updateHUD, onPhase, banner, toast, combo, hurt, showEnd, clearSel };
+  return { init, onTap, updateHUD, onPhase, banner, toast, combo, hurt, showEnd, clearSel, openLevels };
 })();
