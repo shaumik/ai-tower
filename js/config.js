@@ -117,7 +117,7 @@ const CONFIG = (function () {
     {
       n: 5, name: 'BLACKOUT', sub: 'The core is damaged', seed: 3377, waves: 11,
       palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      eco: { powerBase: 5 },
+      eco: { powerBase: 5, startSalvage: 160 },   // enough to seed the grid
       bosses: { 11: 1 },
       spire: { height: 33, socketEvery: 3.2, w: { arc: 0.55, sb: 0.2, riser: 0.15, plaza: 0.1 }, plazaMax: 1 },
       intro: 'Core power is down to 5. Generators are not optional here.',
@@ -164,8 +164,12 @@ const CONFIG = (function () {
   // Encounter-budget waves with authored pacing roles:
   //   opener (light) → ramp → surge every 4th → breather before finale →
   //   finale (heavy, + bosses where scripted). Deterministic per (node, wave).
+  // Difficulty sawtooth: every node OPENS near a baseline the player can
+  // handle from fixed starting salvage, and the within-node ramp carries
+  // most of the pressure. Node number raises the ramp's slope and the
+  // finale's ceiling, not the opener.
   function hpMult(L, n) {
-    return (1 + 0.26 * Math.pow(L - 1, 1.06)) * (1 + 0.055 * (n - 1));
+    return (1 + 0.18 * (L - 1)) * (1 + 0.05 * (n - 1));
   }
 
   function wave(level, n) {
@@ -187,7 +191,7 @@ const CONFIG = (function () {
     else if (n === W) mult *= 1.4;
     else if (n === W - 1 && W > 5) mult *= 0.58;   // breather: bank, breathe, rebuild
     else if (n % 4 === 0) mult *= 1.22;            // surge beat
-    let budget = (9 + level.n * 2.8) * mult * (1 + 0.055 * (n - 1));
+    let budget = (8 + level.n * 1.1) * mult * (1 + Math.min(1.3, (0.05 + 0.011 * level.n) * (n - 1)));
 
     // scripted bosses spend none of the budget; escorts come from what's left
     const nBoss = (level.bosses && level.bosses[n]) || 0;
@@ -204,7 +208,7 @@ const CONFIG = (function () {
       const maxN = Math.max(2, Math.floor(budget / def.pts));
       let count = Math.min(maxN, def.pts >= 4 ? 2 + Math.floor(R() * 2) : (level.swarm ? 6 : 4) + Math.floor(R() * 4));
       let gap = def.pts >= 4 ? 2.6 : (def.flying ? 1.1 : 0.85);
-      if (level.swarm) gap *= 0.75;
+      if (level.swarm) gap *= 0.85;
       if (level.hot) gap *= 0.7;
       gap *= Math.max(0.55, 1 - 0.02 * (level.n + n));   // waves pack tighter as pressure rises
       G(type, count, gap, delay);
