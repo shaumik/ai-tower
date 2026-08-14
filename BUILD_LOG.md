@@ -217,6 +217,13 @@ by prompting, against actual TD level-design structure.
   3. CRACKED MARKET starved the strategy it was teaching — −30% kill pay
      from wave 1 with no capital. Fix: −20% and a ¤200 endowment so
      hoard-for-interest is playable, not aspirational.
-  After the fixes: N1 cleared flawlessly (3★), N3 and N5 cleared with leaks
-  (the twist nodes bite), and N7/N9 reached their final waves at 10/10 and
-  7/10 core respectively — hard-fought, clearly winnable.
+  A fourth defect followed: N4's brute *teaching* wave spawned nine armored
+  brutes (18 potential core damage) — showcase waves are now sized by
+  encounter points so they demonstrate instead of punish.
+- **Final verified curve** (bot = competent casual, all runs zero console
+  errors): N1 won 3★ flawless · N2 won 2★ (2 leaks) · N3 won 1★ ·
+  N4 won 1★ at 2 core (the first spike, as designed) · N5 won 1★ with 38
+  gravity kills · N6 won 2★ · N7 reached its final wave at a perfect 10/10
+  core · N8 won 1★ at 2 core with 72 gravity kills · N9 reached the
+  twin-ARCHON finale at 7/10 core. Gentle teach-in, rising tension, spikes
+  at 4 and 8, demanding apex.
