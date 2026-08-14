@@ -79,7 +79,18 @@ const TURRET = (function () {
       socket.turret = this;
     }
 
-    stat(key) { return statFor(this.def, this.level, key); }
+    stat(key) {
+      let v = statFor(this.def, this.level, key);
+      // SPIRE OS tech modifies live stats
+      const tech = GAME.tech || {};
+      if (tech.lenses && key === 'dmg' && (this.type === 'blaster' || this.type === 'tesla')) v *= 1.25;
+      if (tech.massdrv && key === 'knock') v *= 1.3;
+      if (tech.harmonic && this.type === 'stasis') {
+        if (key === 'slow') v += 0.12;
+        if (key === 'range') v *= 1.15;
+      }
+      return v;
+    }
     get upgradeCost() { return upgradeCost(this.def, this.level); }
 
     upgrade() {
@@ -95,9 +106,9 @@ const TURRET = (function () {
       FX.ring(this.mesh.position, 1.6, this.def.color);
     }
 
-    overclock() {
+    overclock(cooldown) {
       this.overclockT = CONFIG.ECONOMY.overclockTime;
-      this.ocCooldown = CONFIG.ECONOMY.overclockTime + CONFIG.ECONOMY.overclockCooldown;
+      this.ocCooldown = CONFIG.ECONOMY.overclockTime + (cooldown !== undefined ? cooldown : CONFIG.ECONOMY.overclockCooldown);
       FX.ring(this.mesh.position, 2.2, 0xffd166);
       AUDIO.sfx.overclock();
     }
@@ -149,7 +160,7 @@ const TURRET = (function () {
       if (this.cooldown > 0) return;
       const target = this.findTarget(game.enemies);
       if (!target) return;
-      this.cooldown = 1 / this.stat('rate');
+      this.cooldown = 1 / (this.stat('rate') * game.mod('rateMult', 1));
       const from = this.muzzle();
       m.userData.head.lookAt(target.mesh.position);
 

@@ -51,6 +51,49 @@ body {
   background:linear-gradient(0deg, rgba(4,6,12,.92), rgba(4,6,12,0));
   pointer-events:none;
 }
+#bottom-row { display:flex; gap:8px; pointer-events:none; }
+#bottom-row .btn { pointer-events:auto; }
+#btn-tech { padding:12px 14px; font-size:12px; }
+#btn-tech.hidden2, #btn-wave.hidden2 { display:none; }
+
+/* ---- directives: pick-one economic trades between waves ---- */
+#directive-bar {
+  display:flex; flex-direction:column; gap:5px; width:100%; max-width:380px;
+  pointer-events:none;
+}
+#directive-bar .dir-title {
+  text-align:center; font-size:9.5px; letter-spacing:3px; color:#ffd166;
+  font-weight:800; text-shadow:0 0 10px rgba(255,170,60,.5);
+}
+#directive-bar .dir-row { display:flex; gap:5px; }
+.dir-chip {
+  flex:1; pointer-events:auto; cursor:pointer; text-align:center;
+  background:rgba(11,21,38,.94); border:1px solid #2e4a6e; border-radius:12px;
+  padding:7px 5px 6px;
+}
+.dir-chip:active { transform:scale(.97); }
+.dir-chip .dc-ico { font-size:16px; line-height:1.1; }
+.dir-chip .dc-name { font-size:8.5px; font-weight:800; letter-spacing:.5px; color:#ffd166; margin:2px 0; }
+.dir-chip .dc-desc { font-size:8.5px; color:#7fa8c9; line-height:1.35; }
+.dir-skip {
+  pointer-events:auto; cursor:pointer; align-self:center; font-size:9px;
+  letter-spacing:2px; color:#5f89ad; font-weight:800; padding:3px 10px;
+}
+
+/* ---- SPIRE OS sheet ---- */
+#tech-list { display:flex; flex-direction:column; gap:7px; max-height:46vh; overflow-y:auto; }
+.tech-row {
+  display:flex; align-items:center; gap:10px;
+  border:1px solid #1e3a5f; border-radius:13px; padding:9px 11px;
+  background:rgba(11,21,38,.8);
+}
+.tech-row.owned { border-color:#2a9d5f; }
+.tech-row .th-ico { font-size:18px; width:24px; text-align:center; color:#7fdcff; }
+.tech-row .th-body { flex:1; min-width:0; }
+.tech-row .th-name { font-size:11px; font-weight:800; letter-spacing:1px; }
+.tech-row .th-desc { font-size:10px; color:#7fa8c9; line-height:1.4; }
+.tech-row .btn { padding:8px 12px; font-size:11px; letter-spacing:1px; flex-shrink:0; }
+
 #wave-preview {
   display:flex; gap:6px; align-items:center; font-size:10px; letter-spacing:1px;
   color:#5f89ad; font-weight:800; flex-wrap:wrap; justify-content:center;
@@ -215,7 +258,8 @@ body {
         <div class="logo-sub">VERTICAL TOWER DEFENSE</div>
       </div>
       <p class="title-pitch">Rogue processes are climbing the spire.<br>
-      Hold the summit core. <b>Gravity is a weapon.</b></p>
+      Hold the summit core. <b>Gravity is a weapon.</b><br>
+      Every run grows a new spire.</p>
       <button class="btn btn-primary btn-big" id="btn-start">DEFEND THE SPIRE</button>
       <div class="title-best" id="title-best"></div>
     </div>
@@ -238,8 +282,12 @@ body {
     <div id="hurt-vignette"></div>
 
     <div id="hud-bottom">
+      <div id="directive-bar"></div>
       <div id="wave-preview"></div>
-      <button class="btn btn-primary" id="btn-wave">▶ START WAVE</button>
+      <div id="bottom-row">
+        <button class="btn" id="btn-tech">⚙ SPIRE OS</button>
+        <button class="btn btn-primary" id="btn-wave">▶ START WAVE</button>
+      </div>
     </div>
 
     <!-- build sheet: shown when an empty socket is selected -->
@@ -253,6 +301,13 @@ body {
     <div id="sheet-turret" class="sheet">
       <div class="sheet-grip"></div>
       <div id="turret-body"></div>
+    </div>
+
+    <!-- SPIRE OS: in-run tech tree -->
+    <div id="sheet-tech" class="sheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-title">⚙ SPIRE OS — PERMANENT UPGRADES THIS RUN</div>
+      <div id="tech-list"></div>
     </div>
   </div>
 
@@ -281,6 +336,10 @@ body {
       <b>interest</b> every wave, so hoarding pays… until it doesn't.</p>
       <p><b>⚡ Power</b> limits how much you can run. Generators add power but
       occupy defense sockets.</p>
+      <p>Between waves, <b>directives</b> offer one-wave economic trades, and
+      <b>⚙ SPIRE OS</b> sells permanent upgrades for the run.</p>
+      <p><b>Every run grows a new spire</b> — switchbacks, steep risers and
+      plaza rings change where the good sockets are.</p>
       <p><b>Repulsors throw climbers off the spire.</b> The higher the fall,
       the bigger the salvage bonus.</p>
       <p>Fliers ignore the ramp and rise straight up — cover your airspace.</p>
@@ -320,7 +379,17 @@ const UTIL = (function () {
   // device-appropriate verb for instructional text
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
   function tapWord() { return isTouch ? 'Tap' : 'Click'; }
-  return { el, h, clamp, lerp, fmt, tapWord, isTouch };
+  // seeded RNG (mulberry32) — every run generates its own spire from a seed
+  function rng(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  return { el, h, clamp, lerp, fmt, tapWord, isTouch, rng };
 })();
 </script>
 <script>
@@ -426,7 +495,33 @@ const CONFIG = (function () {
     }
   }
 
-  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, MAX_WAVE, wave };
+  // ---------------- wave directives ----------------
+  // Between waves the player picks one of three market-style modifiers (or
+  // skips). Each is a real economic trade, not a free buff.
+  const DIRECTIVES = [
+    { id: 'bull',      ico: '📈', name: 'BULL MARKET',   desc: 'Kills pay +40% this wave. No interest this wave.', mods: { killMult: 1.4, interestMult: 0 } },
+    { id: 'haven',     ico: '🏦', name: 'SAFE HAVEN',    desc: 'Interest ×2 this wave. Threats +15% integrity.', mods: { interestMult: 2, enemyHpMult: 1.15 } },
+    { id: 'overvolt',  ico: '⚡', name: 'OVERVOLT',      desc: 'Pay ¤30 now for +2 grid power, permanently.', cost: 30, mods: { permPower: 2 } },
+    { id: 'drones',    ico: '🛰', name: 'SCRAP DRONES',  desc: '+3 salvage on every kill this wave.', mods: { killFlat: 3 } },
+    { id: 'tailwind',  ico: '🌀', name: 'TAILWIND',      desc: 'Turrets +15% fire rate; threats +10% speed.', mods: { rateMult: 1.15, enemySpeedMult: 1.1 } },
+    { id: 'insurance', ico: '🛡', name: 'INSURANCE',     desc: 'Each core leak this wave is compensated ¤60.', mods: { leakPay: 60 } },
+    { id: 'royalty',   ico: '🪂', name: 'GRAVITY ROYALTIES', desc: 'Fall bonuses pay double this wave.', mods: { fallMult: 2 } },
+    { id: 'bonds',     ico: '📜', name: 'WAR BONDS',     desc: '+¤120 now. Kills pay −20% for the next 3 waves.', mods: { instant: 120, killMult: 0.8, duration: 3 } },
+    { id: 'coldsnap',  ico: '❄', name: 'COLD SNAP',     desc: 'Pay ¤35: all threats 12% slower this wave.', cost: 35, mods: { enemySpeedMult: 0.88 } },
+  ];
+
+  // ---------------- SPIRE OS: in-run tech tree ----------------
+  // One-time purchases: long-term investment vs. the next turret.
+  const TECH = [
+    { id: 'coretap',  ico: '⚡', name: 'CORE TAP',          cost: 150, desc: '+3 power from the summit core.' },
+    { id: 'compound', ico: '¤',  name: 'COMPOUND PROTOCOL', cost: 200, desc: 'Interest 10% → 14%, cap ¤50 → ¤90.' },
+    { id: 'lenses',   ico: '✛',  name: 'FOCUS LENSES',      cost: 180, desc: 'Blasters and Arc Nodes +25% damage.' },
+    { id: 'massdrv',  ico: '◎',  name: 'MASS DRIVERS',      cost: 160, desc: 'Repulsors +30% force, fall bonus +50%.' },
+    { id: 'harmonic', ico: '❉',  name: 'FIELD HARMONICS',   cost: 140, desc: 'Stasis Wells slow 12% harder, +15% range.' },
+    { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
+  ];
+
+  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, MAX_WAVE, wave, DIRECTIVES, TECH };
 })();
 </script>
 <script>
@@ -533,30 +628,68 @@ const AUDIO = (function () {
 </script>
 <script>
 /* ====================== js/spire.js ====================== */
-/* NEURAL SPIRE — the tower: scene, helix climb path, build sockets */
+/* NEURAL SPIRE — the tower: scene, procedurally generated climb path, build sockets.
+   Every run rolls a new spire: winding arcs, switchbacks, steep risers and flat
+   plaza rings, with the ramp radius swelling and tightening as it climbs. */
 'use strict';
 const SPIRE = (function () {
   const S = CONFIG.SPIRE;
   let scene = null, group = null;
-  const sockets = [];   // { i, pos, mesh, pad, turret|null }
-  const path = { points: [], cum: [], total: 0 };
+  let sockets = [];     // { i, pos, mesh, turret|null }
+  let path = null;      // { points[], cum[], total }
   let coreMesh = null, coreLight = null, coreBasePos = null;
+  let curSeed = 1;
 
-  // ---------------- helix path ----------------
-  function buildPath() {
-    const steps = 640;
+  // ---------------- procedural helix path ----------------
+  // The path is a chain of segments. Each segment turns (arc / switchback /
+  // riser / plaza) while climbing, and drifts toward its own target radius.
+  function buildPath(seed) {
+    const R = UTIL.rng(seed);
+    path = { points: [], cum: [], total: 0 };
+    let ang = R() * Math.PI * 2;
+    let y = 0.6;
+    let dir = R() < 0.5 ? 1 : -1;      // winding direction, flips at switchbacks
+    let radius = S.rPath;
+    let plazas = 0, segsSinceFlip = 0;
+
+    const segs = [];
+    while (y < S.height - 1.2) {
+      const roll = R();
+      let type;
+      if (roll < 0.52) type = 'arc';
+      else if (roll < 0.68 && segsSinceFlip >= 1) type = 'switchback';
+      else if (roll < 0.85) type = 'riser';
+      else if (plazas < 2 && y > 6 && y < S.height - 8) type = 'plaza';
+      else type = 'arc';
+
+      let dAng, dY, rTarget = 3.2 + R() * 1.3;
+      if (type === 'arc') { dAng = (Math.PI * 0.6 + R() * Math.PI * 0.6) * dir; dY = 3.2 + R() * 1.6; segsSinceFlip++; }
+      else if (type === 'switchback') { dir = -dir; segsSinceFlip = 0; dAng = (Math.PI * 0.7 + R() * Math.PI * 0.5) * dir; dY = 2.6 + R() * 1.2; }
+      else if (type === 'riser') { dAng = (Math.PI * 0.2 + R() * Math.PI * 0.15) * dir; dY = 4.2 + R() * 1.6; segsSinceFlip++; }
+      else { plazas++; dAng = Math.PI * 2 * dir; dY = 1.3; rTarget = 3.9 + R() * 0.7; segsSinceFlip++; }
+      dY = Math.min(dY, S.height - 1.0 - y);
+      segs.push({ ang0: ang, dAng, y0: y, dY, r0: radius, r1: rTarget });
+      ang += dAng; y += dY; radius = rTarget;
+    }
+
     let prev = null, d = 0;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const ang = t * S.turns * Math.PI * 2;
-      const p = new THREE.Vector3(Math.sin(ang) * S.rPath, 0.6 + t * (S.height - 1.6), Math.cos(ang) * S.rPath);
-      if (prev) d += p.distanceTo(prev);
-      path.points.push(p);
-      path.cum.push(d);
-      prev = p;
+    for (const sg of segs) {
+      const steps = Math.max(10, Math.round(Math.abs(sg.dAng) * 22));
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const a = sg.ang0 + sg.dAng * t;
+        // ease the radius between segment targets so the ramp flows
+        const r = UTIL.lerp(sg.r0, sg.r1, t * t * (3 - 2 * t));
+        const p = new THREE.Vector3(Math.sin(a) * r, sg.y0 + sg.dY * t, Math.cos(a) * r);
+        if (prev) d += p.distanceTo(prev);
+        path.points.push(p);
+        path.cum.push(d);
+        prev = p;
+      }
     }
     path.total = d;
   }
+
   // position + tangent at distance d along the ramp
   function at(d) {
     d = UTIL.clamp(d, 0, path.total);
@@ -571,7 +704,6 @@ const SPIRE = (function () {
 
   // line-of-sight: is the straight segment a→b blocked by the central column?
   function losBlocked(a, b) {
-    // 2D (xz) distance from origin to segment
     const ax = a.x, az = a.z, bx = b.x, bz = b.z;
     const dx = bx - ax, dz = bz - az;
     const len2 = dx * dx + dz * dz;
@@ -582,11 +714,27 @@ const SPIRE = (function () {
   }
 
   // ---------------- visuals ----------------
-  function build(sc) {
-    scene = sc;
+  function disposeGroup() {
+    if (!group) return;
+    scene.remove(group);
+    group.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+        else o.material.dispose();
+      }
+    });
+    group = null;
+    sockets = [];
+    coreMesh = null; coreLight = null;
+  }
+
+  function regen(seed) {
+    curSeed = seed;
+    disposeGroup();
     group = new THREE.Group();
     scene.add(group);
-    buildPath();
+    buildPath(seed);
 
     const matCol = new THREE.MeshStandardMaterial({ color: 0x1c2a45, roughness: 0.65, metalness: 0.5, emissive: 0x060d1c, emissiveIntensity: 1 });
     const matDark = new THREE.MeshStandardMaterial({ color: 0x131e33, roughness: 0.85, metalness: 0.3 });
@@ -608,17 +756,29 @@ const SPIRE = (function () {
       seam.position.y = y0 + h + 0.12;
       group.add(seam);
     }
+    // vertical circuit strips on the column
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      const strip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, S.height * 0.92, 0.07),
+        new THREE.MeshBasicMaterial({ color: k % 2 ? 0x1d4a75 : 0x2a78be, transparent: true, opacity: 0.65 })
+      );
+      const rr = S.rCol * 0.965;
+      strip.position.set(Math.sin(a) * rr, S.height * 0.47, Math.cos(a) * rr);
+      group.add(strip);
+    }
 
-    // climb ramp: ribbon along the helix
-    const inner = S.rPath - 0.55, outer = S.rPath + 0.55;
+    // climb ramp: ribbon following the generated path, width around each
+    // point's own radius (the radius varies along the tower)
     const verts = [], norms = [], idx = [];
     const N = path.points.length;
+    const HALF = 0.55;
     for (let i = 0; i < N; i++) {
       const p = path.points[i];
+      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
       const ang = Math.atan2(p.x, p.z);
-      const ix = Math.sin(ang) * inner, iz = Math.cos(ang) * inner;
-      const ox = Math.sin(ang) * outer, oz = Math.cos(ang) * outer;
-      verts.push(ix, p.y, iz, ox, p.y, oz);
+      const ri = pr - HALF, ro = pr + HALF;
+      verts.push(Math.sin(ang) * ri, p.y, Math.cos(ang) * ri, Math.sin(ang) * ro, p.y, Math.cos(ang) * ro);
       norms.push(0, 1, 0, 0, 1, 0);
       if (i) {
         const a = (i - 1) * 2, b = a + 1, c = i * 2, e = c + 1;
@@ -635,40 +795,17 @@ const SPIRE = (function () {
     }));
     group.add(ribbon);
 
-    // glowing outer edge of the ramp (the "railing" enemies get thrown over)
-    const edgePts = [];
+    // glowing edges of the ramp (outer = the railing enemies get thrown over)
+    const outPts = [], inPts = [];
     for (let i = 0; i < N; i += 2) {
       const p = path.points[i];
+      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
       const ang = Math.atan2(p.x, p.z);
-      edgePts.push(new THREE.Vector3(Math.sin(ang) * outer, p.y + 0.05, Math.cos(ang) * outer));
+      outPts.push(new THREE.Vector3(Math.sin(ang) * (pr + HALF), p.y + 0.05, Math.cos(ang) * (pr + HALF)));
+      inPts.push(new THREE.Vector3(Math.sin(ang) * (pr - HALF), p.y + 0.05, Math.cos(ang) * (pr - HALF)));
     }
-    const edge = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(edgePts),
-      new THREE.LineBasicMaterial({ color: 0x3f9be8 })
-    );
-    group.add(edge);
-    // matching inner edge hugging the column
-    const inEdgePts = [];
-    for (let i = 0; i < N; i += 2) {
-      const p = path.points[i];
-      const ang = Math.atan2(p.x, p.z);
-      inEdgePts.push(new THREE.Vector3(Math.sin(ang) * inner, p.y + 0.05, Math.cos(ang) * inner));
-    }
-    group.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(inEdgePts),
-      new THREE.LineBasicMaterial({ color: 0x2a5a8e, transparent: true, opacity: 0.8 })
-    ));
-    // vertical circuit strips on the column
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2;
-      const strip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.07, S.height * 0.92, 0.07),
-        new THREE.MeshBasicMaterial({ color: k % 2 ? 0x1d4a75 : 0x2a78be, transparent: true, opacity: 0.65 })
-      );
-      const rr = S.rCol * 0.965;
-      strip.position.set(Math.sin(a) * rr, S.height * 0.47, Math.cos(a) * rr);
-      group.add(strip);
-    }
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outPts), new THREE.LineBasicMaterial({ color: 0x3f9be8 })));
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(inPts), new THREE.LineBasicMaterial({ color: 0x2a5a8e, transparent: true, opacity: 0.8 })));
 
     // build sockets: hex pads riding just outside the ramp
     const padG = new THREE.CylinderGeometry(0.52, 0.6, 0.16, 6);
@@ -676,14 +813,14 @@ const SPIRE = (function () {
     for (let i = 1; i <= nSock; i++) {
       const d = i * S.socketEvery;
       const { pos } = at(d);
+      const pr = Math.max(0.6, Math.hypot(pos.x, pos.z));
       const ang = Math.atan2(pos.x, pos.z);
-      const sp = new THREE.Vector3(Math.sin(ang) * S.rSocket, pos.y - 0.05, Math.cos(ang) * S.rSocket);
+      const sp = new THREE.Vector3(Math.sin(ang) * (pr + 1.0), pos.y - 0.05, Math.cos(ang) * (pr + 1.0));
       const pad = new THREE.Mesh(padG, new THREE.MeshStandardMaterial({
         color: 0x1a2b4a, roughness: 0.5, metalness: 0.5,
         emissive: 0x0a2038, emissiveIntensity: 1,
       }));
       pad.position.copy(sp);
-      // small arm connecting pad to ramp
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 1.0), matDark);
       arm.position.copy(sp).lerp(pos, 0.5);
       arm.lookAt(pos.x, arm.position.y, pos.z);
@@ -712,13 +849,14 @@ const SPIRE = (function () {
     coreLight.position.copy(coreBasePos);
     group.add(coreLight);
 
-    // base: spawn portal ring + ground
+    // base: spawn portal ring at the path start + ground
+    const p0 = path.points[0];
     const portal = new THREE.Mesh(
-      new THREE.TorusGeometry(S.rPath, 0.14, 8, 48),
+      new THREE.TorusGeometry(1.4, 0.14, 8, 40),
       new THREE.MeshBasicMaterial({ color: 0xff3d6e })
     );
     portal.rotation.x = Math.PI / 2;
-    portal.position.y = 0.25;
+    portal.position.set(p0.x, 0.25, p0.z);
     group.add(portal);
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(30, 48),
@@ -736,11 +874,15 @@ const SPIRE = (function () {
       const r = 45 + Math.random() * 55, th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 1.6 - 0.8);
       starPts.push(new THREE.Vector3(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) + 14, r * Math.sin(ph) * Math.sin(th)));
     }
-    const stars = new THREE.Points(
+    group.add(new THREE.Points(
       new THREE.BufferGeometry().setFromPoints(starPts),
       new THREE.PointsMaterial({ color: 0x9fc3e8, size: 0.16, transparent: true, opacity: 0.8 })
-    );
-    group.add(stars);
+    ));
+  }
+
+  function build(sc, seed) {
+    scene = sc;
+    regen(seed);
   }
 
   // idle animation + socket affordance pulse
@@ -769,12 +911,13 @@ const SPIRE = (function () {
   }
 
   return {
-    build, update, at, losBlocked, coreHitFlash,
+    build, regen, update, at, losBlocked, coreHitFlash,
     get sockets() { return sockets; },
     get pathTotal() { return path.total; },
     get corePos() { return coreBasePos; },
     get height() { return S.height; },
     get rPath() { return S.rPath; },
+    get seed() { return curSeed; },
   };
 })();
 </script>
@@ -957,7 +1100,7 @@ const ENEMY = (function () {
         m.position.set(pos.x, pos.y + this.def.size + 0.12, pos.z);
         m.lookAt(pos.clone().add(tangent).setY(m.position.y));
       } else if (this.state === 'fly') {
-        const r = SPIRE.rPath + 0.4;
+        const r = 5.3; // outside even the widest ramp sections
         m.position.set(Math.sin(this.flyAng) * r, this.y, Math.cos(this.flyAng) * r);
         if (m.userData.spin) m.userData.spin.rotation.y += dt * 6;
       } else if (this.state === 'air') {
@@ -1149,7 +1292,18 @@ const TURRET = (function () {
       socket.turret = this;
     }
 
-    stat(key) { return statFor(this.def, this.level, key); }
+    stat(key) {
+      let v = statFor(this.def, this.level, key);
+      // SPIRE OS tech modifies live stats
+      const tech = GAME.tech || {};
+      if (tech.lenses && key === 'dmg' && (this.type === 'blaster' || this.type === 'tesla')) v *= 1.25;
+      if (tech.massdrv && key === 'knock') v *= 1.3;
+      if (tech.harmonic && this.type === 'stasis') {
+        if (key === 'slow') v += 0.12;
+        if (key === 'range') v *= 1.15;
+      }
+      return v;
+    }
     get upgradeCost() { return upgradeCost(this.def, this.level); }
 
     upgrade() {
@@ -1165,9 +1319,9 @@ const TURRET = (function () {
       FX.ring(this.mesh.position, 1.6, this.def.color);
     }
 
-    overclock() {
+    overclock(cooldown) {
       this.overclockT = CONFIG.ECONOMY.overclockTime;
-      this.ocCooldown = CONFIG.ECONOMY.overclockTime + CONFIG.ECONOMY.overclockCooldown;
+      this.ocCooldown = CONFIG.ECONOMY.overclockTime + (cooldown !== undefined ? cooldown : CONFIG.ECONOMY.overclockCooldown);
       FX.ring(this.mesh.position, 2.2, 0xffd166);
       AUDIO.sfx.overclock();
     }
@@ -1219,7 +1373,7 @@ const TURRET = (function () {
       if (this.cooldown > 0) return;
       const target = this.findTarget(game.enemies);
       if (!target) return;
-      this.cooldown = 1 / this.stat('rate');
+      this.cooldown = 1 / (this.stat('rate') * game.mod('rateMult', 1));
       const from = this.muzzle();
       m.userData.head.lookAt(target.mesh.position);
 
@@ -1302,10 +1456,34 @@ const GAME = (function () {
     endless: false,
     stats: null,
     comboThrows: 0, comboT: 0,
+    seed: 1,
+    tech: {},                // purchased SPIRE OS nodes, by id
+    permPower: 0,            // permanent grid bonuses from directives
+    activeDirs: [],          // [{ def, mods, wavesLeft }]
+    dirOffer: null,          // the 3 directives offered this build phase
+    waveEarn: null,          // per-wave income breakdown for the report
   };
 
+  // combined modifier across active directives: 'mult' keys multiply, others add
+  function mod(key, base) {
+    let v = base === undefined ? (key.endsWith('Mult') ? 1 : 0) : base;
+    for (const d of g.activeDirs) {
+      const m = d.mods[key];
+      if (m === undefined) continue;
+      if (key.endsWith('Mult')) v *= m; else v += m;
+    }
+    return v;
+  }
+
+  // economy values, tech-aware
+  function interestRate() { return g.tech.compound ? 0.14 : ECO.interestRate; }
+  function interestCap() { return g.tech.compound ? 90 : ECO.interestCap; }
+  function overclockCost() { return g.tech.cycles ? 15 : ECO.overclockCost; }
+  function overclockCooldown() { return g.tech.cycles ? ECO.overclockCooldown - 6 : ECO.overclockCooldown; }
+  function fallBonusMult() { return (g.tech.massdrv ? 1.5 : 1) * mod('fallMult', 1); }
+
   function powerCap() {
-    let cap = ECO.powerBase;
+    let cap = ECO.powerBase + g.permPower + (g.tech.coretap ? 3 : 0);
     for (const t of g.turrets) cap += t.stat('gen') || 0;
     return Math.round(cap);
   }
@@ -1317,7 +1495,7 @@ const GAME = (function () {
 
   function reset() {
     for (const e of g.enemies) e.remove();
-    for (const t of g.turrets) t.sell();
+    for (const t of g.turrets) t.sell();   // removes their meshes from the scene
     g.enemies = []; g.turrets = [];
     g.wave = 1;
     g.salvage = ECO.startSalvage;
@@ -1327,15 +1505,64 @@ const GAME = (function () {
     g.speed = 1;
     g.endless = false;
     g.paused = false;
+    g.tech = {};
+    g.permPower = 0;
+    g.activeDirs = [];
+    g.dirOffer = null;
+    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
     g.stats = { kills: 0, throws: 0, fallSalvage: 0, interest: 0, leaked: 0, built: 0, bestCombo: 0 };
   }
 
   function start() {
+    // every run grows a fresh spire from a new seed
+    g.seed = 1 + Math.floor(Math.random() * 99999);
+    SPIRE.regen(g.seed);
     reset();
     g.phase = 'build';
+    rollDirectives();
     UI.onPhase();
-    UI.banner('WAVE 1 INCOMING — BUILD YOUR DEFENSE', false);
+    UI.banner('SPIRE #' + g.seed + ' — BUILD YOUR DEFENSE', false);
     UI.updateHUD();
+  }
+
+  // ---------------- directives ----------------
+  function rollDirectives() {
+    if (g.wave < 2) { g.dirOffer = null; return; }
+    const pool = CONFIG.DIRECTIVES.filter(d => (d.cost || 0) <= g.salvage);
+    const offer = [];
+    while (offer.length < 3 && pool.length) {
+      offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    g.dirOffer = offer;
+  }
+
+  function pickDirective(def) {
+    if (!g.dirOffer || !g.dirOffer.includes(def)) return false;
+    if (def.cost) {
+      if (g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
+      g.salvage -= def.cost;
+    }
+    if (def.mods.instant) g.salvage += def.mods.instant;
+    if (def.mods.permPower) g.permPower += def.mods.permPower;
+    g.activeDirs.push({ def, mods: def.mods, wavesLeft: def.mods.duration || 1 });
+    g.dirOffer = null;
+    AUDIO.sfx.cash();
+    UI.toast(def.ico + ' ' + def.name + ' ACTIVE', 'warn');
+    UI.onPhase(); UI.updateHUD();
+    return true;
+  }
+
+  function skipDirectives() { g.dirOffer = null; UI.onPhase(); }
+
+  // ---------------- tech ----------------
+  function buyTech(def) {
+    if (g.tech[def.id] || g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
+    g.salvage -= def.cost;
+    g.tech[def.id] = true;
+    AUDIO.sfx.build();
+    UI.toast('⚙ ' + def.name + ' INSTALLED', 'warn');
+    UI.updateHUD();
+    return true;
   }
 
   // ---------------- economy actions ----------------
@@ -1373,10 +1600,10 @@ const GAME = (function () {
   }
 
   function overclock(t) {
-    if (t.ocCooldown > 0 || g.salvage < ECO.overclockCost) { AUDIO.sfx.error(); return false; }
+    if (t.ocCooldown > 0 || g.salvage < overclockCost()) { AUDIO.sfx.error(); return false; }
     if (t.type === 'generator' || t.type === 'stasis') return false;
-    g.salvage -= ECO.overclockCost;
-    t.overclock();
+    g.salvage -= overclockCost();
+    t.overclock(overclockCooldown());
     UI.updateHUD();
     return true;
   }
@@ -1393,21 +1620,30 @@ const GAME = (function () {
   // ---------------- waves ----------------
   function startWave() {
     if (g.phase !== 'build') return;
+    g.dirOffer = null;
+    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
     // interest on unspent salvage — the invest-or-hoard decision
-    const interest = Math.min(ECO.interestCap, Math.floor(g.salvage * ECO.interestRate));
+    const interest = Math.round(Math.min(interestCap(), g.salvage * interestRate()) * mod('interestMult', 1));
     if (interest > 0) {
       g.salvage += interest;
       g.stats.interest += interest;
+      g.waveEarn.interest = interest;
       UI.toast('+' + interest + ' ¤ INTEREST ON RESERVES', 'warn');
       AUDIO.sfx.cash();
     }
     g.phase = 'combat';
     g.combatT = 0;
     g.spawnQueue = [];
+    const hpDirMult = mod('enemyHpMult', 1);
+    const spdDirMult = mod('enemySpeedMult', 1);
     const comp = CONFIG.wave(g.wave);
     for (const grp of comp) {
       for (let i = 0; i < grp.count; i++) {
-        g.spawnQueue.push({ type: grp.type, at: grp.delay + i * grp.gap, hpMult: grp.hpMult * (g.endless ? 1 + (g.wave - CONFIG.MAX_WAVE) * 0.25 : 1) });
+        g.spawnQueue.push({
+          type: grp.type, at: grp.delay + i * grp.gap,
+          hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - CONFIG.MAX_WAVE) * 0.25 : 1),
+          spdMult: spdDirMult,
+        });
       }
     }
     g.spawnQueue.sort((a, b) => a.at - b.at);
@@ -1418,9 +1654,21 @@ const GAME = (function () {
   }
 
   function endWave() {
+    // wave report: where the money came from
+    const e = g.waveEarn;
+    const parts = [];
+    if (e.kill) parts.push('kills ¤' + e.kill);
+    if (e.fall) parts.push('gravity ¤' + e.fall);
+    if (e.interest) parts.push('interest ¤' + e.interest);
+    if (e.leakPay) parts.push('insurance ¤' + e.leakPay);
+    if (parts.length) UI.toast('WAVE ' + g.wave + ' INCOME — ' + parts.join(' · '), 'warn');
+    // expire directives
+    for (const d of g.activeDirs) d.wavesLeft--;
+    g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
     if (!g.endless && g.wave > CONFIG.MAX_WAVE) { victoryEnd(); return; }
     g.phase = 'build';
+    rollDirectives();
     UI.banner('WAVE CLEAR — REINFORCE', false);
     UI.onPhase();
     UI.updateHUD();
@@ -1443,11 +1691,14 @@ const GAME = (function () {
   // ---------------- combat events ----------------
   function onKill(e, opts) {
     g.stats.kills++;
-    let pay = e.def.salvage;
+    let pay = Math.round(e.def.salvage * mod('killMult', 1)) + mod('killFlat', 0);
+    g.waveEarn.kill += pay;
     if (opts.fallBonus) {
-      pay += opts.fallBonus;
+      const bonus = Math.round(opts.fallBonus * fallBonusMult());
+      pay += bonus;
       g.stats.throws++;
-      g.stats.fallSalvage += opts.fallBonus;
+      g.stats.fallSalvage += bonus;
+      g.waveEarn.fall += bonus;
       FX.text(e.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)), '+' + pay + ' ¤ GRAVITY', '#ffd166', 0.85);
     }
     g.salvage += pay;
@@ -1463,6 +1714,12 @@ const GAME = (function () {
   function onLeak(e) {
     g.coreHP -= e.def.dmg;
     g.stats.leaked++;
+    const pay = mod('leakPay', 0);
+    if (pay > 0) {
+      g.salvage += pay;
+      g.waveEarn.leakPay += pay;
+      UI.toast('🛡 INSURANCE PAID ¤' + pay, 'warn');
+    }
     AUDIO.sfx.leak();
     UI.hurt();
     UI.updateHUD();
@@ -1484,7 +1741,9 @@ const GAME = (function () {
       g.combatT += dt;
       while (g.spawnQueue.length && g.spawnQueue[0].at <= g.combatT) {
         const s = g.spawnQueue.shift();
-        g.enemies.push(new ENEMY.Enemy(g.scene, s.type, s.hpMult));
+        const e = new ENEMY.Enemy(g.scene, s.type, s.hpMult);
+        if (s.spdMult) e.speed *= s.spdMult;
+        g.enemies.push(e);
       }
       for (const e of g.enemies) e.update(dt, g);
       g.enemies = g.enemies.filter(e => e.alive);
@@ -1506,6 +1765,13 @@ const GAME = (function () {
   g.powerCap = powerCap;
   g.powerUsed = powerUsed;
   g.canAffordAny = canAffordAny;
+  g.pickDirective = pickDirective;
+  g.skipDirectives = skipDirectives;
+  g.buyTech = buyTech;
+  g.mod = mod;
+  g.overclockCost = overclockCost;
+  g.interestRate = interestRate;
+  g.interestCap = interestCap;
   return g;
 })();
 </script>
@@ -1660,6 +1926,7 @@ const UI = (function () {
     selSocket = null; selTurret = null;
     $('sheet-build').classList.remove('open');
     $('sheet-turret').classList.remove('open');
+    $('sheet-tech').classList.remove('open');
     hideRange();
   }
 
@@ -1720,9 +1987,10 @@ const UI = (function () {
       row.appendChild(UTIL.h('button', 'btn', '★ MAX LEVEL')).disabled = true;
     }
     if (t.type !== 'generator' && t.type !== 'stasis') {
+      const ocCost = GAME.overclockCost();
       const oc = UTIL.h('button', 'btn' + (t.overclockT > 0 ? ' oc-active' : ''),
-        t.overclockT > 0 ? '⚡ OVERCLOCKED' : (t.ocCooldown > 0 ? '⚡ COOLING ' + Math.ceil(t.ocCooldown) + 's' : '⚡ OVERCLOCK ¤ ' + CONFIG.ECONOMY.overclockCost));
-      oc.disabled = t.ocCooldown > 0 || GAME.salvage < CONFIG.ECONOMY.overclockCost;
+        t.overclockT > 0 ? '⚡ OVERCLOCKED' : (t.ocCooldown > 0 ? '⚡ COOLING ' + Math.ceil(t.ocCooldown) + 's' : '⚡ OVERCLOCK ¤ ' + ocCost));
+      oc.disabled = t.ocCooldown > 0 || GAME.salvage < ocCost;
       oc.onclick = () => { if (GAME.overclock(t)) renderTurretSheet(); };
       row.appendChild(oc);
     }
@@ -1744,20 +2012,71 @@ const UI = (function () {
     $('v-wave').textContent = 'W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : CONFIG.MAX_WAVE) + (GAME.endless ? '·∞' : '/' + CONFIG.MAX_WAVE);
     // refresh open sheets so costs stay truthful
     if (selSocket && $('sheet-build').classList.contains('open')) renderBuildSheet();
+    if ($('sheet-tech').classList.contains('open')) renderTech();
   }
 
   function onPhase() {
     const b = $('btn-wave');
     if (GAME.phase === 'build') {
       b.classList.remove('hidden2');
-      const interest = Math.min(CONFIG.ECONOMY.interestCap, Math.floor(GAME.salvage * CONFIG.ECONOMY.interestRate));
-      b.textContent = '▶ START WAVE ' + GAME.wave + (interest > 0 ? '  (+' + interest + ' ¤ interest)' : '');
+      $('btn-tech').classList.remove('hidden2');
+      const interest = Math.round(Math.min(GAME.interestCap(), GAME.salvage * GAME.interestRate()) * GAME.mod('interestMult', 1));
+      b.textContent = '▶ WAVE ' + GAME.wave + (interest > 0 ? ' (+' + interest + ' ¤)' : '');
       renderPreview();
+      renderDirectives();
     } else {
       b.classList.add('hidden2');
+      $('btn-tech').classList.add('hidden2');
       $('wave-preview').innerHTML = '';
+      $('directive-bar').innerHTML = '';
       clearSel();
     }
+  }
+
+  // ---------------- directives ----------------
+  function renderDirectives() {
+    const bar = $('directive-bar');
+    bar.innerHTML = '';
+    const offer = GAME.dirOffer;
+    if (!offer || !offer.length) return;
+    bar.appendChild(UTIL.h('div', 'dir-title', '◈ DIRECTIVE — PICK ONE TRADE'));
+    const row = UTIL.h('div', 'dir-row');
+    for (const d of offer) {
+      const chip = UTIL.h('div', 'dir-chip',
+        '<div class="dc-ico">' + d.ico + '</div>' +
+        '<div class="dc-name">' + d.name + (d.cost ? ' −¤' + d.cost : '') + '</div>' +
+        '<div class="dc-desc">' + d.desc + '</div>');
+      chip.onclick = () => { AUDIO.unlock(); GAME.pickDirective(d); };
+      row.appendChild(chip);
+    }
+    bar.appendChild(row);
+    const skip = UTIL.h('div', 'dir-skip', '✕ SKIP');
+    skip.onclick = () => { AUDIO.sfx.click(); GAME.skipDirectives(); };
+    bar.appendChild(skip);
+  }
+
+  // ---------------- SPIRE OS tech sheet ----------------
+  function renderTech() {
+    const list = $('tech-list');
+    list.innerHTML = '';
+    for (const t of CONFIG.TECH) {
+      const owned = !!GAME.tech[t.id];
+      const row = UTIL.h('div', 'tech-row' + (owned ? ' owned' : ''),
+        '<div class="th-ico">' + t.ico + '</div>' +
+        '<div class="th-body"><div class="th-name">' + t.name + '</div>' +
+        '<div class="th-desc">' + t.desc + '</div></div>');
+      const btn = UTIL.h('button', 'btn' + (owned ? '' : ' btn-primary'), owned ? '✓ OWNED' : '¤ ' + t.cost);
+      btn.disabled = owned || GAME.salvage < t.cost;
+      btn.onclick = () => { if (GAME.buyTech(t)) renderTech(); };
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
+  }
+  function openTech() {
+    clearSel();
+    renderTech();
+    $('sheet-tech').classList.add('open');
+    AUDIO.sfx.click();
   }
 
   function renderPreview() {
@@ -1811,10 +2130,12 @@ const UI = (function () {
     card.innerHTML = '';
     card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'SPIRE HELD' : 'CORE BREACHED'));
     card.appendChild(UTIL.h('div', 'end-line',
-      (won ? 'All ' + CONFIG.MAX_WAVE + ' waves repelled.' : 'Fell on wave ' + GAME.wave + ' of ' + CONFIG.MAX_WAVE + '.') +
+      'SPIRE #' + GAME.seed + ' — ' +
+      (won ? 'all ' + CONFIG.MAX_WAVE + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + CONFIG.MAX_WAVE + '.') +
       '<br><b>' + s.kills + '</b> threats destroyed · <b>' + s.throws + '</b> thrown off the spire' +
       '<br>gravity paid <b>¤ ' + s.fallSalvage + '</b> · interest paid <b>¤ ' + s.interest + '</b>' +
-      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked));
+      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked +
+      '<br><span style="opacity:.7">Next run grows a different spire.</span>'));
     if (won) {
       const cont = UTIL.h('button', 'btn btn-primary', '∞ CONTINUE — OVERTIME');
       cont.onclick = () => {
@@ -1843,6 +2164,10 @@ const UI = (function () {
       if (!SAVE.state.bestWave) $('help-overlay').classList.add('show');
     };
     $('btn-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
+    $('btn-tech').onclick = () => {
+      AUDIO.unlock();
+      if ($('sheet-tech').classList.contains('open')) clearSel(); else openTech();
+    };
     $('btn-pause').onclick = () => { GAME.paused = true; $('pause-overlay').classList.add('show'); syncMuteLabel(); };
     $('btn-resume').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); };
     $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
@@ -1889,7 +2214,7 @@ const UI = (function () {
   scene.add(rim);
 
   GAME.scene = scene;
-  SPIRE.build(scene);
+  SPIRE.build(scene, 1 + Math.floor(Math.random() * 99999)); // title backdrop spire
   FX.init(scene);
   UI.init();
   INPUT.init(camera, canvas, UI.onTap);

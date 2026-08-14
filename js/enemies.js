@@ -64,7 +64,7 @@ const ENEMY = (function () {
         m.position.set(pos.x, pos.y + this.def.size + 0.12, pos.z);
         m.lookAt(pos.clone().add(tangent).setY(m.position.y));
       } else if (this.state === 'fly') {
-        const r = SPIRE.rPath + 0.4;
+        const r = 5.3; // outside even the widest ramp sections
         m.position.set(Math.sin(this.flyAng) * r, this.y, Math.cos(this.flyAng) * r);
         if (m.userData.spin) m.userData.spin.rotation.y += dt * 6;
       } else if (this.state === 'air') {

@@ -18,10 +18,34 @@ const GAME = (function () {
     endless: false,
     stats: null,
     comboThrows: 0, comboT: 0,
+    seed: 1,
+    tech: {},                // purchased SPIRE OS nodes, by id
+    permPower: 0,            // permanent grid bonuses from directives
+    activeDirs: [],          // [{ def, mods, wavesLeft }]
+    dirOffer: null,          // the 3 directives offered this build phase
+    waveEarn: null,          // per-wave income breakdown for the report
   };
 
+  // combined modifier across active directives: 'mult' keys multiply, others add
+  function mod(key, base) {
+    let v = base === undefined ? (key.endsWith('Mult') ? 1 : 0) : base;
+    for (const d of g.activeDirs) {
+      const m = d.mods[key];
+      if (m === undefined) continue;
+      if (key.endsWith('Mult')) v *= m; else v += m;
+    }
+    return v;
+  }
+
+  // economy values, tech-aware
+  function interestRate() { return g.tech.compound ? 0.14 : ECO.interestRate; }
+  function interestCap() { return g.tech.compound ? 90 : ECO.interestCap; }
+  function overclockCost() { return g.tech.cycles ? 15 : ECO.overclockCost; }
+  function overclockCooldown() { return g.tech.cycles ? ECO.overclockCooldown - 6 : ECO.overclockCooldown; }
+  function fallBonusMult() { return (g.tech.massdrv ? 1.5 : 1) * mod('fallMult', 1); }
+
   function powerCap() {
-    let cap = ECO.powerBase;
+    let cap = ECO.powerBase + g.permPower + (g.tech.coretap ? 3 : 0);
     for (const t of g.turrets) cap += t.stat('gen') || 0;
     return Math.round(cap);
   }
@@ -33,7 +57,7 @@ const GAME = (function () {
 
   function reset() {
     for (const e of g.enemies) e.remove();
-    for (const t of g.turrets) t.sell();
+    for (const t of g.turrets) t.sell();   // removes their meshes from the scene
     g.enemies = []; g.turrets = [];
     g.wave = 1;
     g.salvage = ECO.startSalvage;
@@ -43,15 +67,64 @@ const GAME = (function () {
     g.speed = 1;
     g.endless = false;
     g.paused = false;
+    g.tech = {};
+    g.permPower = 0;
+    g.activeDirs = [];
+    g.dirOffer = null;
+    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
     g.stats = { kills: 0, throws: 0, fallSalvage: 0, interest: 0, leaked: 0, built: 0, bestCombo: 0 };
   }
 
   function start() {
+    // every run grows a fresh spire from a new seed
+    g.seed = 1 + Math.floor(Math.random() * 99999);
+    SPIRE.regen(g.seed);
     reset();
     g.phase = 'build';
+    rollDirectives();
     UI.onPhase();
-    UI.banner('WAVE 1 INCOMING — BUILD YOUR DEFENSE', false);
+    UI.banner('SPIRE #' + g.seed + ' — BUILD YOUR DEFENSE', false);
     UI.updateHUD();
+  }
+
+  // ---------------- directives ----------------
+  function rollDirectives() {
+    if (g.wave < 2) { g.dirOffer = null; return; }
+    const pool = CONFIG.DIRECTIVES.filter(d => (d.cost || 0) <= g.salvage);
+    const offer = [];
+    while (offer.length < 3 && pool.length) {
+      offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    g.dirOffer = offer;
+  }
+
+  function pickDirective(def) {
+    if (!g.dirOffer || !g.dirOffer.includes(def)) return false;
+    if (def.cost) {
+      if (g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
+      g.salvage -= def.cost;
+    }
+    if (def.mods.instant) g.salvage += def.mods.instant;
+    if (def.mods.permPower) g.permPower += def.mods.permPower;
+    g.activeDirs.push({ def, mods: def.mods, wavesLeft: def.mods.duration || 1 });
+    g.dirOffer = null;
+    AUDIO.sfx.cash();
+    UI.toast(def.ico + ' ' + def.name + ' ACTIVE', 'warn');
+    UI.onPhase(); UI.updateHUD();
+    return true;
+  }
+
+  function skipDirectives() { g.dirOffer = null; UI.onPhase(); }
+
+  // ---------------- tech ----------------
+  function buyTech(def) {
+    if (g.tech[def.id] || g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
+    g.salvage -= def.cost;
+    g.tech[def.id] = true;
+    AUDIO.sfx.build();
+    UI.toast('⚙ ' + def.name + ' INSTALLED', 'warn');
+    UI.updateHUD();
+    return true;
   }
 
   // ---------------- economy actions ----------------
@@ -89,10 +162,10 @@ const GAME = (function () {
   }
 
   function overclock(t) {
-    if (t.ocCooldown > 0 || g.salvage < ECO.overclockCost) { AUDIO.sfx.error(); return false; }
+    if (t.ocCooldown > 0 || g.salvage < overclockCost()) { AUDIO.sfx.error(); return false; }
     if (t.type === 'generator' || t.type === 'stasis') return false;
-    g.salvage -= ECO.overclockCost;
-    t.overclock();
+    g.salvage -= overclockCost();
+    t.overclock(overclockCooldown());
     UI.updateHUD();
     return true;
   }
@@ -109,21 +182,30 @@ const GAME = (function () {
   // ---------------- waves ----------------
   function startWave() {
     if (g.phase !== 'build') return;
+    g.dirOffer = null;
+    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
     // interest on unspent salvage — the invest-or-hoard decision
-    const interest = Math.min(ECO.interestCap, Math.floor(g.salvage * ECO.interestRate));
+    const interest = Math.round(Math.min(interestCap(), g.salvage * interestRate()) * mod('interestMult', 1));
     if (interest > 0) {
       g.salvage += interest;
       g.stats.interest += interest;
+      g.waveEarn.interest = interest;
       UI.toast('+' + interest + ' ¤ INTEREST ON RESERVES', 'warn');
       AUDIO.sfx.cash();
     }
     g.phase = 'combat';
     g.combatT = 0;
     g.spawnQueue = [];
+    const hpDirMult = mod('enemyHpMult', 1);
+    const spdDirMult = mod('enemySpeedMult', 1);
     const comp = CONFIG.wave(g.wave);
     for (const grp of comp) {
       for (let i = 0; i < grp.count; i++) {
-        g.spawnQueue.push({ type: grp.type, at: grp.delay + i * grp.gap, hpMult: grp.hpMult * (g.endless ? 1 + (g.wave - CONFIG.MAX_WAVE) * 0.25 : 1) });
+        g.spawnQueue.push({
+          type: grp.type, at: grp.delay + i * grp.gap,
+          hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - CONFIG.MAX_WAVE) * 0.25 : 1),
+          spdMult: spdDirMult,
+        });
       }
     }
     g.spawnQueue.sort((a, b) => a.at - b.at);
@@ -134,9 +216,21 @@ const GAME = (function () {
   }
 
   function endWave() {
+    // wave report: where the money came from
+    const e = g.waveEarn;
+    const parts = [];
+    if (e.kill) parts.push('kills ¤' + e.kill);
+    if (e.fall) parts.push('gravity ¤' + e.fall);
+    if (e.interest) parts.push('interest ¤' + e.interest);
+    if (e.leakPay) parts.push('insurance ¤' + e.leakPay);
+    if (parts.length) UI.toast('WAVE ' + g.wave + ' INCOME — ' + parts.join(' · '), 'warn');
+    // expire directives
+    for (const d of g.activeDirs) d.wavesLeft--;
+    g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
     if (!g.endless && g.wave > CONFIG.MAX_WAVE) { victoryEnd(); return; }
     g.phase = 'build';
+    rollDirectives();
     UI.banner('WAVE CLEAR — REINFORCE', false);
     UI.onPhase();
     UI.updateHUD();
@@ -159,11 +253,14 @@ const GAME = (function () {
   // ---------------- combat events ----------------
   function onKill(e, opts) {
     g.stats.kills++;
-    let pay = e.def.salvage;
+    let pay = Math.round(e.def.salvage * mod('killMult', 1)) + mod('killFlat', 0);
+    g.waveEarn.kill += pay;
     if (opts.fallBonus) {
-      pay += opts.fallBonus;
+      const bonus = Math.round(opts.fallBonus * fallBonusMult());
+      pay += bonus;
       g.stats.throws++;
-      g.stats.fallSalvage += opts.fallBonus;
+      g.stats.fallSalvage += bonus;
+      g.waveEarn.fall += bonus;
       FX.text(e.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)), '+' + pay + ' ¤ GRAVITY', '#ffd166', 0.85);
     }
     g.salvage += pay;
@@ -179,6 +276,12 @@ const GAME = (function () {
   function onLeak(e) {
     g.coreHP -= e.def.dmg;
     g.stats.leaked++;
+    const pay = mod('leakPay', 0);
+    if (pay > 0) {
+      g.salvage += pay;
+      g.waveEarn.leakPay += pay;
+      UI.toast('🛡 INSURANCE PAID ¤' + pay, 'warn');
+    }
     AUDIO.sfx.leak();
     UI.hurt();
     UI.updateHUD();
@@ -200,7 +303,9 @@ const GAME = (function () {
       g.combatT += dt;
       while (g.spawnQueue.length && g.spawnQueue[0].at <= g.combatT) {
         const s = g.spawnQueue.shift();
-        g.enemies.push(new ENEMY.Enemy(g.scene, s.type, s.hpMult));
+        const e = new ENEMY.Enemy(g.scene, s.type, s.hpMult);
+        if (s.spdMult) e.speed *= s.spdMult;
+        g.enemies.push(e);
       }
       for (const e of g.enemies) e.update(dt, g);
       g.enemies = g.enemies.filter(e => e.alive);
@@ -222,5 +327,12 @@ const GAME = (function () {
   g.powerCap = powerCap;
   g.powerUsed = powerUsed;
   g.canAffordAny = canAffordAny;
+  g.pickDirective = pickDirective;
+  g.skipDirectives = skipDirectives;
+  g.buyTech = buyTech;
+  g.mod = mod;
+  g.overclockCost = overclockCost;
+  g.interestRate = interestRate;
+  g.interestCap = interestCap;
   return g;
 })();

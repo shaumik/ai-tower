@@ -22,7 +22,8 @@
         <div class="logo-sub">VERTICAL TOWER DEFENSE</div>
       </div>
       <p class="title-pitch">Rogue processes are climbing the spire.<br>
-      Hold the summit core. <b>Gravity is a weapon.</b></p>
+      Hold the summit core. <b>Gravity is a weapon.</b><br>
+      Every run grows a new spire.</p>
       <button class="btn btn-primary btn-big" id="btn-start">DEFEND THE SPIRE</button>
       <div class="title-best" id="title-best"></div>
     </div>
@@ -45,8 +46,12 @@
     <div id="hurt-vignette"></div>
 
     <div id="hud-bottom">
+      <div id="directive-bar"></div>
       <div id="wave-preview"></div>
-      <button class="btn btn-primary" id="btn-wave">▶ START WAVE</button>
+      <div id="bottom-row">
+        <button class="btn" id="btn-tech">⚙ SPIRE OS</button>
+        <button class="btn btn-primary" id="btn-wave">▶ START WAVE</button>
+      </div>
     </div>
 
     <!-- build sheet: shown when an empty socket is selected -->
@@ -60,6 +65,13 @@
     <div id="sheet-turret" class="sheet">
       <div class="sheet-grip"></div>
       <div id="turret-body"></div>
+    </div>
+
+    <!-- SPIRE OS: in-run tech tree -->
+    <div id="sheet-tech" class="sheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-title">⚙ SPIRE OS — PERMANENT UPGRADES THIS RUN</div>
+      <div id="tech-list"></div>
     </div>
   </div>
 
@@ -88,6 +100,10 @@
       <b>interest</b> every wave, so hoarding pays… until it doesn't.</p>
       <p><b>⚡ Power</b> limits how much you can run. Generators add power but
       occupy defense sockets.</p>
+      <p>Between waves, <b>directives</b> offer one-wave economic trades, and
+      <b>⚙ SPIRE OS</b> sells permanent upgrades for the run.</p>
+      <p><b>Every run grows a new spire</b> — switchbacks, steep risers and
+      plaza rings change where the good sockets are.</p>
       <p><b>Repulsors throw climbers off the spire.</b> The higher the fall,
       the bigger the salvage bonus.</p>
       <p>Fliers ignore the ramp and rise straight up — cover your airspace.</p>

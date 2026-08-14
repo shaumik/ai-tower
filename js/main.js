@@ -23,7 +23,7 @@
   scene.add(rim);
 
   GAME.scene = scene;
-  SPIRE.build(scene);
+  SPIRE.build(scene, 1 + Math.floor(Math.random() * 99999)); // title backdrop spire
   FX.init(scene);
   UI.init();
   INPUT.init(camera, canvas, UI.onTap);

@@ -99,5 +99,31 @@ const CONFIG = (function () {
     }
   }
 
-  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, MAX_WAVE, wave };
+  // ---------------- wave directives ----------------
+  // Between waves the player picks one of three market-style modifiers (or
+  // skips). Each is a real economic trade, not a free buff.
+  const DIRECTIVES = [
+    { id: 'bull',      ico: '📈', name: 'BULL MARKET',   desc: 'Kills pay +40% this wave. No interest this wave.', mods: { killMult: 1.4, interestMult: 0 } },
+    { id: 'haven',     ico: '🏦', name: 'SAFE HAVEN',    desc: 'Interest ×2 this wave. Threats +15% integrity.', mods: { interestMult: 2, enemyHpMult: 1.15 } },
+    { id: 'overvolt',  ico: '⚡', name: 'OVERVOLT',      desc: 'Pay ¤30 now for +2 grid power, permanently.', cost: 30, mods: { permPower: 2 } },
+    { id: 'drones',    ico: '🛰', name: 'SCRAP DRONES',  desc: '+3 salvage on every kill this wave.', mods: { killFlat: 3 } },
+    { id: 'tailwind',  ico: '🌀', name: 'TAILWIND',      desc: 'Turrets +15% fire rate; threats +10% speed.', mods: { rateMult: 1.15, enemySpeedMult: 1.1 } },
+    { id: 'insurance', ico: '🛡', name: 'INSURANCE',     desc: 'Each core leak this wave is compensated ¤60.', mods: { leakPay: 60 } },
+    { id: 'royalty',   ico: '🪂', name: 'GRAVITY ROYALTIES', desc: 'Fall bonuses pay double this wave.', mods: { fallMult: 2 } },
+    { id: 'bonds',     ico: '📜', name: 'WAR BONDS',     desc: '+¤120 now. Kills pay −20% for the next 3 waves.', mods: { instant: 120, killMult: 0.8, duration: 3 } },
+    { id: 'coldsnap',  ico: '❄', name: 'COLD SNAP',     desc: 'Pay ¤35: all threats 12% slower this wave.', cost: 35, mods: { enemySpeedMult: 0.88 } },
+  ];
+
+  // ---------------- SPIRE OS: in-run tech tree ----------------
+  // One-time purchases: long-term investment vs. the next turret.
+  const TECH = [
+    { id: 'coretap',  ico: '⚡', name: 'CORE TAP',          cost: 150, desc: '+3 power from the summit core.' },
+    { id: 'compound', ico: '¤',  name: 'COMPOUND PROTOCOL', cost: 200, desc: 'Interest 10% → 14%, cap ¤50 → ¤90.' },
+    { id: 'lenses',   ico: '✛',  name: 'FOCUS LENSES',      cost: 180, desc: 'Blasters and Arc Nodes +25% damage.' },
+    { id: 'massdrv',  ico: '◎',  name: 'MASS DRIVERS',      cost: 160, desc: 'Repulsors +30% force, fall bonus +50%.' },
+    { id: 'harmonic', ico: '❉',  name: 'FIELD HARMONICS',   cost: 140, desc: 'Stasis Wells slow 12% harder, +15% range.' },
+    { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
+  ];
+
+  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, MAX_WAVE, wave, DIRECTIVES, TECH };
 })();

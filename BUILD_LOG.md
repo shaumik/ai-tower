@@ -128,3 +128,35 @@ playtest-driven tuning.
 - Packaging per the rules: our game code assembled inline into one readable
   `index.html`; Three.js (the only third-party library) ships in `vendor/`
   inside the zip, referenced by relative path.
+
+## Session 7 — 2026-08-14 — variety and a real management layer
+
+Playtest verdict on session 6: one uniform helix reads as one-note within a
+few waves, and the economy was mostly passive — real, but the player rarely
+*chose* anything between waves. Two prompted systems fixed both.
+
+- **Procedural spires (seeded per run).** The climb path is now generated as
+  a chain of segments — winding arcs, direction-flipping switchbacks, steep
+  risers, and flat full-circle plaza rings — with the ramp radius swelling
+  and tightening as it climbs. Socket positions fall out of the path, so
+  every run has different good ground: a plaza ring is a kill-box begging for
+  a repulsor; a steep riser is cheap altitude with thin coverage. Each run
+  shows its seed ("SPIRE #76193"); restart grows a different tower.
+- **Wave directives.** Each build phase deals 3 of 9 market-style trades;
+  the player picks one or skips. Every one is a real trade-off, not a buff:
+  Bull Market (+40% kill pay, no interest), Safe Haven (interest ×2, threats
+  +15% hp), War Bonds (+¤120 now, −20% kill pay for 3 waves), Insurance
+  (¤60 per leak), Overvolt (pay ¤30 for +2 permanent power), Gravity
+  Royalties (fall bonuses ×2), and so on.
+- **SPIRE OS tech tree.** Six one-time in-run purchases (¤120–¤200) that
+  compete directly with turret spending: core power tap, compounding interest
+  (10→14%, cap ¤90), damage lenses, mass drivers (+knockback, +50% fall
+  bonus), stasis harmonics, cheap overclock cycles. Long-term investment vs.
+  the next turret is now a decision the player makes every wave.
+- **Wave income report.** Each wave-clear prints where the money came from
+  (kills / gravity / interest / insurance), so the economy is legible enough
+  to optimize against.
+- Verified again headlessly on the packaged zip build: a managed defense
+  (upgrades + tech + directives) holds all 15 waves at 10/10 core on a random
+  procedural spire; tech effects checked numerically (power 8→11, overclock
+  ¤25→¤15, interest 10%→14%); zero external requests, zero console errors.

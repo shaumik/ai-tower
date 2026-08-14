@@ -1,27 +1,65 @@
-/* NEURAL SPIRE — the tower: scene, helix climb path, build sockets */
+/* NEURAL SPIRE — the tower: scene, procedurally generated climb path, build sockets.
+   Every run rolls a new spire: winding arcs, switchbacks, steep risers and flat
+   plaza rings, with the ramp radius swelling and tightening as it climbs. */
 'use strict';
 const SPIRE = (function () {
   const S = CONFIG.SPIRE;
   let scene = null, group = null;
-  const sockets = [];   // { i, pos, mesh, pad, turret|null }
-  const path = { points: [], cum: [], total: 0 };
+  let sockets = [];     // { i, pos, mesh, turret|null }
+  let path = null;      // { points[], cum[], total }
   let coreMesh = null, coreLight = null, coreBasePos = null;
+  let curSeed = 1;
 
-  // ---------------- helix path ----------------
-  function buildPath() {
-    const steps = 640;
+  // ---------------- procedural helix path ----------------
+  // The path is a chain of segments. Each segment turns (arc / switchback /
+  // riser / plaza) while climbing, and drifts toward its own target radius.
+  function buildPath(seed) {
+    const R = UTIL.rng(seed);
+    path = { points: [], cum: [], total: 0 };
+    let ang = R() * Math.PI * 2;
+    let y = 0.6;
+    let dir = R() < 0.5 ? 1 : -1;      // winding direction, flips at switchbacks
+    let radius = S.rPath;
+    let plazas = 0, segsSinceFlip = 0;
+
+    const segs = [];
+    while (y < S.height - 1.2) {
+      const roll = R();
+      let type;
+      if (roll < 0.52) type = 'arc';
+      else if (roll < 0.68 && segsSinceFlip >= 1) type = 'switchback';
+      else if (roll < 0.85) type = 'riser';
+      else if (plazas < 2 && y > 6 && y < S.height - 8) type = 'plaza';
+      else type = 'arc';
+
+      let dAng, dY, rTarget = 3.2 + R() * 1.3;
+      if (type === 'arc') { dAng = (Math.PI * 0.6 + R() * Math.PI * 0.6) * dir; dY = 3.2 + R() * 1.6; segsSinceFlip++; }
+      else if (type === 'switchback') { dir = -dir; segsSinceFlip = 0; dAng = (Math.PI * 0.7 + R() * Math.PI * 0.5) * dir; dY = 2.6 + R() * 1.2; }
+      else if (type === 'riser') { dAng = (Math.PI * 0.2 + R() * Math.PI * 0.15) * dir; dY = 4.2 + R() * 1.6; segsSinceFlip++; }
+      else { plazas++; dAng = Math.PI * 2 * dir; dY = 1.3; rTarget = 3.9 + R() * 0.7; segsSinceFlip++; }
+      dY = Math.min(dY, S.height - 1.0 - y);
+      segs.push({ ang0: ang, dAng, y0: y, dY, r0: radius, r1: rTarget });
+      ang += dAng; y += dY; radius = rTarget;
+    }
+
     let prev = null, d = 0;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const ang = t * S.turns * Math.PI * 2;
-      const p = new THREE.Vector3(Math.sin(ang) * S.rPath, 0.6 + t * (S.height - 1.6), Math.cos(ang) * S.rPath);
-      if (prev) d += p.distanceTo(prev);
-      path.points.push(p);
-      path.cum.push(d);
-      prev = p;
+    for (const sg of segs) {
+      const steps = Math.max(10, Math.round(Math.abs(sg.dAng) * 22));
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const a = sg.ang0 + sg.dAng * t;
+        // ease the radius between segment targets so the ramp flows
+        const r = UTIL.lerp(sg.r0, sg.r1, t * t * (3 - 2 * t));
+        const p = new THREE.Vector3(Math.sin(a) * r, sg.y0 + sg.dY * t, Math.cos(a) * r);
+        if (prev) d += p.distanceTo(prev);
+        path.points.push(p);
+        path.cum.push(d);
+        prev = p;
+      }
     }
     path.total = d;
   }
+
   // position + tangent at distance d along the ramp
   function at(d) {
     d = UTIL.clamp(d, 0, path.total);
@@ -36,7 +74,6 @@ const SPIRE = (function () {
 
   // line-of-sight: is the straight segment a→b blocked by the central column?
   function losBlocked(a, b) {
-    // 2D (xz) distance from origin to segment
     const ax = a.x, az = a.z, bx = b.x, bz = b.z;
     const dx = bx - ax, dz = bz - az;
     const len2 = dx * dx + dz * dz;
@@ -47,11 +84,27 @@ const SPIRE = (function () {
   }
 
   // ---------------- visuals ----------------
-  function build(sc) {
-    scene = sc;
+  function disposeGroup() {
+    if (!group) return;
+    scene.remove(group);
+    group.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+        else o.material.dispose();
+      }
+    });
+    group = null;
+    sockets = [];
+    coreMesh = null; coreLight = null;
+  }
+
+  function regen(seed) {
+    curSeed = seed;
+    disposeGroup();
     group = new THREE.Group();
     scene.add(group);
-    buildPath();
+    buildPath(seed);
 
     const matCol = new THREE.MeshStandardMaterial({ color: 0x1c2a45, roughness: 0.65, metalness: 0.5, emissive: 0x060d1c, emissiveIntensity: 1 });
     const matDark = new THREE.MeshStandardMaterial({ color: 0x131e33, roughness: 0.85, metalness: 0.3 });
@@ -73,17 +126,29 @@ const SPIRE = (function () {
       seam.position.y = y0 + h + 0.12;
       group.add(seam);
     }
+    // vertical circuit strips on the column
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      const strip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, S.height * 0.92, 0.07),
+        new THREE.MeshBasicMaterial({ color: k % 2 ? 0x1d4a75 : 0x2a78be, transparent: true, opacity: 0.65 })
+      );
+      const rr = S.rCol * 0.965;
+      strip.position.set(Math.sin(a) * rr, S.height * 0.47, Math.cos(a) * rr);
+      group.add(strip);
+    }
 
-    // climb ramp: ribbon along the helix
-    const inner = S.rPath - 0.55, outer = S.rPath + 0.55;
+    // climb ramp: ribbon following the generated path, width around each
+    // point's own radius (the radius varies along the tower)
     const verts = [], norms = [], idx = [];
     const N = path.points.length;
+    const HALF = 0.55;
     for (let i = 0; i < N; i++) {
       const p = path.points[i];
+      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
       const ang = Math.atan2(p.x, p.z);
-      const ix = Math.sin(ang) * inner, iz = Math.cos(ang) * inner;
-      const ox = Math.sin(ang) * outer, oz = Math.cos(ang) * outer;
-      verts.push(ix, p.y, iz, ox, p.y, oz);
+      const ri = pr - HALF, ro = pr + HALF;
+      verts.push(Math.sin(ang) * ri, p.y, Math.cos(ang) * ri, Math.sin(ang) * ro, p.y, Math.cos(ang) * ro);
       norms.push(0, 1, 0, 0, 1, 0);
       if (i) {
         const a = (i - 1) * 2, b = a + 1, c = i * 2, e = c + 1;
@@ -100,40 +165,17 @@ const SPIRE = (function () {
     }));
     group.add(ribbon);
 
-    // glowing outer edge of the ramp (the "railing" enemies get thrown over)
-    const edgePts = [];
+    // glowing edges of the ramp (outer = the railing enemies get thrown over)
+    const outPts = [], inPts = [];
     for (let i = 0; i < N; i += 2) {
       const p = path.points[i];
+      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
       const ang = Math.atan2(p.x, p.z);
-      edgePts.push(new THREE.Vector3(Math.sin(ang) * outer, p.y + 0.05, Math.cos(ang) * outer));
+      outPts.push(new THREE.Vector3(Math.sin(ang) * (pr + HALF), p.y + 0.05, Math.cos(ang) * (pr + HALF)));
+      inPts.push(new THREE.Vector3(Math.sin(ang) * (pr - HALF), p.y + 0.05, Math.cos(ang) * (pr - HALF)));
     }
-    const edge = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(edgePts),
-      new THREE.LineBasicMaterial({ color: 0x3f9be8 })
-    );
-    group.add(edge);
-    // matching inner edge hugging the column
-    const inEdgePts = [];
-    for (let i = 0; i < N; i += 2) {
-      const p = path.points[i];
-      const ang = Math.atan2(p.x, p.z);
-      inEdgePts.push(new THREE.Vector3(Math.sin(ang) * inner, p.y + 0.05, Math.cos(ang) * inner));
-    }
-    group.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(inEdgePts),
-      new THREE.LineBasicMaterial({ color: 0x2a5a8e, transparent: true, opacity: 0.8 })
-    ));
-    // vertical circuit strips on the column
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2;
-      const strip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.07, S.height * 0.92, 0.07),
-        new THREE.MeshBasicMaterial({ color: k % 2 ? 0x1d4a75 : 0x2a78be, transparent: true, opacity: 0.65 })
-      );
-      const rr = S.rCol * 0.965;
-      strip.position.set(Math.sin(a) * rr, S.height * 0.47, Math.cos(a) * rr);
-      group.add(strip);
-    }
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outPts), new THREE.LineBasicMaterial({ color: 0x3f9be8 })));
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(inPts), new THREE.LineBasicMaterial({ color: 0x2a5a8e, transparent: true, opacity: 0.8 })));
 
     // build sockets: hex pads riding just outside the ramp
     const padG = new THREE.CylinderGeometry(0.52, 0.6, 0.16, 6);
@@ -141,14 +183,14 @@ const SPIRE = (function () {
     for (let i = 1; i <= nSock; i++) {
       const d = i * S.socketEvery;
       const { pos } = at(d);
+      const pr = Math.max(0.6, Math.hypot(pos.x, pos.z));
       const ang = Math.atan2(pos.x, pos.z);
-      const sp = new THREE.Vector3(Math.sin(ang) * S.rSocket, pos.y - 0.05, Math.cos(ang) * S.rSocket);
+      const sp = new THREE.Vector3(Math.sin(ang) * (pr + 1.0), pos.y - 0.05, Math.cos(ang) * (pr + 1.0));
       const pad = new THREE.Mesh(padG, new THREE.MeshStandardMaterial({
         color: 0x1a2b4a, roughness: 0.5, metalness: 0.5,
         emissive: 0x0a2038, emissiveIntensity: 1,
       }));
       pad.position.copy(sp);
-      // small arm connecting pad to ramp
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 1.0), matDark);
       arm.position.copy(sp).lerp(pos, 0.5);
       arm.lookAt(pos.x, arm.position.y, pos.z);
@@ -177,13 +219,14 @@ const SPIRE = (function () {
     coreLight.position.copy(coreBasePos);
     group.add(coreLight);
 
-    // base: spawn portal ring + ground
+    // base: spawn portal ring at the path start + ground
+    const p0 = path.points[0];
     const portal = new THREE.Mesh(
-      new THREE.TorusGeometry(S.rPath, 0.14, 8, 48),
+      new THREE.TorusGeometry(1.4, 0.14, 8, 40),
       new THREE.MeshBasicMaterial({ color: 0xff3d6e })
     );
     portal.rotation.x = Math.PI / 2;
-    portal.position.y = 0.25;
+    portal.position.set(p0.x, 0.25, p0.z);
     group.add(portal);
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(30, 48),
@@ -201,11 +244,15 @@ const SPIRE = (function () {
       const r = 45 + Math.random() * 55, th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 1.6 - 0.8);
       starPts.push(new THREE.Vector3(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) + 14, r * Math.sin(ph) * Math.sin(th)));
     }
-    const stars = new THREE.Points(
+    group.add(new THREE.Points(
       new THREE.BufferGeometry().setFromPoints(starPts),
       new THREE.PointsMaterial({ color: 0x9fc3e8, size: 0.16, transparent: true, opacity: 0.8 })
-    );
-    group.add(stars);
+    ));
+  }
+
+  function build(sc, seed) {
+    scene = sc;
+    regen(seed);
   }
 
   // idle animation + socket affordance pulse
@@ -234,11 +281,12 @@ const SPIRE = (function () {
   }
 
   return {
-    build, update, at, losBlocked, coreHitFlash,
+    build, regen, update, at, losBlocked, coreHitFlash,
     get sockets() { return sockets; },
     get pathTotal() { return path.total; },
     get corePos() { return coreBasePos; },
     get height() { return S.height; },
     get rPath() { return S.rPath; },
+    get seed() { return curSeed; },
   };
 })();

@@ -52,6 +52,7 @@ const UI = (function () {
     selSocket = null; selTurret = null;
     $('sheet-build').classList.remove('open');
     $('sheet-turret').classList.remove('open');
+    $('sheet-tech').classList.remove('open');
     hideRange();
   }
 
@@ -112,9 +113,10 @@ const UI = (function () {
       row.appendChild(UTIL.h('button', 'btn', '★ MAX LEVEL')).disabled = true;
     }
     if (t.type !== 'generator' && t.type !== 'stasis') {
+      const ocCost = GAME.overclockCost();
       const oc = UTIL.h('button', 'btn' + (t.overclockT > 0 ? ' oc-active' : ''),
-        t.overclockT > 0 ? '⚡ OVERCLOCKED' : (t.ocCooldown > 0 ? '⚡ COOLING ' + Math.ceil(t.ocCooldown) + 's' : '⚡ OVERCLOCK ¤ ' + CONFIG.ECONOMY.overclockCost));
-      oc.disabled = t.ocCooldown > 0 || GAME.salvage < CONFIG.ECONOMY.overclockCost;
+        t.overclockT > 0 ? '⚡ OVERCLOCKED' : (t.ocCooldown > 0 ? '⚡ COOLING ' + Math.ceil(t.ocCooldown) + 's' : '⚡ OVERCLOCK ¤ ' + ocCost));
+      oc.disabled = t.ocCooldown > 0 || GAME.salvage < ocCost;
       oc.onclick = () => { if (GAME.overclock(t)) renderTurretSheet(); };
       row.appendChild(oc);
     }
@@ -136,20 +138,71 @@ const UI = (function () {
     $('v-wave').textContent = 'W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : CONFIG.MAX_WAVE) + (GAME.endless ? '·∞' : '/' + CONFIG.MAX_WAVE);
     // refresh open sheets so costs stay truthful
     if (selSocket && $('sheet-build').classList.contains('open')) renderBuildSheet();
+    if ($('sheet-tech').classList.contains('open')) renderTech();
   }
 
   function onPhase() {
     const b = $('btn-wave');
     if (GAME.phase === 'build') {
       b.classList.remove('hidden2');
-      const interest = Math.min(CONFIG.ECONOMY.interestCap, Math.floor(GAME.salvage * CONFIG.ECONOMY.interestRate));
-      b.textContent = '▶ START WAVE ' + GAME.wave + (interest > 0 ? '  (+' + interest + ' ¤ interest)' : '');
+      $('btn-tech').classList.remove('hidden2');
+      const interest = Math.round(Math.min(GAME.interestCap(), GAME.salvage * GAME.interestRate()) * GAME.mod('interestMult', 1));
+      b.textContent = '▶ WAVE ' + GAME.wave + (interest > 0 ? ' (+' + interest + ' ¤)' : '');
       renderPreview();
+      renderDirectives();
     } else {
       b.classList.add('hidden2');
+      $('btn-tech').classList.add('hidden2');
       $('wave-preview').innerHTML = '';
+      $('directive-bar').innerHTML = '';
       clearSel();
     }
+  }
+
+  // ---------------- directives ----------------
+  function renderDirectives() {
+    const bar = $('directive-bar');
+    bar.innerHTML = '';
+    const offer = GAME.dirOffer;
+    if (!offer || !offer.length) return;
+    bar.appendChild(UTIL.h('div', 'dir-title', '◈ DIRECTIVE — PICK ONE TRADE'));
+    const row = UTIL.h('div', 'dir-row');
+    for (const d of offer) {
+      const chip = UTIL.h('div', 'dir-chip',
+        '<div class="dc-ico">' + d.ico + '</div>' +
+        '<div class="dc-name">' + d.name + (d.cost ? ' −¤' + d.cost : '') + '</div>' +
+        '<div class="dc-desc">' + d.desc + '</div>');
+      chip.onclick = () => { AUDIO.unlock(); GAME.pickDirective(d); };
+      row.appendChild(chip);
+    }
+    bar.appendChild(row);
+    const skip = UTIL.h('div', 'dir-skip', '✕ SKIP');
+    skip.onclick = () => { AUDIO.sfx.click(); GAME.skipDirectives(); };
+    bar.appendChild(skip);
+  }
+
+  // ---------------- SPIRE OS tech sheet ----------------
+  function renderTech() {
+    const list = $('tech-list');
+    list.innerHTML = '';
+    for (const t of CONFIG.TECH) {
+      const owned = !!GAME.tech[t.id];
+      const row = UTIL.h('div', 'tech-row' + (owned ? ' owned' : ''),
+        '<div class="th-ico">' + t.ico + '</div>' +
+        '<div class="th-body"><div class="th-name">' + t.name + '</div>' +
+        '<div class="th-desc">' + t.desc + '</div></div>');
+      const btn = UTIL.h('button', 'btn' + (owned ? '' : ' btn-primary'), owned ? '✓ OWNED' : '¤ ' + t.cost);
+      btn.disabled = owned || GAME.salvage < t.cost;
+      btn.onclick = () => { if (GAME.buyTech(t)) renderTech(); };
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
+  }
+  function openTech() {
+    clearSel();
+    renderTech();
+    $('sheet-tech').classList.add('open');
+    AUDIO.sfx.click();
   }
 
   function renderPreview() {
@@ -203,10 +256,12 @@ const UI = (function () {
     card.innerHTML = '';
     card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'SPIRE HELD' : 'CORE BREACHED'));
     card.appendChild(UTIL.h('div', 'end-line',
-      (won ? 'All ' + CONFIG.MAX_WAVE + ' waves repelled.' : 'Fell on wave ' + GAME.wave + ' of ' + CONFIG.MAX_WAVE + '.') +
+      'SPIRE #' + GAME.seed + ' — ' +
+      (won ? 'all ' + CONFIG.MAX_WAVE + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + CONFIG.MAX_WAVE + '.') +
       '<br><b>' + s.kills + '</b> threats destroyed · <b>' + s.throws + '</b> thrown off the spire' +
       '<br>gravity paid <b>¤ ' + s.fallSalvage + '</b> · interest paid <b>¤ ' + s.interest + '</b>' +
-      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked));
+      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked +
+      '<br><span style="opacity:.7">Next run grows a different spire.</span>'));
     if (won) {
       const cont = UTIL.h('button', 'btn btn-primary', '∞ CONTINUE — OVERTIME');
       cont.onclick = () => {
@@ -235,6 +290,10 @@ const UI = (function () {
       if (!SAVE.state.bestWave) $('help-overlay').classList.add('show');
     };
     $('btn-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
+    $('btn-tech').onclick = () => {
+      AUDIO.unlock();
+      if ($('sheet-tech').classList.contains('open')) clearSel(); else openTech();
+    };
     $('btn-pause').onclick = () => { GAME.paused = true; $('pause-overlay').classList.add('show'); syncMuteLabel(); };
     $('btn-resume').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); };
     $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
