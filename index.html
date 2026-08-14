@@ -4,14 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#05070d">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>NEURAL SIEGE — AI Tower Defense</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=190">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div id="app">
@@ -174,19 +168,25 @@
     </div>
   </section>
 
+  <!-- portrait-orientation prompt: shown only on landscape phones -->
+  <div id="rotate-overlay">
+    <div class="rotate-icon">⟳</div>
+    <div class="rotate-msg">PLEASE ROTATE YOUR DEVICE</div>
+    <div class="rotate-sub">NEURAL SIEGE is a portrait game.</div>
+  </div>
+
 </div>
 
-<script src="js/ads.js?v=190"></script>
-<script src="js/util.js?v=190"></script>
-<script src="js/data.js?v=190"></script>
-<script src="js/save.js?v=190"></script>
-<script src="js/audio.js?v=190"></script>
-<script src="js/maps.js?v=190"></script>
-<script src="js/waves.js?v=190"></script>
-<script src="js/entities.js?v=190"></script>
-<script src="js/render.js?v=190"></script>
-<script src="js/game.js?v=190"></script>
-<script src="js/ui.js?v=190"></script>
-<script src="js/main.js?v=190"></script>
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/save.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/waves.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>

@@ -1,34 +1,9 @@
 /* NEURAL SIEGE — bootstrap */
 'use strict';
-(async function () {
-  ADS.loadingStart();          // queued until the SDK is initialized
+(function () {
   SAVE.load();
   RENDER.setup(UTIL.el('game-canvas'));
   UI.init();
-  await ADS.init();            // SDK ready — queued loading events flush here
-  ADS.loadingStop();
-
-  // Portal builds (CrazyGames / GD): land in gameplay immediately, zero clicks.
-  // Continue at the furthest unlocked node; the menu stays reachable via pause.
-  if (ADS.provider !== 'none') {
-    let furthest = 1;
-    for (let i = 1; i <= 50; i++) if (SAVE.isUnlocked(i)) furthest = i;
-    GAME.start(furthest, 'standard', false);
-  }
-
-  // Offline support (needs http(s); silently skipped on file:// and portal builds)
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.__NO_SW) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    });
-    // when an updated SW takes control, reload once to pick up new assets
-    let refreshed = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshed) return;
-      refreshed = true;
-      if (!GAME.active) location.reload(); // never yank a level out from under the player
-    });
-  }
 
   // Block iOS double-tap zoom on the playfield (buttons stay tappable at speed)
   let lastTouch = 0;

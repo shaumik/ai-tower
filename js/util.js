@@ -35,7 +35,7 @@ const UTIL = (function () {
   }
 
   function el(id) { return document.getElementById(id); }
-  // device-appropriate verb for instructional text (CrazyGames requirement)
+  // device-appropriate verb for instructional text
   function tapWord() { return ('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 'TAP' : 'CLICK'; }
   function tapWordLc() { return tapWord() === 'TAP' ? 'Tap' : 'Click'; }
 

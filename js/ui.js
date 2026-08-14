@@ -953,36 +953,6 @@ const UI = (function () {
         'Survived to wave ' + GAME.wave + ' of ' + GAME.totalWaves +
         '<br>' + GAME.stats.kills + ' threats neutralized.'));
     }
-    // rewarded ad: bonus cores on victory / second wind on defeat (portal builds only)
-    if (ADS.available()) {
-      if (won) {
-        const bonus = Math.max(1, Math.ceil(cores * 0.5));
-        const adB = UTIL.h('button', 'btn btn-primary', '▶ WATCH AD: +' + bonus + ' ◈ BONUS');
-        adB.onclick = () => {
-          adB.disabled = true;
-          ADS.showRewarded(ok => {
-            if (ok) {
-              SAVE.state.cores += bonus; SAVE.persist();
-              adB.textContent = '✓ +' + bonus + ' ◈ CLAIMED';
-              toast('+' + bonus + ' ◈ DATA CORES', 'warn');
-              AUDIO.sfx.cash();
-            } else { adB.textContent = 'AD UNAVAILABLE'; }
-          });
-        };
-        card.appendChild(adB);
-      } else if (!GAME.revived) {
-        const adB = UTIL.h('button', 'btn btn-primary', '▶ WATCH AD: ⚡ SECOND WIND (+5 ⬢)');
-        adB.onclick = () => {
-          adB.disabled = true;
-          ADS.showRewarded(ok => {
-            if (ok && GAME.revive()) { $('end-overlay').classList.remove('show'); }
-            else { adB.textContent = 'AD UNAVAILABLE'; }
-          });
-        };
-        card.appendChild(adB);
-      }
-    }
-
     if (won) {
       if (!GAME.endless) {
         const cont = UTIL.h('button', 'btn', '∞ CONTINUE ENDLESS');
@@ -999,7 +969,7 @@ const UI = (function () {
         const nxt = UTIL.h('button', 'btn btn-primary', '▶ NEXT NODE');
         nxt.onclick = () => {
           $('end-overlay').classList.remove('show');
-          ADS.interstitial(() => GAME.start(GAME.levelN + 1, GAME.diff, false));
+          GAME.start(GAME.levelN + 1, GAME.diff, false);
         };
         card.appendChild(nxt);
       }
@@ -1007,7 +977,7 @@ const UI = (function () {
       const rty = UTIL.h('button', 'btn btn-primary', '↻ RETRY NODE');
       rty.onclick = () => {
         $('end-overlay').classList.remove('show');
-        ADS.interstitial(() => GAME.start(GAME.levelN, GAME.diff, GAME.endless));
+        GAME.start(GAME.levelN, GAME.diff, GAME.endless);
       };
       card.appendChild(rty);
     }
@@ -1020,8 +990,7 @@ const UI = (function () {
   function togglePause(on) {
     GAME.paused = on;
     $('pause-overlay').classList.toggle('show', on);
-    if (on) { renderPauseToggles(); ADS.gameplayStop(); }
-    else if (GAME.active) ADS.gameplayStart();
+    if (on) renderPauseToggles();
   }
   function renderPauseToggles() {
     const box = $('pause-toggles');
@@ -1179,28 +1148,6 @@ const UI = (function () {
     document.querySelectorAll('.ctab').forEach(t => {
       t.onclick = () => { codexTab = t.dataset.ctab; renderCodex(); };
     });
-
-    // portal builds have no SW/offline story — hide those affordances entirely
-    if (window.__NO_SW) {
-      const oh = $('offline-hint'); if (oh) oh.textContent = '';
-    }
-    // force update: nuke SW + caches, reload fresh (save data untouched)
-    const upBtn = UTIL.h('button', 'btn', '⟳ CHECK FOR UPDATES');
-    upBtn.onclick = async () => {
-      upBtn.textContent = 'UPDATING…';
-      try {
-        if ('serviceWorker' in navigator) {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          for (const r of regs) await r.unregister();
-        }
-        if (window.caches) {
-          const keys = await caches.keys();
-          for (const k of keys) await caches.delete(k);
-        }
-      } catch (e) {}
-      location.replace(location.pathname + '?u=' + Math.floor(performance.now()));
-    };
-    if (!window.__NO_SW) document.querySelector('#screen-settings .settings-danger').insertBefore(upBtn, $('btn-wipe'));
 
     // wipe with confirm
     let wipeArmed = false;

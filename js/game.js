@@ -59,7 +59,6 @@ const GAME = (function () {
     g.burns = []; g.texts = [];
     g.curEvent = null; g.evSpeedMult = 1; g.evRegen = 0; g.evComboMult = 1;
     g.slowmoT = 0; g.endDelay = 0; g.hurtT = 0; g.autoT2 = 0;
-    g.revived = false;
     g.perfectStreak = 0; g.perfectWaves = 0; g.bestCombo = 0; g.dangerT = 0; g.alarmT = 0;
     g.tiles = {}; g.corrupt = {};
     g.deal = null; g.dealAccepted = null; g.insured = false; g.bargainMult = 1;
@@ -96,13 +95,11 @@ const GAME = (function () {
     if (newT.length) setTimeout(() => UI.toast('NEW DEFENSE UNLOCKED: ' + DATA.TOWERS[newT[0]].name.toUpperCase(), 'warn'), 900);
 
     if (!rafId) { lastT = performance.now(); rafId = requestAnimationFrame(loop); }
-    ADS.gameplayStart(); // build phase counts as gameplay for portal metrics
   }
 
   function quit() {
     g.active = false;
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-    ADS.gameplayStop();
   }
 
   // ================================================================ GRID
@@ -276,7 +273,6 @@ const GAME = (function () {
     UI.closeSheets();
     UI.updateHUD();
     AUDIO.sfx.waveStart();
-    ADS.gameplayStart();
   }
 
   function endWave() {
@@ -397,7 +393,6 @@ const GAME = (function () {
 
   function victory() {
     g.phase = 'won';
-    ADS.gameplayStop();
     const fracLives = g.lives / g.maxLives;
     const stars = g.lives >= g.maxLives * 0.9 ? 3 : (fracLives >= 0.5 ? 2 : 1);
     g.grade = g.stats.leaked === 0 ? 'S' : (fracLives >= 0.9 ? 'A' : (fracLives >= 0.55 ? 'B' : 'C'));
@@ -409,31 +404,14 @@ const GAME = (function () {
     if (g.stats.leaked === 0) SAVE.addStat('perfectWins', 1);
     if (g.diff === 'insane') SAVE.addStat('insaneWins', 1);
     AUDIO.sfx.victory();
-    ADS.happytime();
     UI.showEnd(true, stars, cores);
     UI.checkAchToasts();
   }
 
   function defeat() {
     g.phase = 'lost';
-    ADS.gameplayStop();
     AUDIO.sfx.defeat();
     UI.showEnd(false, 0, 0);
-  }
-
-  // rewarded-ad second wind: once per level, back into the fight
-  function revive() {
-    if (g.phase !== 'lost' || g.revived) return false;
-    g.revived = true;
-    g.lives = 5;
-    g.phase = 'combat';
-    for (const e of g.enemies) if (!e.dead) e.applyStun(2.5);
-    fxRing(g.level.path[g.level.path.length - 1].x + 0.5, g.level.path[g.level.path.length - 1].y + 0.5, 3, '#7fdcff');
-    shake(5);
-    UI.phaseBanner('⚡ SECOND WIND — CORE RESTORED TO 5', true);
-    UI.updateHUD();
-    ADS.gameplayStart();
-    return true;
   }
 
   // ================================================================ SPAWN & COMBAT
@@ -876,7 +854,6 @@ const GAME = (function () {
   g.chipHas = chipHas; g.pickChip = pickChip;
   g.abilityCost = abilityCost; g.abilityReady = abilityReady;
   g.castAbility = castAbility; g.doStrike = doStrike;
-  g.revive = revive;
   g.tileAt = tileAt;
   g.acceptDeal = acceptDeal; g.purgeCorruption = purgeCorruption; g.purgeCost = purgeCost;
   g.pickFork = pickFork;
