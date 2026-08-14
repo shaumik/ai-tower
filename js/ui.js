@@ -1,1208 +1,255 @@
-/* NEURAL SIEGE — DOM UI: screens, HUD, sheets, input */
+/* NEURAL SPIRE — DOM HUD: sheets, banners, end screens, wave preview */
 'use strict';
 const UI = (function () {
   const $ = UTIL.el;
-  let curScreen = 'screen-menu';
-  let selLevel = 1, selDiff = 'standard';
-  let bannerTimer = null;
-  let bossRef = null;
+  let selSocket = null, selTurret = null, selType = null;
+  let rangeRing = null;   // 3D range indicator for the current selection
 
-  // ================================================================ SCREENS
-  function show(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    $(id).classList.add('active');
-    curScreen = id;
+  // ---------------- range ring ----------------
+  function showRange(pos, r, color) {
+    hideRange();
+    rangeRing = new THREE.Mesh(
+      new THREE.TorusGeometry(r, 0.05, 6, 48),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55 })
+    );
+    rangeRing.rotation.x = Math.PI / 2;
+    rangeRing.position.copy(pos);
+    GAME.scene.add(rangeRing);
+  }
+  function hideRange() {
+    if (rangeRing) { GAME.scene.remove(rangeRing); rangeRing.geometry.dispose(); rangeRing.material.dispose(); rangeRing = null; }
+  }
+
+  // ---------------- selection / sheets ----------------
+  function onTap(hit) {
+    AUDIO.unlock();
+    if (hit.turret) { selectTurret(hit.turret); return; }
+    if (hit.socket) { selectSocket(hit.socket); return; }
+    clearSel();
+  }
+
+  function selectSocket(s) {
+    selSocket = s; selTurret = null;
+    selType = selType || 'blaster';
+    renderBuildSheet();
+    $('sheet-turret').classList.remove('open');
+    $('sheet-build').classList.add('open');
+    INPUT.focusOn(s.pos.y + 2.5); // bring the selection above the sheet
     AUDIO.sfx.click();
   }
 
-  function refreshMenu() {
-    const st = SAVE.state;
-    $('menu-stats').innerHTML =
-      '◈ ' + st.cores + ' CORES &nbsp;·&nbsp; ★ ' + st.stats.starsTotal + '/150' +
-      '<br>' + UTIL.fmt(st.stats.kills) + ' THREATS NEUTRALIZED' +
-      '<br><span style="opacity:.55">v' + DATA.VERSION + '</span>';
-  }
-
-  // ================================================================ LEVEL SELECT
-  let curSector = 0;
-  function openLevels() {
-    // jump to the sector containing the furthest unlocked level
-    let furthest = 1;
-    for (let i = 1; i <= 50; i++) if (SAVE.isUnlocked(i)) furthest = i;
-    curSector = Math.min(4, Math.floor((furthest - 1) / 10));
-    selLevel = furthest;
-    buildSectorTabs();
-    buildLevelGrid();
-    $('levels-cores').textContent = '◈ ' + SAVE.state.cores;
-    show('screen-levels');
-  }
-
-  function buildSectorTabs() {
-    const wrap = $('sector-tabs');
-    wrap.innerHTML = '';
-    DATA.SECTORS.forEach((s, i) => {
-      const unlocked = i === 0 || SAVE.isUnlocked(i * 10 + 1);
-      const b = UTIL.h('button', 'stab' + (i === curSector ? ' active' : '') + (unlocked ? '' : ' locked'), s.tag + ' · ' + s.name);
-      if (unlocked) b.onclick = () => { curSector = i; buildSectorTabs(); buildLevelGrid(); };
-      wrap.appendChild(b);
-    });
-  }
-
-  function buildLevelGrid() {
-    const grid = $('level-grid');
-    grid.innerHTML = '';
-    const lo = curSector * 10 + 1, hi = lo + 9;
-    let firstSelectable = null;
-    for (let n = lo; n <= hi; n++) {
-      const unlocked = SAVE.isUnlocked(n);
-      const stars = SAVE.bestStars(n);
-      const boss = !!DATA.BOSS_LEVELS[n];
-      const node = UTIL.h('div', 'lvl-node' + (unlocked ? '' : ' locked') + (boss ? ' boss' : '') + (stars ? ' done' : ''));
-      node.appendChild(UTIL.h('div', 'n', boss ? '☠' : String(n)));
-      node.appendChild(UTIL.h('div', 'stars', stars ? '★'.repeat(stars) : (unlocked ? '·' : '🔒')));
-      if (unlocked) {
-        node.onclick = () => { selLevel = n; markSelected(); renderLevelDetail(); AUDIO.sfx.click(); };
-        if (!firstSelectable) firstSelectable = n;
-      }
-      node.dataset.n = n;
-      grid.appendChild(node);
-    }
-    if (selLevel < lo || selLevel > hi || !SAVE.isUnlocked(selLevel)) selLevel = firstSelectable || lo;
-    markSelected();
-    renderLevelDetail();
-  }
-  function markSelected() {
-    document.querySelectorAll('.lvl-node').forEach(nd => {
-      nd.classList.toggle('selected', Number(nd.dataset.n) === selLevel);
-    });
-  }
-
-  function renderLevelDetail() {
-    const box = $('level-detail');
-    if (!SAVE.isUnlocked(selLevel)) { box.innerHTML = '<div class="ld-sub">LOCKED</div>'; return; }
-    const lv = MAPS.level(selLevel);
-    const wonStd = SAVE.isWon(selLevel, 'standard');
-    const wonHard = SAVE.isWon(selLevel, 'hard');
-    if (selDiff === 'hard' && !wonStd) selDiff = 'standard';
-    if (selDiff === 'insane' && !wonHard) selDiff = 'standard';
-
-    const newT = MAPS.newThreatsAt(selLevel).map(id => DATA.ENEMIES[id].name);
-    const newTw = MAPS.newTowersAt(selLevel).map(id => DATA.TOWERS[id].name);
-    let flags = '';
-    if (DATA.BOSS_LEVELS[selLevel]) flags += '☠ BOSS: ' + DATA.ENEMIES[DATA.BOSS_LEVELS[selLevel]].name + '  ';
-    if (newT.length) flags += '⚠ New threat: ' + newT.join(', ') + '  ';
-    if (newTw.length) flags += '✚ Unlocks: ' + newTw.join(', ');
-
-    box.innerHTML = '';
-    box.appendChild(UTIL.h('div', 'ld-title', 'NODE ' + (selLevel < 10 ? '0' : '') + selLevel + ' — ' + lv.name));
-    box.appendChild(UTIL.h('div', 'ld-sub', lv.waves + ' WAVES · ' + DATA.SECTORS[lv.sector].name +
-      (SAVE.levelRec(selLevel).endlessBest ? ' · ENDLESS BEST: W' + SAVE.levelRec(selLevel).endlessBest : '')));
-    box.appendChild(UTIL.h('div', 'ld-flags', flags));
-
-    const diffRow = UTIL.h('div', 'ld-row');
-    DATA.DIFFS.forEach(d => {
-      const locked = (d.id === 'hard' && !wonStd) || (d.id === 'insane' && !wonHard);
-      const stars = SAVE.starsFor(selLevel, d.id);
-      const b = UTIL.h('button', 'diff-btn' + (selDiff === d.id ? ' active' : '') + (locked ? ' locked' : ''),
-        d.name + '<br><span style="color:#ffd166">' + (stars ? '★'.repeat(stars) : '&nbsp;') + '</span>');
-      if (!locked) b.onclick = () => { selDiff = d.id; renderLevelDetail(); AUDIO.sfx.click(); };
-      diffRow.appendChild(b);
-    });
-    box.appendChild(diffRow);
-
-    const row = UTIL.h('div', 'ld-row');
-    row.style.marginTop = '8px';
-    const start = UTIL.h('button', 'btn btn-primary', '▶ DEPLOY');
-    start.onclick = () => { AUDIO.unlock(); GAME.start(selLevel, selDiff, false); };
-    row.appendChild(start);
-    if (SAVE.bestStars(selLevel) > 0) {
-      const endless = UTIL.h('button', 'btn', '∞ ENDLESS');
-      endless.onclick = () => { AUDIO.unlock(); GAME.start(selLevel, selDiff, true); };
-      row.appendChild(endless);
-    }
-    box.appendChild(row);
-  }
-
-  // ================================================================ RESEARCH
-  function openResearch() {
-    renderResearch();
-    show('screen-research');
-  }
-  function renderResearch() {
-    $('research-cores').textContent = '◈ ' + SAVE.state.cores;
-    const list = $('research-list');
-    list.innerHTML = '';
-    for (const def of DATA.RESEARCH) {
-      const lvl = SAVE.researchLevel(def.id);
-      const maxed = lvl >= def.max;
-      const cost = maxed ? null : def.costs[lvl];
-      const item = UTIL.h('div', 'res-item');
-      item.appendChild(UTIL.h('div', 'res-ico', def.ico));
-      const mid = UTIL.h('div', 'res-mid');
-      mid.appendChild(UTIL.h('div', 'res-name', def.name));
-      mid.appendChild(UTIL.h('div', 'res-desc', def.desc.replace('{v}', String(def.per * Math.max(1, lvl + (maxed ? 0 : 1)))) +
-        (lvl > 0 ? ' <b style="color:#7fdcff">(now: ' + def.per * lvl + ')</b>' : '')));
-      mid.appendChild(UTIL.h('div', 'res-pips', '●'.repeat(lvl) + '○'.repeat(def.max - lvl)));
-      item.appendChild(mid);
-      const buyWrap = UTIL.h('div', 'res-buy');
-      const b = UTIL.h('button', 'btn' + (maxed ? '' : ' btn-primary'), maxed ? 'MAX' : '◈ ' + cost);
-      b.disabled = maxed || SAVE.state.cores < cost;
-      if (!maxed) b.onclick = () => {
-        if (SAVE.buyResearch(def.id)) { AUDIO.sfx.upgrade(); renderResearch(); }
-        else AUDIO.sfx.error();
-      };
-      buyWrap.appendChild(b);
-      item.appendChild(buyWrap);
-      list.appendChild(item);
-    }
-  }
-
-  // ================================================================ CODEX
-  let codexTab = 'threats';
-  function openCodex() { renderCodex(); show('screen-codex'); }
-  function renderCodex() {
-    document.querySelectorAll('.ctab').forEach(t => t.classList.toggle('active', t.dataset.ctab === codexTab));
-    const list = $('codex-list');
-    list.innerHTML = '';
-    if (codexTab === 'threats') {
-      const ids = Object.keys(DATA.ENEMIES);
-      for (const id of ids) {
-        const e = DATA.ENEMIES[id];
-        const seen = SAVE.state.seenEnemies[id];
-        const item = UTIL.h('div', 'cdx-item' + (seen ? '' : ' locked'));
-        const sp = UTIL.h('div', 'cdx-sprite');
-        const cv = document.createElement('canvas');
-        cv.width = cv.height = 88;
-        if (seen) RENDER.paintEnemyIcon(cv, id);
-        sp.appendChild(cv);
-        item.appendChild(sp);
-        const mid = UTIL.h('div');
-        mid.appendChild(UTIL.h('div', 'cdx-name', seen ? e.name : '???'));
-        const tags = [];
-        const tr = e.traits || {};
-        if (tr.boss) tags.push('BOSS');
-        if (tr.flying) tags.push('AIRBORNE');
-        if (tr.stealth) tags.push('STEALTH');
-        if (tr.armor) tags.push('ARMORED');
-        if (tr.shield) tags.push('SHIELDED');
-        if (tr.regen) tags.push('REGEN');
-        if (tr.slowImmune) tags.push('SLOW-IMMUNE');
-        if (tr.split || tr.spawnOnDeath) tags.push('SPAWNER');
-        if (tr.teleport) tags.push('BLINKS');
-        if (tr.aura) tags.push('BUFFER');
-        if (tr.jam) tags.push('JAMMER');
-        if (e.weak) tags.push('WEAK: ' + DATA.DTYPES[e.weak].name);
-        if (e.resist) tags.push('RESISTS: ' + DATA.DTYPES[e.resist].name);
-        mid.appendChild(UTIL.h('div', 'cdx-tags', seen ? tags.join(' · ') : 'ENCOUNTER TO DECRYPT'));
-        mid.appendChild(UTIL.h('div', 'cdx-desc', seen ? e.lore : 'No data. Encounter this entity in the field.'));
-        if (seen) mid.appendChild(UTIL.h('div', 'cdx-stats',
-          'HP ' + e.hp + ' · SPEED ' + e.speed + ' · BOUNTY ' + e.bounty + ' · CORE DMG ' + e.dmg));
-        item.appendChild(mid);
-        list.appendChild(item);
-      }
-    } else {
-      for (const id of DATA.TOWER_ORDER) {
-        const t = DATA.TOWERS[id];
-        const item = UTIL.h('div', 'cdx-item');
-        const sp = UTIL.h('div', 'cdx-sprite');
-        const cv = document.createElement('canvas');
-        cv.width = cv.height = 88;
-        RENDER.paintTowerIcon(cv, id, 0);
-        sp.appendChild(cv);
-        item.appendChild(sp);
-        const mid = UTIL.h('div');
-        mid.appendChild(UTIL.h('div', 'cdx-name', t.name));
-        mid.appendChild(UTIL.h('div', 'cdx-tags', 'UNLOCKS AT NODE ' + t.unlock + (t.air ? ' · TARGETS AIR' : ' · GROUND ONLY') +
-          (t.dtype ? ' · ' + DATA.DTYPES[t.dtype].ico + ' ' + DATA.DTYPES[t.dtype].name : '')));
-        mid.appendChild(UTIL.h('div', 'cdx-desc', t.desc));
-        const l0 = t.levels[0];
-        mid.appendChild(UTIL.h('div', 'cdx-stats', 'COST ' + l0.cost +
-          (l0.dmg ? ' · DMG ' + l0.dmg : '') + (l0.rate ? ' · RATE ' + l0.rate + '/s' : '') + ' · RANGE ' + l0.range));
-        item.appendChild(mid);
-        list.appendChild(item);
-      }
-    }
-  }
-
-  // ================================================================ ACHIEVEMENTS
-  function openAch() {
-    const list = $('ach-list');
-    list.innerHTML = '';
-    let got = 0;
-    for (const a of DATA.ACHIEVEMENTS) {
-      const done = !!SAVE.state.achievements[a.id];
-      if (done) got++;
-      const cur = Math.min(SAVE.state.stats[a.stat] || 0, a.goal);
-      const item = UTIL.h('div', 'cdx-item' + (done ? '' : ' locked'));
-      item.appendChild(UTIL.h('div', 'res-ico', done ? '🏆' : '○'));
-      const mid = UTIL.h('div');
-      mid.appendChild(UTIL.h('div', 'cdx-name', a.name));
-      mid.appendChild(UTIL.h('div', 'cdx-desc', a.desc));
-      mid.appendChild(UTIL.h('div', 'cdx-stats', done ? 'COMPLETE' : UTIL.fmt(cur) + ' / ' + UTIL.fmt(a.goal)));
-      item.appendChild(mid);
-      list.appendChild(item);
-    }
-    $('ach-count').textContent = got + '/' + DATA.ACHIEVEMENTS.length;
-    show('screen-achievements');
-  }
-
-  // ================================================================ SETTINGS
-  function openSettings() {
-    const list = $('settings-list');
-    list.innerHTML = '';
-    const rows = [
-      ['sfx', 'Sound Effects', 'Weapon fire, explosions, UI'],
-      ['music', 'Ambient Music', 'Generative synth score'],
-      ['shake', 'Screen Shake', 'Impact feedback'],
-      ['autostart', 'Auto-Start Waves', 'Next wave begins 3s after deploy phase starts'],
-      ['autocast', 'Auto-Cast Abilities', 'AI fires Orbital Strike / Surge / Patch for you (full AFK mode)'],
-    ];
-    for (const [key, label, sub] of rows) {
-      const row = UTIL.h('div', 'set-row');
-      const left = UTIL.h('div');
-      left.appendChild(UTIL.h('div', 'set-label', label));
-      left.appendChild(UTIL.h('div', 'set-sub', sub));
-      row.appendChild(left);
-      const tg = UTIL.h('div', 'toggle' + (SAVE.state.settings[key] ? ' on' : ''));
-      tg.onclick = () => {
-        SAVE.state.settings[key] = !SAVE.state.settings[key];
-        SAVE.persist();
-        tg.classList.toggle('on', SAVE.state.settings[key]);
-        AUDIO.applySettings();
-        AUDIO.sfx.click();
-      };
-      row.appendChild(tg);
-      list.appendChild(row);
-    }
-    $('version-label').textContent = DATA.VERSION;
-    show('screen-settings');
-  }
-
-  // ================================================================ GAME HUD
-  function enterGame() {
-    show('screen-game');
-    buildBuildBar();
-    buildAbilityBar();
-    closeSheets();
-    $('pause-overlay').classList.remove('show');
-    $('end-overlay').classList.remove('show');
-    $('chip-overlay').classList.remove('show');
-    refreshChipInd();
-    bossBar(null);
-    maybeStartOnboarding();
-  }
-
-  // ================================================================ ONBOARDING
-  // First-ever run: three visual beats taught on the live controls.
-  // The layer never blocks input — highlight + hint, the real tap does the work.
-  let obStep = 0, obTimer = null, obCell = null;
-  function maybeStartOnboarding() {
-    if (SAVE.state.onboarded) return;
-    if (GAME.levelN !== 1 || (SAVE.state.stats.towersBuilt || 0) > 0) return;
-    obStep = 1; obCell = null;
-    if (obTimer) clearInterval(obTimer);
-    obTimer = setInterval(obTick, 150);
-  }
-  function endOnboarding(done) {
-    if (obTimer) { clearInterval(obTimer); obTimer = null; }
-    obStep = 0;
-    $('onboard-layer').classList.remove('show');
-    if (done) { SAVE.state.onboarded = true; SAVE.persist(); }
-  }
-  // free cell next to the path, ~30% of the way in (spiral out from there)
-  function obFindCell() {
-    const g = GAME, path = g.level.path;
-    const mid = Math.floor(path.length * 0.3);
-    for (let off = 0; off < path.length; off++) {
-      for (const sgn of (off ? [1, -1] : [1])) {
-        const i = mid + sgn * off;
-        if (i < 0 || i >= path.length) continue;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const x = path[i].x + dx, y = path[i].y + dy;
-          if (g.cellFree(x, y)) return { x, y };
-        }
-      }
-    }
-    return null;
-  }
-  function obPoint(rect, label, arrow) {
-    const ring = $('ob-ring'), lab = $('ob-label'), ar = $('ob-arrow');
-    ring.style.left = (rect.x - 5) + 'px';
-    ring.style.top = (rect.y - 5) + 'px';
-    ring.style.width = (rect.w + 10) + 'px';
-    ring.style.height = (rect.h + 10) + 'px';
-    ar.style.display = arrow ? 'block' : 'none';
-    if (arrow) { ar.style.left = (rect.x + rect.w / 2) + 'px'; ar.style.top = (rect.y - 34) + 'px'; }
-    lab.textContent = label;
-    const half = lab.offsetWidth / 2 + 8;
-    const cx = Math.max(half, Math.min(window.innerWidth - half, rect.x + rect.w / 2));
-    lab.style.left = cx + 'px';
-    lab.style.top = (rect.y - (arrow ? 68 : 44)) + 'px';
-  }
-  function obTick() {
-    const g = GAME;
-    if (obStep === 0) return;
-    if (!g.active || curScreen !== 'screen-game') { endOnboarding(false); return; }
-    const layer = $('onboard-layer');
-    // wait behind blocking overlays (chip picker on level start, pause, end)
-    if ($('chip-overlay').classList.contains('show') || $('pause-overlay').classList.contains('show') ||
-        $('end-overlay').classList.contains('show')) { layer.classList.remove('show'); return; }
-    // advance on real progress
-    if (obStep === 1 && g.placingType) obStep = 2;
-    if (obStep === 2 && !g.placingType && g.towers.length === 0) obStep = 1; // placement cancelled
-    if (obStep <= 2 && g.towers.length > 0) obStep = 3;
-    if (obStep === 3 && g.phase !== 'build') { endOnboarding(true); return; } // wave running — done
-    layer.classList.add('show'); // before positioning: labels measure their own width
-    if (obStep === 1) {
-      const item = document.querySelector('.bb-item');
-      if (!item) return;
-      const r = item.getBoundingClientRect();
-      obPoint({ x: r.left, y: r.top, w: r.width, h: r.height }, 'DEPLOY YOUR FIRST TOWER', false);
-    } else if (obStep === 2) {
-      if (!obCell || !g.cellFree(obCell.x, obCell.y)) obCell = obFindCell();
-      if (!obCell) { layer.classList.remove('show'); return; }
-      const p = RENDER.cellToScreen(obCell.x, obCell.y);
-      obPoint({ x: p.x, y: p.y, w: RENDER.T, h: RENDER.T }, UTIL.tapWord() + ' THE TILE, THEN ✓', true);
-    } else if (obStep === 3) {
-      const r = $('btn-start-wave').getBoundingClientRect();
-      if (r.width === 0) { layer.classList.remove('show'); return; }
-      obPoint({ x: r.left, y: r.top, w: r.width, h: r.height }, 'START THE WAVE', false);
-    }
-  }
-
-  function updateHUD() {
-    const g = GAME;
-    if (!g.active) return;
-    $('hud-lives-v').textContent = g.lives;
-    $('hud-cash-v').textContent = UTIL.fmt(g.cash);
-    const wl = g.endless && g.wave > g.totalWaves ? 'W' + g.wave + ' ∞' : g.wave + '/' + g.totalWaves;
-    $('hud-wave-v').textContent = wl;
-    $('btn-speed').textContent = g.speed + '×';
-    const sw = $('btn-start-wave');
-    if (g.phase === 'build') {
-      sw.classList.remove('hidden');
-      const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff);
-      const rush = g.rushT > 0 && g.rushBase > 0 ? Math.ceil(g.rushBase * (g.rushT / 22)) : 0;
-      const fInfo = prev.formation ? WAVES.formationInfo(prev.formation) : null;
-      const tag = prev.event
-        ? ' <span style="color:#ffd166">' + DATA.EVENTS[prev.event].ico + ' ' + DATA.EVENTS[prev.event].name + '</span>'
-        : (fInfo ? ' <span style="color:#ff8aa8">' + fInfo.ico + ' ' + fInfo.name + '</span>' : '');
-      sw.innerHTML = '▶ START WAVE ' + g.wave +
-        (rush > 0 ? ' <span style="color:#ffd166">+¤' + rush + '</span>' : '') + tag +
-        '<br><span style="font-size:10px;font-weight:400;opacity:.75">' +
-        prev.list.slice(0, 3).map(p => p.count + '× ' + DATA.ENEMIES[p.type].name).join(', ') +
-        (prev.list.length > 3 ? ' +' : '') +
-        (prev.event ? ' · ' + DATA.EVENTS[prev.event].desc : (fInfo ? ' · ' + fInfo.desc : '')) + '</span>';
-    } else {
-      sw.classList.add('hidden');
-    }
-    refreshBuildBarState();
-    refreshPlaceActions();
-    refreshAbilities();
-    renderWaveIntel();
-  }
-
-  // ================================================================ WAVE INTEL
-  // Fills the space between board and build bar with the incoming wave roster.
-  function renderWaveIntel() {
-    const g = GAME;
-    const box = $('wave-intel');
-    // hidden while placing: the placement card owns the bottom of the screen
-    if (!g.active || g.phase !== 'build' || g.placingType) { box.classList.remove('show'); renderAlertChips(true); return; }
-    const top = RENDER.boardBottom + 8;
-    const bottomEdge = window.innerHeight - 185; // above the build bar block
-    if (bottomEdge - top < 66) { box.classList.remove('show'); renderAlertChips(false); return; }
-    box.style.top = top + 'px';
-    box.style.maxHeight = (bottomEdge - top) + 'px';
-    const prev = WAVES.preview(g.levelN, g.wave, g.totalWaves, g.diff, g.forkPick);
-    box.innerHTML = '';
-    let title = 'INCOMING — WAVE ' + g.wave + ' / ' + g.totalWaves;
-    if (prev.hasBoss) title += '  <b>☠ BOSS</b>';
-    else if (prev.hasMini) title += '  <b>⚠ MINI-BOSS</b>';
-    if (g.diffDef.towerCap) title += '  <span style="color:#7fa8c9">· TOWERS ' + g.towers.length + '/' + g.diffDef.towerCap + '</span>';
-    box.appendChild(UTIL.h('div', 'wi-title', title));
-    const row = UTIL.h('div', 'wi-row');
-    for (const p of prev.list.slice(0, 6)) {
-      const cell = UTIL.h('div', 'wi-enemy');
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = 60;
-      RENDER.paintEnemyIcon(cv, p.type);
-      cell.appendChild(cv);
-      const e = DATA.ENEMIES[p.type];
-      let marks = '';
-      if (e.weak) marks += ' <span style="color:' + DATA.DTYPES[e.weak].color + '">▲' + DATA.DTYPES[e.weak].ico + '</span>';
-      if (e.resist) marks += ' <span style="color:#5f6e89">▼' + DATA.DTYPES[e.resist].ico + '</span>';
-      cell.appendChild(UTIL.h('span', '', '<span class="wc">×' + p.count + '</span>' + marks + '<br><span class="wn">' + e.name + '</span>'));
-      row.appendChild(cell);
-    }
-    box.appendChild(row);
-    const fInfo = prev.formation ? WAVES.formationInfo(prev.formation) : null;
-    if (prev.event) box.appendChild(UTIL.h('div', 'wi-warn', DATA.EVENTS[prev.event].ico + ' ' + DATA.EVENTS[prev.event].name + ' — ' + DATA.EVENTS[prev.event].desc));
-    else if (fInfo) box.appendChild(UTIL.h('div', 'wi-warn', fInfo.ico + ' ' + fInfo.name + ' — ' + fInfo.desc));
-
-    // fork the wave: pick what's coming
-    if (g.fork && !g.forkPick) {
-      box.appendChild(buildForkCard());
-    } else if (g.forkPick) {
-      const f = WAVES.formationInfo(g.forkPick);
-      box.appendChild(UTIL.h('div', 'wi-warn', '⑂ ROUTED: ' + f.ico + ' ' + f.name));
-    }
-
-    // deal on the table
-    if (g.deal) {
-      box.appendChild(buildDealCard());
-    } else if (g.dealAccepted === 'insurance') {
-      box.appendChild(UTIL.h('div', 'wi-warn', '⛨ INSURED FOR THIS WAVE'));
-    } else if (g.dealAccepted === 'bargain') {
-      box.appendChild(UTIL.h('div', 'wi-warn', "¤ BARGAIN STRUCK — NEXT WAVE +35%"));
-    }
-
-    // corruption purge
-    if (Object.keys(g.corrupt).length) box.appendChild(buildPurgeCard());
-    box.classList.add('show');
-    renderAlertChips(true);
-  }
-
-  // Shared action cards: rendered inside the intel panel when it fits,
-  // or inside the tile popup (via alert chips / tile taps) when it doesn't.
-  function actionDone() { hideTilePop(); renderWaveIntel(); }
-  function buildForkCard() {
-    const g = GAME;
-    const fr = UTIL.h('div', 'wi-deal');
-    fr.appendChild(UTIL.h('div', 'wi-warn', '⑂ ROUTE SPLIT — choose the incoming wave:'));
-    const btns = UTIL.h('div', 'wi-btns');
-    g.fork.forEach((key, idx) => {
-      const f = WAVES.formationInfo(key);
-      const b = UTIL.h('button', 'btn wi-btn', f.ico + ' ' + f.name);
-      b.onclick = () => { GAME.pickFork(idx); actionDone(); };
-      btns.appendChild(b);
-    });
-    fr.appendChild(btns);
-    return fr;
-  }
-  function buildDealCard() {
-    const g = GAME;
-    const dd = DATA.DEALS[g.deal.id];
-    const dr = UTIL.h('div', 'wi-deal');
-    const label = g.deal.id === 'bargain' ? '+¤' + g.deal.gain : '−¤' + g.deal.cost;
-    dr.appendChild(UTIL.h('div', 'wi-warn', dd.ico + ' ' + dd.name + ' <b>' + label + '</b> — ' + dd.desc));
-    const btns = UTIL.h('div', 'wi-btns');
-    const acc = UTIL.h('button', 'btn btn-primary wi-btn', '✓ ACCEPT ' + label);
-    acc.onclick = () => { GAME.acceptDeal(); actionDone(); };
-    btns.appendChild(acc);
-    dr.appendChild(btns);
-    return dr;
-  }
-  function buildPurgeCard() {
-    const g = GAME;
-    const n = Object.keys(g.corrupt).length;
-    const cr = UTIL.h('div', 'wi-deal');
-    cr.appendChild(UTIL.h('div', 'wi-warn', '☣ CORRUPTION: ' + n + ' TILE' + (n > 1 ? 'S' : '') + ' — spreads every wave'));
-    const btns = UTIL.h('div', 'wi-btns');
-    const pb = UTIL.h('button', 'btn btn-danger wi-btn', '☣ PURGE ¤' + g.purgeCost());
-    pb.onclick = () => { GAME.purgeCorruption(); actionDone(); };
-    btns.appendChild(pb);
-    cr.appendChild(btns);
-    return cr;
-  }
-
-  // ============================================================= TILE POPUP
-  // Tap any special tile to learn what it is (and act on it).
-  let tilePopT = null, tilePopSticky = false;
-  function hideTilePop() {
-    $('tile-pop').classList.remove('show');
-    tilePopSticky = false;
-    if (tilePopT) { clearTimeout(tilePopT); tilePopT = null; }
-  }
-  function showTilePop(cellY, nodes, autoHide) {
-    const box = $('tile-pop');
-    box.innerHTML = '';
-    for (const n of nodes) box.appendChild(n);
-    // sit above the build bar; if the tapped cell is down there, jump to the top
-    const cellPx = cellY == null ? -1 : RENDER.cellToScreen(0, cellY + 1).y;
-    if (cellPx > window.innerHeight - 330) { box.style.top = '66px'; box.style.bottom = 'auto'; }
-    else { box.style.bottom = '195px'; box.style.top = 'auto'; }
-    box.classList.add('show');
-    tilePopSticky = !autoHide;
-    if (tilePopT) clearTimeout(tilePopT);
-    tilePopT = autoHide ? setTimeout(hideTilePop, 4500) : null;
-  }
-  const TILE_INFO = {
-    hill:  { t: '▲ UPLINK RIDGE',   c: '#ffd166', d: 'High ground. Towers built on this tile get <b>+1 RANGE</b>.' },
-    power: { t: '⚡ POWER NODE',     c: '#7fdcff', d: 'Live conduit. Towers built on this tile deal <b>+25% DAMAGE</b>.' },
-    dead:  { t: '▦ DEAD ZONE',      c: '#ff5252', d: 'Scorched sector. <b>Nothing can be built here.</b>' },
-    block: { t: '▪ DATA BLOCK',     c: '#8fb3d4', d: 'Solid obstruction. Cannot build on it.' },
-  };
-  function tapTileInfo(cell) {
-    const g = GAME;
-    if (g.corrupt[cell.x + ',' + cell.y]) {
-      const nodes = [
-        UTIL.h('div', 'tp-title', '<span style="color:#c86bff">☣ CORRUPTED TILE</span>'),
-        UTIL.h('div', 'tp-desc', 'Spreads to a neighboring tile after every wave, eating your build space.'),
-      ];
-      if (g.phase === 'build') nodes.push(buildPurgeCard());
-      showTilePop(cell.y, nodes, g.phase !== 'build');
-      AUDIO.sfx.click();
-      return true;
-    }
-    const tk = g.tileAt(cell.x, cell.y) || (g.grid[cell.x + ',' + cell.y] === 'block' ? 'block' : null);
-    const info = TILE_INFO[tk];
-    if (!info) return false;
-    showTilePop(cell.y, [
-      UTIL.h('div', 'tp-title', '<span style="color:' + info.c + '">' + info.t + '</span>'),
-      UTIL.h('div', 'tp-desc', info.d),
-    ], true);
+  function selectTurret(t) {
+    selTurret = t; selSocket = null;
+    renderTurretSheet();
+    $('sheet-build').classList.remove('open');
+    $('sheet-turret').classList.add('open');
+    showRange(t.mesh.position, t.stat('range') || 1.2, t.def.color);
+    INPUT.focusOn(t.mesh.position.y + 2.5);
     AUDIO.sfx.click();
-    return true;
   }
 
-  // ============================================================ ALERT CHIPS
-  // When the intel panel has no room (tall boards), pending decisions surface
-  // as pulsing chips above the build bar; tapping one opens the card popup.
-  function renderAlertChips(panelFits) {
-    const g = GAME;
-    const box = $('alert-chips');
-    box.innerHTML = '';
-    const pending = [];
-    if (g.active && g.phase === 'build' && !panelFits && !g.placingType) {
-      if (g.fork && !g.forkPick) pending.push(['⑂ ROUTE', buildForkCard, '']);
-      if (g.deal) pending.push([DATA.DEALS[g.deal.id].ico + ' DEAL', buildDealCard, '']);
-      if (Object.keys(g.corrupt).length) pending.push(['☣ PURGE ¤' + g.purgeCost(), buildPurgeCard, 'danger']);
+  function clearSel() {
+    selSocket = null; selTurret = null;
+    $('sheet-build').classList.remove('open');
+    $('sheet-turret').classList.remove('open');
+    hideRange();
+  }
+
+  function renderBuildSheet() {
+    $('build-socket-n').textContent = '#' + (selSocket.i + 1);
+    const cards = $('build-cards');
+    cards.innerHTML = '';
+    const cap = GAME.powerCap(), used = GAME.powerUsed();
+    for (const id of CONFIG.TURRET_ORDER) {
+      const d = CONFIG.TURRETS[id];
+      const afford = GAME.salvage >= d.cost && used + d.power <= cap;
+      const card = UTIL.h('div', 'b-card' + (selType === id ? ' sel' : '') + (afford ? '' : ' cant'),
+        '<div class="bc-ico" style="color:#' + d.color.toString(16).padStart(6, '0') + '">' + d.ico + '</div>' +
+        '<div class="bc-name">' + d.name.toUpperCase() + '</div>' +
+        '<div class="bc-cost">¤ ' + d.cost + '</div>' +
+        '<div class="bc-pow">' + (d.gen ? '+' + d.gen + ' ⚡' : d.power + ' ⚡') + '</div>');
+      card.onclick = () => { selType = id; renderBuildSheet(); AUDIO.sfx.click(); };
+      cards.appendChild(card);
     }
-    for (const [label, builder, cls] of pending) {
-      const b = UTIL.h('button', 'al-chip ' + cls, label);
-      b.onclick = () => { AUDIO.unlock(); showTilePop(null, [builder()], false); };
-      box.appendChild(b);
-    }
-    box.style.bottom = '192px';
-    box.classList.toggle('show', pending.length > 0);
-    // an open action card is stale once the build phase ends
-    if (tilePopSticky && g.phase !== 'build') hideTilePop();
-  }
-
-  // ================================================================ ABILITIES
-  function buildAbilityBar() {
-    const wrap = $('ability-btns');
-    wrap.innerHTML = '';
-    const unlocked = Object.keys(DATA.ABILITIES).filter(k => GAME.levelN >= DATA.ABILITIES[k].unlock);
-    $('ability-bar').classList.toggle('show', unlocked.length > 0);
-    for (const key of unlocked) {
-      const a = DATA.ABILITIES[key];
-      const b = UTIL.h('button', 'ab-btn', a.ico + '<span class="ab-cost">' + GAME.abilityCost(key) + '</span>');
-      b.dataset.ab = key;
-      b.title = a.name + ' — ' + a.desc;
-      b.onclick = () => { AUDIO.unlock(); GAME.castAbility(key); };
-      wrap.appendChild(b);
-    }
-    refreshAbilities();
-  }
-
-  function refreshAbilities() {
-    const g = GAME;
-    if (!g.active) return;
-    $('energy-fill').style.height = Math.round(g.energy) + '%';
-    document.querySelectorAll('.ab-btn').forEach(b => {
-      const key = b.dataset.ab;
-      const ready = g.abilityReady(key);
-      b.disabled = !ready;
-      b.classList.toggle('ready', ready);
-      b.classList.toggle('armed', g.abilityTarget === 'strike' && key === 'strike');
-    });
-  }
-
-  // ================================================================ CHIP PICKER
-  function showChipPicker(choices) {
-    if (!choices || !choices.length) return;
-    const card = $('chip-card');
-    card.innerHTML = '';
-    card.appendChild(UTIL.h('h2', '', '◈ PROTOCOL CHIP'));
-    card.appendChild(UTIL.h('div', 'chip-sub', 'Pick one boost for this deployment.'));
-    for (const c of choices) {
-      const b = UTIL.h('button', 'chip-opt',
-        '<span class="ci">' + c.ico + '</span><span><span class="cn">' + c.name + '</span><br><span class="cd">' + c.desc + '</span></span>');
-      b.onclick = () => {
-        GAME.pickChip(c.id);
-        $('chip-overlay').classList.remove('show');
-        toast('CHIP INSTALLED: ' + c.name.toUpperCase(), 'warn');
-        AUDIO.sfx.upgrade();
-        refreshChipInd();
-      };
-      card.appendChild(b);
-    }
-    $('chip-overlay').classList.add('show');
-  }
-
-  // persistent badge showing the active chip; tap it to re-read the effect
-  function refreshChipInd() {
-    const box = $('chip-ind');
-    const g = GAME;
-    if (!g.active || !g.chips.length) { box.classList.remove('show'); return; }
-    const defs = g.chips.map(id => DATA.CHIPS.find(c => c.id === id)).filter(Boolean);
-    box.innerHTML = defs.map(c => '<span>' + c.ico + '</span>').join('');
-    box.onclick = () => {
-      toast(defs.map(c => c.ico + ' ' + c.name + ': ' + c.desc).join(' · '), 'warn');
-      AUDIO.sfx.click();
+    const d = CONFIG.TURRETS[selType];
+    let body = $('sheet-build').querySelector('.b-desc');
+    if (!body) { body = UTIL.h('div', 'b-desc'); $('sheet-build').appendChild(body); }
+    body.innerHTML = d.desc;
+    let btn = $('sheet-build').querySelector('.b-confirm');
+    if (!btn) { btn = UTIL.h('button', 'btn btn-primary b-confirm'); $('sheet-build').appendChild(btn); }
+    const afford = GAME.salvage >= d.cost && GAME.powerUsed() + d.power <= GAME.powerCap();
+    btn.textContent = afford ? '✓ BUILD ' + d.name.toUpperCase() + ' — ¤ ' + d.cost : (GAME.salvage < d.cost ? 'NEED ¤ ' + d.cost : 'NEED ⚡ POWER');
+    btn.disabled = !afford;
+    btn.onclick = () => {
+      const t = GAME.build(selSocket, selType);
+      if (t) { clearSel(); selectTurret(t); }
     };
-    box.classList.add('show');
+    // preview the range from this socket
+    if (d.range) showRange(selSocket.pos, d.range, d.color); else hideRange();
   }
 
-  function hurtFlash() {
-    const elv = $('hud-lives');
-    elv.classList.remove('hurt');
-    void elv.offsetWidth;
-    elv.classList.add('hurt');
-  }
-
-  function phaseBanner(text, threat) {
-    const b = $('phase-banner');
-    b.textContent = text;
-    b.classList.toggle('threat', !!threat);
-    b.classList.add('show');
-    if (bannerTimer) clearTimeout(bannerTimer);
-    bannerTimer = setTimeout(() => b.classList.remove('show'), 2600);
-  }
-
-  function toast(msg, kind) {
-    const zone = $('toast-zone');
-    while (zone.children.length >= 3) zone.removeChild(zone.firstChild);
-    const t = UTIL.h('div', 'toast' + (kind ? ' ' + kind : ''), msg);
-    zone.appendChild(t);
-    setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 2700);
-  }
-
-  function bossBar(e) {
-    bossRef = e;
-    $('boss-bar').classList.toggle('show', !!e);
-    if (e) $('boss-bar-name').textContent = e.displayName || e.def.name;
-  }
-  setInterval(() => {
-    if (bossRef && !bossRef.dead) {
-      $('boss-bar-fill').style.width = Math.max(0, bossRef.hp / bossRef.maxHp * 100) + '%';
-    } else if (bossRef) bossBar(null);
-    // live tickers: combo, energy, rush countdown
-    const g = GAME;
-    if (!g.active) return;
-    const ci = $('combo-ind');
-    if (g.combo >= 5 && g.phase === 'combat') {
-      ci.textContent = '×' + g.combo + ' COMBO';
-      ci.classList.add('show');
-      ci.style.transform = 'scale(' + Math.min(1.5, 1 + g.combo * 0.01) + ')';
-    } else ci.classList.remove('show');
-    if (g.phase === 'combat') refreshAbilities();
-  }, 120);
-  // rush bonus countdown on the start button (cheap, only during build)
-  setInterval(() => {
-    if (GAME.active && GAME.phase === 'build' && GAME.rushT > 0) updateHUD();
-  }, 1000);
-
-  function checkAchToasts() {
-    const fresh = SAVE.checkAchievements();
-    for (const a of fresh) toast('🏆 ' + a.name.toUpperCase(), 'warn');
-  }
-
-  // ================================================================ BUILD BAR
-  function buildBuildBar() {
-    const bar = $('build-bar');
-    bar.innerHTML = '';
-    const unlocked = MAPS.unlockedTowers(GAME.levelN);
-    for (const id of unlocked) {
-      const t = DATA.TOWERS[id];
-      const item = UTIL.h('div', 'bb-item');
-      item.dataset.type = id;
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = 72;
-      RENDER.paintTowerIcon(cv, id, 0);
-      item.appendChild(cv);
-      item.appendChild(UTIL.h('div', 'bb-cost', '¤' + GAME.towerCost(id)));
-      item.appendChild(UTIL.h('div', 'bb-name', t.name));
-      item.onclick = () => {
-        if (GAME.phase !== 'build') { toast('DEPLOY ONLY BETWEEN WAVES', 'warn'); AUDIO.sfx.error(); return; }
-        if (GAME.placingType === id) { cancelPlacement(); }
-        else {
-          GAME.placingType = id; GAME.placeCell = null; GAME.selectedTower = null;
-          closeSheets(); hideTilePop(); renderPlaceInfo(id);
-          renderBuildSheet(id); $('build-panel').classList.add('open');
-          refreshPlaceActions(); renderWaveIntel();
-        }
-        refreshBuildBarState();
-        AUDIO.sfx.click();
-      };
-      bar.appendChild(item);
-    }
-    refreshBuildBarState();
-  }
-
-  function refreshBuildBarState() {
-    const g = GAME;
-    document.querySelectorAll('.bb-item').forEach(item => {
-      const id = item.dataset.type;
-      item.classList.toggle('selected', g.placingType === id);
-      item.classList.toggle('poor', g.cash < g.towerCost(id));
-      item.classList.toggle('disabled', g.phase !== 'build');
-    });
-  }
-
-  // Compact info inside the single placement bar (no sheet during placement)
-  function renderPlaceInfo(id) {
-    const t = DATA.TOWERS[id];
-    const l0 = t.levels[0];
-    const box = $('place-info');
-    box.innerHTML = '';
-    const cv = document.createElement('canvas'); cv.width = cv.height = 72;
-    RENDER.paintTowerIcon(cv, id, 0);
-    box.appendChild(cv);
-    const mid = UTIL.h('div');
-    mid.appendChild(UTIL.h('div', 'pi-name', t.name + ' — ¤' + GAME.towerCost(id)));
-    const bits = [];
-    if (l0.dmg) bits.push('DMG ' + l0.dmg);
-    if (l0.rate) bits.push(Math.round(l0.rate * 100) / 100 + '/s');
-    bits.push('RNG ' + l0.range);
-    if (l0.slow) bits.push('SLOW ' + Math.round(l0.slow * 100) + '%');
-    if (l0.splash) bits.push('SPLASH ' + l0.splash);
-    if (l0.chains) bits.push('CHAIN ×' + l0.chains);
-    if (l0.income) bits.push('+¤' + l0.income + '/wave');
-    if (l0.buffDmg) bits.push('+' + Math.round(l0.buffDmg * 100) + '% DMG aura');
-    if (t.dtype) bits.push('<span style="color:' + DATA.DTYPES[t.dtype].color + '">' + DATA.DTYPES[t.dtype].ico + ' ' + DATA.DTYPES[t.dtype].name + '</span>');
-    bits.push(t.air ? 'hits air' : 'ground only');
-    mid.appendChild(UTIL.h('div', 'pi-stats', bits.join(' · ')));
-    box.appendChild(mid);
-  }
-
-  function statChips(lv) {
-    const bits = [];
-    if (lv.dmg) bits.push('DMG <b>' + Math.round(lv.dmg) + '</b>');
-    if (lv.rate) bits.push('RATE <b>' + (Math.round(lv.rate * 100) / 100) + '/s</b>');
-    bits.push('RANGE <b>' + lv.range + '</b>');
-    if (lv.slow) bits.push('SLOW <b>' + Math.round(lv.slow * 100) + '%</b>');
-    if (lv.splash) bits.push('SPLASH <b>' + lv.splash + '</b>');
-    if (lv.chains) bits.push('CHAINS <b>' + lv.chains + '</b>');
-    if (lv.stun) bits.push('STUN <b>' + lv.stun + 's</b>');
-    if (lv.income) bits.push('INCOME <b>¤' + lv.income + '/wave</b>');
-    if (lv.buffDmg) bits.push('BUFF <b>+' + Math.round(lv.buffDmg * 100) + '% DMG</b>');
-    if (lv.buffRate) bits.push('BUFF <b>+' + Math.round(lv.buffRate * 100) + '% RATE</b>');
-    return bits.map(b => '<span>' + b + '</span>').join('');
-  }
-
-  // ================================================================ BUILD SHEET
-  // Rich pre-placement sheet: stats plus the full evolution path (tiers +
-  // branch machines) so upgrading has a visible destination. Collapses to the
-  // compact placement card on the first grid tap.
-  function renderBuildSheet(id) {
-    const t = DATA.TOWERS[id];
-    const body = $('build-panel-body');
-    body.innerHTML = '';
-    const head = UTIL.h('div', 'tp-head');
-    const cv = document.createElement('canvas'); cv.width = cv.height = 92;
-    RENDER.paintTowerIcon(cv, id, 0);
-    head.appendChild(cv);
-    const hd = UTIL.h('div');
-    hd.appendChild(UTIL.h('div', 'tp-title', t.name + ' — <span style="color:#ffd166">¤' + GAME.towerCost(id) + '</span>'));
-    const bits = [];
-    if (t.dtype) bits.push('<span style="color:' + DATA.DTYPES[t.dtype].color + '">' + DATA.DTYPES[t.dtype].ico + ' ' + DATA.DTYPES[t.dtype].name + '</span>');
-    bits.push(t.air ? 'HITS AIR' : 'GROUND ONLY');
-    hd.appendChild(UTIL.h('div', 'tp-tier', bits.join(' · ')));
-    head.appendChild(hd);
-    body.appendChild(head);
-    const x = UTIL.h('button', 'sheet-close', '✕');
-    x.onclick = () => { cancelPlacement(); AUDIO.sfx.click(); };
-    body.appendChild(x);
-    body.appendChild(UTIL.h('div', 'tp-stats', statChips(t.levels[0])));
-    body.appendChild(UTIL.h('div', 'bs-desc', t.desc));
-    // evolution path: tier icons growing into the two branch machines
-    const evo = UTIL.h('div', 'evo-row');
-    for (let i = 0; i < 4; i++) {
-      if (i > 0) evo.appendChild(UTIL.h('span', 'evo-arrow', '›'));
-      const ec = document.createElement('canvas');
-      ec.width = ec.height = 64;
-      ec.className = 'evo-ico';
-      RENDER.paintTowerIcon(ec, id, i);
-      evo.appendChild(ec);
-    }
-    body.appendChild(UTIL.h('div', 'bs-label', 'EVOLUTION'));
-    body.appendChild(evo);
-    const brs = DATA.BRANCHES[id];
-    if (brs) {
-      body.appendChild(UTIL.h('div', 'bs-label', 'TIER III SPECIALIZATIONS — PICK ONE'));
-      const row = UTIL.h('div', 'evo-branches');
-      brs.forEach((b, bi) => {
-        const card = UTIL.h('div', 'evo-branch');
-        const bc = document.createElement('canvas');
-        bc.width = bc.height = 72;
-        RENDER.paintTowerIcon(bc, id, 3, bi);
-        card.appendChild(bc);
-        const tx = UTIL.h('div');
-        tx.appendChild(UTIL.h('div', 'eb-name', b.ico + ' ' + b.name));
-        tx.appendChild(UTIL.h('div', 'eb-desc', b.desc));
-        card.appendChild(tx);
-        row.appendChild(card);
-      });
-      body.appendChild(row);
-    }
-  }
-
-  // ================================================================ TOWER PANEL
-  const MODES = ['first', 'last', 'strong', 'close'];
-  function openTowerPanel(tw) {
-    GAME.selectedTower = tw;
-    GAME.placingType = null; GAME.placeCell = null;
-    refreshBuildBarState();
-    renderTowerPanel();
-    $('build-panel').classList.remove('open');
-    $('tower-panel').classList.add('open');
-  }
-
-  function renderTowerPanel() {
-    const tw = GAME.selectedTower;
-    if (!tw) return;
-    const body = $('tower-panel-body');
-    body.innerHTML = '';
-    const head = UTIL.h('div', 'tp-head');
-    const cv = document.createElement('canvas'); cv.width = cv.height = 92;
-    RENDER.paintTowerIcon(cv, tw.type, tw.tier, tw.branch);
-    head.appendChild(cv);
-    const hd = UTIL.h('div');
-    const branchName = (tw.tier === 3 && tw.branch !== null && DATA.BRANCHES[tw.type])
-      ? DATA.BRANCHES[tw.type][tw.branch].name : null;
-    hd.appendChild(UTIL.h('div', 'tp-title', branchName || tw.def.name));
-    hd.appendChild(UTIL.h('div', 'tp-tier', 'TIER ' + UTIL.ROMAN[tw.tier] + (branchName ? ' ★' : '') + ' · ' + tw.kills + ' KILLS'));
-    head.appendChild(hd);
-    body.appendChild(head);
-    const x = UTIL.h('button', 'sheet-close', '✕');
-    x.onclick = closeSheets;
-    body.appendChild(x);
-    body.appendChild(UTIL.h('div', 'tp-stats', statChips(tw.def.levels[tw.tier])));
-
-    const upCost = tw.upgradeCost();
-    const isBranchPoint = tw.tier === 2 && DATA.BRANCHES[tw.type];
-
-    if (tw.tier < 3 && !isBranchPoint) {
-      const nxt = tw.def.levels[tw.tier + 1];
-      body.appendChild(UTIL.h('div', 'tp-upnext', '⬆ TIER ' + UTIL.ROMAN[tw.tier + 1] + ': ' + statChips(nxt)));
-    }
-
-    // final upgrade forks: choose a specialization
-    if (isBranchPoint) {
-      body.appendChild(UTIL.h('div', 'tp-upnext', '⬆ TIER IV — choose a specialization (¤' + upCost + '):'));
-      const brow = UTIL.h('div', 'branch-row');
-      DATA.BRANCHES[tw.type].forEach((br, idx) => {
-        const b = UTIL.h('button', 'branch-btn',
-          '<div class="bn">' + br.ico + ' ' + br.name.toUpperCase() + '</div><div class="bd">' + br.desc + '</div>');
-        b.disabled = GAME.cash < upCost || GAME.phase !== 'build';
-        b.onclick = () => { if (GAME.upgradeTower(tw, idx)) renderTowerPanel(); };
-        brow.appendChild(b);
-      });
-      body.appendChild(brow);
-    }
-
-    const row = UTIL.h('div', 'tp-actions');
-    if (!isBranchPoint) {
-      const up = UTIL.h('button', 'btn btn-primary', upCost === null ? 'MAX TIER' : '⬆ UPGRADE ¤' + upCost);
-      up.disabled = upCost === null || GAME.cash < upCost || GAME.phase !== 'build';
-      up.onclick = () => { if (GAME.upgradeTower(tw)) renderTowerPanel(); };
+  function renderTurretSheet() {
+    const t = selTurret;
+    const body = $('turret-body');
+    const col = '#' + t.def.color.toString(16).padStart(6, '0');
+    let stats = '';
+    if (t.type === 'generator') stats = '+' + Math.round(t.stat('gen')) + ' ⚡ power to the grid';
+    else if (t.type === 'stasis') stats = 'Slows ' + Math.round(t.stat('slow') * 100) + '% · range ' + t.stat('range').toFixed(1);
+    else stats = 'DMG ' + t.stat('dmg').toFixed(1) + ' · ' + t.stat('rate').toFixed(1) + '/s · range ' + t.stat('range').toFixed(1) + (t.def.knock ? ' · knock ' + t.stat('knock').toFixed(1) : '') + ' · kills ' + t.kills;
+    const upCost = t.upgradeCost;
+    body.innerHTML =
+      '<div class="t-head"><div class="t-ico" style="color:' + col + '">' + t.def.ico + '</div>' +
+      '<div><div class="t-name">' + t.def.name.toUpperCase() + '</div>' +
+      '<div class="t-lvl">' + '▮'.repeat(t.level) + '▯'.repeat(3 - t.level) + ' LEVEL ' + t.level + '</div></div></div>' +
+      '<div class="t-stats">' + stats + '</div>';
+    const row = UTIL.h('div', 't-row');
+    if (upCost !== null) {
+      const up = UTIL.h('button', 'btn btn-primary', '▲ UPGRADE ¤ ' + upCost);
+      up.disabled = GAME.salvage < upCost;
+      up.onclick = () => { if (GAME.upgrade(t)) renderTurretSheet(); };
       row.appendChild(up);
+    } else {
+      row.appendChild(UTIL.h('button', 'btn', '★ MAX LEVEL')).disabled = true;
     }
-
-    if (tw.def.kind !== 'income' && tw.def.kind !== 'buffaura' && tw.def.kind !== 'slowaura' && tw.def.kind !== 'field' && tw.def.kind !== 'emp') {
-      const tgt = UTIL.h('button', 'btn', '◎ ' + tw.targetMode.toUpperCase());
-      tgt.onclick = () => {
-        tw.targetMode = MODES[(MODES.indexOf(tw.targetMode) + 1) % MODES.length];
-        tgt.textContent = '◎ ' + tw.targetMode.toUpperCase();
-        AUDIO.sfx.click();
-      };
-      row.appendChild(tgt);
+    if (t.type !== 'generator' && t.type !== 'stasis') {
+      const oc = UTIL.h('button', 'btn' + (t.overclockT > 0 ? ' oc-active' : ''),
+        t.overclockT > 0 ? '⚡ OVERCLOCKED' : (t.ocCooldown > 0 ? '⚡ COOLING ' + Math.ceil(t.ocCooldown) + 's' : '⚡ OVERCLOCK ¤ ' + CONFIG.ECONOMY.overclockCost));
+      oc.disabled = t.ocCooldown > 0 || GAME.salvage < CONFIG.ECONOMY.overclockCost;
+      oc.onclick = () => { if (GAME.overclock(t)) renderTurretSheet(); };
+      row.appendChild(oc);
     }
-
-    const refund = tw.fresh ? tw.invested : tw.sellValue();
-    const sell = UTIL.h('button', 'btn btn-danger', tw.fresh ? '↩ UNDO ¤' + refund : '✕ SELL ¤' + refund);
-    sell.disabled = GAME.phase !== 'build';
-    sell.onclick = () => { if (GAME.sellTower(tw)) closeSheets(); };
-    row.appendChild(sell);
-    if (tw.fresh) {
-      body.appendChild(UTIL.h('div', 'tp-upnext', 'Fresh deployment — UNDO refunds the full ¤' + refund + ' until the wave starts.'));
-    }
+    const sl = UTIL.h('button', 'btn', '✕ SELL ¤ ' + Math.round(t.spent * CONFIG.ECONOMY.sellRefund));
+    sl.onclick = () => { GAME.sell(t); clearSel(); };
+    row.appendChild(sl);
     body.appendChild(row);
-    if (GAME.phase !== 'build') {
-      body.appendChild(UTIL.h('div', 'tp-upnext', '⏳ Wave in progress — modifications locked until deploy phase.'));
+    showRange(t.mesh.position, t.stat('range') || 1.2, t.def.color);
+  }
+
+  // ---------------- HUD ----------------
+  function updateHUD() {
+    $('v-core').textContent = GAME.coreHP;
+    $('hud-core').classList.toggle('low', GAME.coreHP <= 3);
+    $('v-salvage').textContent = UTIL.fmt(GAME.salvage);
+    const used = GAME.powerUsed(), cap = GAME.powerCap();
+    $('v-power').textContent = used + '/' + cap;
+    $('hud-power').classList.toggle('full', used >= cap);
+    $('v-wave').textContent = 'W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : CONFIG.MAX_WAVE) + (GAME.endless ? '·∞' : '/' + CONFIG.MAX_WAVE);
+    // refresh open sheets so costs stay truthful
+    if (selSocket && $('sheet-build').classList.contains('open')) renderBuildSheet();
+  }
+
+  function onPhase() {
+    const b = $('btn-wave');
+    if (GAME.phase === 'build') {
+      b.classList.remove('hidden2');
+      const interest = Math.min(CONFIG.ECONOMY.interestCap, Math.floor(GAME.salvage * CONFIG.ECONOMY.interestRate));
+      b.textContent = '▶ START WAVE ' + GAME.wave + (interest > 0 ? '  (+' + interest + ' ¤ interest)' : '');
+      renderPreview();
+    } else {
+      b.classList.add('hidden2');
+      $('wave-preview').innerHTML = '';
+      clearSel();
     }
   }
 
-  function closeSheets() {
-    $('tower-panel').classList.remove('open');
-    $('build-panel').classList.remove('open');
-    if (GAME.selectedTower) GAME.selectedTower = null;
-    if (!GAME.placingType) $('place-actions').classList.remove('show');
+  function renderPreview() {
+    const box = $('wave-preview');
+    box.innerHTML = '<span style="opacity:.7">NEXT:</span>';
+    const comp = CONFIG.wave(GAME.wave);
+    const totals = {};
+    for (const grp of comp) totals[grp.type] = (totals[grp.type] || 0) + grp.count;
+    for (const type in totals) {
+      const d = CONFIG.ENEMIES[type];
+      const col = '#' + d.color.toString(16).padStart(6, '0');
+      box.appendChild(UTIL.h('span', 'wp-chip',
+        '<span style="color:' + col + '">' + d.ico + '</span> ' + d.name + ' <b>×' + totals[type] + '</b>' +
+        (d.flying ? ' ✈' : '') + (d.boss ? ' ☠' : '')));
+    }
   }
 
-  // ================================================================ END / PAUSE
-  function showEnd(won, stars, cores) {
+  // ---------------- feedback ----------------
+  let bannerT = null;
+  function banner(msg, warn) {
+    const b = $('banner');
+    b.textContent = msg;
+    b.classList.toggle('warn', !!warn);
+    b.classList.add('show');
+    clearTimeout(bannerT);
+    bannerT = setTimeout(() => b.classList.remove('show'), 2200);
+  }
+  function toast(msg, kind) {
+    const t = UTIL.h('div', 'toast' + (kind ? ' ' + kind : ''), msg);
+    $('toast-zone').appendChild(t);
+    setTimeout(() => t.remove(), 2400);
+  }
+  let comboT = null;
+  function combo(msg) {
+    const c = $('combo-ind');
+    c.textContent = msg;
+    c.classList.add('show');
+    clearTimeout(comboT);
+    comboT = setTimeout(() => c.classList.remove('show'), 1400);
+  }
+  function hurt() {
+    const h = $('hurt-vignette');
+    h.style.opacity = 1;
+    setTimeout(() => h.style.opacity = 0, 220);
+  }
+
+  // ---------------- end screens ----------------
+  function showEnd(won) {
     const card = $('end-card');
+    const s = GAME.stats;
     card.innerHTML = '';
-    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'NODE SECURED' : 'CORE BREACHED'));
+    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'SPIRE HELD' : 'CORE BREACHED'));
+    card.appendChild(UTIL.h('div', 'end-line',
+      (won ? 'All ' + CONFIG.MAX_WAVE + ' waves repelled.' : 'Fell on wave ' + GAME.wave + ' of ' + CONFIG.MAX_WAVE + '.') +
+      '<br><b>' + s.kills + '</b> threats destroyed · <b>' + s.throws + '</b> thrown off the spire' +
+      '<br>gravity paid <b>¤ ' + s.fallSalvage + '</b> · interest paid <b>¤ ' + s.interest + '</b>' +
+      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked));
     if (won) {
-      const gr = GAME.grade || 'B';
-      const gcol = { S: '#ffd166', A: '#7fdcff', B: '#9fd4ff', C: '#7fa8c9' }[gr];
-      card.appendChild(UTIL.h('div', '', '<span style="font-size:44px;font-weight:900;color:' + gcol +
-        ';text-shadow:0 0 20px ' + gcol + '">' + gr + '</span>' +
-        (gr === 'S' ? ' <span style="font-size:11px;color:#ffd166">FLAWLESS +30% ◈</span>' : '')));
-      card.appendChild(UTIL.h('div', 'end-stars', '★'.repeat(stars) + '<span style="opacity:.25">' + '★'.repeat(3 - stars) + '</span>'));
-      card.appendChild(UTIL.h('div', 'end-line',
-        'Integrity ' + GAME.lives + '/' + GAME.maxLives + ' · ' + GAME.stats.kills + ' kills · best combo ×' + (GAME.bestCombo || 0) +
-        '<br>' + (GAME.perfectWaves || 0) + ' perfect waves · DATA CORES: <b>+' + cores + ' ◈</b>'));
-    } else {
-      card.appendChild(UTIL.h('div', 'end-line',
-        'Survived to wave ' + GAME.wave + ' of ' + GAME.totalWaves +
-        '<br>' + GAME.stats.kills + ' threats neutralized.'));
-    }
-    if (won) {
-      if (!GAME.endless) {
-        const cont = UTIL.h('button', 'btn', '∞ CONTINUE ENDLESS');
-        cont.onclick = () => {
-          $('end-overlay').classList.remove('show');
-          GAME.endless = true;
-          GAME.phase = 'build';
-          phaseBanner('OVERTIME — THREATS COMPOUND. NO RETREAT.', true);
-          updateHUD();
-        };
-        card.appendChild(cont);
-      }
-      if (GAME.levelN < 50 && !GAME.endless) {
-        const nxt = UTIL.h('button', 'btn btn-primary', '▶ NEXT NODE');
-        nxt.onclick = () => {
-          $('end-overlay').classList.remove('show');
-          GAME.start(GAME.levelN + 1, GAME.diff, false);
-        };
-        card.appendChild(nxt);
-      }
-    } else {
-      const rty = UTIL.h('button', 'btn btn-primary', '↻ RETRY NODE');
-      rty.onclick = () => {
+      const cont = UTIL.h('button', 'btn btn-primary', '∞ CONTINUE — OVERTIME');
+      cont.onclick = () => {
         $('end-overlay').classList.remove('show');
-        GAME.start(GAME.levelN, GAME.diff, GAME.endless);
+        GAME.endless = true;
+        GAME.phase = 'build';
+        banner('OVERTIME — WAVES COMPOUND FOREVER', true);
+        onPhase(); updateHUD();
       };
-      card.appendChild(rty);
+      card.appendChild(cont);
     }
-    const back = UTIL.h('button', 'btn', 'NODE SELECT');
-    back.onclick = () => { $('end-overlay').classList.remove('show'); GAME.quit(); refreshMenu(); openLevels(); };
-    card.appendChild(back);
+    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ ' + (won ? 'NEW RUN' : 'RETRY'));
+    again.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
+    card.appendChild(again);
     $('end-overlay').classList.add('show');
   }
 
-  function togglePause(on) {
-    GAME.paused = on;
-    $('pause-overlay').classList.toggle('show', on);
-    if (on) renderPauseToggles();
-  }
-  function renderPauseToggles() {
-    const box = $('pause-toggles');
-    box.innerHTML = '';
-    [['sfx', '♪ SFX'], ['music', '♫ MUSIC'], ['shake', '✷ SHAKE']].forEach(([k, label]) => {
-      const s = UTIL.h('span', SAVE.state.settings[k] ? '' : 'off', label);
-      s.onclick = () => {
-        SAVE.state.settings[k] = !SAVE.state.settings[k];
-        SAVE.persist(); AUDIO.applySettings();
-        s.classList.toggle('off', !SAVE.state.settings[k]);
-      };
-      box.appendChild(s);
-    });
-  }
-
-  // ================================================================ CANVAS INPUT
-  // Touch flow: tap/drag positions the ghost, big ✓ DEPLOY button confirms.
-  // Mouse flow: hover previews, click places instantly.
-  function refreshPlaceActions() {
-    const g = GAME;
-    const box = $('place-actions');
-    // once a tile is chosen the build sheet collapses into the compact card
-    if (g.placeCell) $('build-panel').classList.remove('open');
-    const sheetOpen = $('build-panel').classList.contains('open');
-    const active = !!(g.active && g.placingType && g.placeCell && g.phase === 'build');
-    box.classList.toggle('show', !!(g.active && g.placingType && g.phase === 'build' && !sheetOpen));
-    if (!g.placingType) return;
-    // dodge the card away from the tile being placed
-    if (g.placeCell) {
-      const p = RENDER.cellToScreen(g.placeCell.x, g.placeCell.y);
-      box.classList.toggle('top', p.y > window.innerHeight * 0.52);
-    } else {
-      box.classList.remove('top');
-    }
-    // deploy button only exists once a tile is chosen — no placeholder state
-    box.classList.toggle('armed', !!g.placeCell);
-    if (!g.placeCell) return;
-    const ok = $('btn-place-ok');
-    const cost = g.towerCost(g.placingType);
-    const valid = active && g.cellFree(g.placeCell.x, g.placeCell.y) && g.cash >= cost;
-    ok.disabled = !valid;
-    let tileTag = '';
-    if (valid) {
-      const tk = g.tileAt(g.placeCell.x, g.placeCell.y);
-      if (tk === 'hill') tileTag = '  ▲ +1 RANGE';
-      else if (tk === 'power') tileTag = '  ⚡ +25% DMG';
-    }
-    let blockedLabel = 'BLOCKED TILE';
-    if (g.corrupt[g.placeCell.x + ',' + g.placeCell.y]) blockedLabel = '☣ CORRUPTED — PURGE FIRST';
-    else if (g.tileAt(g.placeCell.x, g.placeCell.y) === 'dead') blockedLabel = '▦ DEAD ZONE';
-    ok.textContent = valid ? '✓ DEPLOY  ¤' + cost + tileTag
-      : (!g.cellFree(g.placeCell.x, g.placeCell.y) ? blockedLabel : 'NEED ¤' + cost);
-  }
-
-  function cancelPlacement() {
-    GAME.placingType = null;
-    GAME.placeCell = null;
-    closeSheets();
-    refreshBuildBarState();
-    refreshPlaceActions();
-    renderWaveIntel();
-  }
-
-  let undoHintShown = false;
-  function confirmPlacement() {
-    const g = GAME;
-    if (!g.placingType || !g.placeCell) return;
-    if (g.placeTower(g.placingType, g.placeCell.x, g.placeCell.y)) {
-      g.placeCell = null;
-      if (!undoHintShown) {
-        undoHintShown = true;
-        toast('DEPLOYED — misplaced? ' + UTIL.tapWordLc() + ' it → UNDO for a full refund', 'warn');
-      }
-      // keep placing while affordable for rapid multi-build
-      if (g.cash < g.towerCost(g.placingType)) cancelPlacement();
-      else { refreshBuildBarState(); refreshPlaceActions(); }
-    }
-  }
-
-  function bindCanvas(canvas) {
-    let dragging = false;
-    const updateGhost = ev => {
-      const c = RENDER.screenToCell(ev.clientX, ev.clientY);
-      const g = GAME;
-      if (c.x >= 0 && c.y >= 0 && c.x < g.level.cols && c.y < g.level.rows) {
-        g.placeCell = c;
-        refreshPlaceActions();
-      }
-    };
-    canvas.addEventListener('pointermove', ev => {
-      if (!GAME.active || !GAME.placingType) return;
-      if (ev.pointerType === 'mouse' || dragging) updateGhost(ev);
-    });
-    canvas.addEventListener('pointerup', () => { dragging = false; });
-    canvas.addEventListener('pointercancel', () => { dragging = false; });
-    canvas.addEventListener('pointerdown', ev => {
-      if (!GAME.active) return;
-      AUDIO.unlock();
-      const cell = RENDER.screenToCell(ev.clientX, ev.clientY);
-      const g = GAME;
-
-      // orbital strike targeting takes priority over everything
-      if (g.abilityTarget === 'strike') {
-        const w = RENDER.screenToWorld(ev.clientX, ev.clientY);
-        g.doStrike(w.x, w.y);
-        return;
-      }
-
-      if (g.placingType) {
-        const inGrid = cell.x >= 0 && cell.y >= 0 && cell.x < g.level.cols && cell.y < g.level.rows;
-        if (!inGrid) { cancelPlacement(); return; }
-        if (ev.pointerType === 'mouse') {
-          // desktop: click places directly at the hovered cell
-          g.placeCell = cell;
-          confirmPlacement();
-        } else {
-          // tapping the already-ghosted tile again also confirms (fallback to the ✓ button)
-          if (g.placeCell && g.placeCell.x === cell.x && g.placeCell.y === cell.y && g.cellFree(cell.x, cell.y)) {
-            confirmPlacement();
-            return;
-          }
-          dragging = true;
-          g.placeCell = cell;
-          refreshPlaceActions();
-          AUDIO.sfx.click();
-        }
-        return;
-      }
-
-      const tw = g.towerAt(cell.x, cell.y);
-      if (tw) {
-        hideTilePop();
-        if (g.selectedTower === tw) { closeSheets(); }       // tap again = deselect
-        else { openTowerPanel(tw); AUDIO.sfx.click(); }
-      } else {
-        closeSheets();
-        // tap a special tile → explain it (and offer PURGE on corruption)
-        const wasOpen = $('tile-pop').classList.contains('show');
-        hideTilePop();
-        if (!wasOpen) tapTileInfo(cell);
-      }
-    });
-  }
-
-  // ================================================================ WIRING
+  // ---------------- wiring ----------------
   function init() {
-    $('btn-play').onclick = () => { AUDIO.unlock(); openLevels(); };
-    $('btn-research').onclick = () => { AUDIO.unlock(); openResearch(); };
-    $('btn-codex').onclick = () => { AUDIO.unlock(); openCodex(); };
-    $('btn-achievements').onclick = () => { AUDIO.unlock(); openAch(); };
-    $('btn-settings').onclick = () => { AUDIO.unlock(); openSettings(); };
-    document.querySelectorAll('.btn-back').forEach(b => {
-      b.onclick = () => { refreshMenu(); show(b.dataset.back); };
-    });
-    document.querySelectorAll('.ctab').forEach(t => {
-      t.onclick = () => { codexTab = t.dataset.ctab; renderCodex(); };
-    });
-
-    // wipe with confirm
-    let wipeArmed = false;
-    $('btn-wipe').onclick = () => {
-      if (!wipeArmed) { wipeArmed = true; $('btn-wipe').textContent = UTIL.tapWord() + ' AGAIN TO CONFIRM WIPE'; setTimeout(() => { wipeArmed = false; $('btn-wipe').textContent = 'WIPE SAVE DATA'; }, 2500); return; }
-      SAVE.wipe(); refreshMenu(); show('screen-menu');
+    $('btn-start').onclick = () => {
+      AUDIO.unlock();
+      $('screen-title').classList.remove('show');
+      $('hud').classList.remove('hidden');
+      GAME.start();
+      INPUT.focusBase();
+      if (!SAVE.state.bestWave) $('help-overlay').classList.add('show');
     };
-
-    // game controls
-    $('btn-place-ok').onclick = () => { AUDIO.unlock(); confirmPlacement(); };
-    $('btn-place-cancel').onclick = () => { cancelPlacement(); AUDIO.sfx.click(); };
-    $('btn-start-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
-    $('btn-speed').onclick = () => { $('btn-speed').textContent = GAME.cycleSpeed() + '×'; AUDIO.sfx.click(); };
-    $('btn-pause').onclick = () => togglePause(true);
-    $('btn-resume').onclick = () => togglePause(false);
-    $('btn-restart').onclick = () => { togglePause(false); GAME.start(GAME.levelN, GAME.diff, GAME.endless); };
-    $('btn-quit').onclick = () => { togglePause(false); GAME.quit(); refreshMenu(); openLevels(); };
-    $('btn-mainmenu').onclick = () => { togglePause(false); GAME.quit(); refreshMenu(); show('screen-menu'); };
-    $('ob-skip').onclick = () => { endOnboarding(true); AUDIO.sfx.click(); };
-
-    // keyboard (desktop / portal reviewers): P or Space pause, Space starts the
-    // wave in build phase, 1/2/3 speed presets. Esc too, where the host allows it.
-    window.addEventListener('keydown', e => {
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if (curScreen !== 'screen-game' || !GAME.active) return;
-      if ($('chip-overlay').classList.contains('show') || $('end-overlay').classList.contains('show')) return;
-      const k = e.key;
-      if (k === 'p' || k === 'P' || k === 'Escape') {
-        e.preventDefault();
-        togglePause(!GAME.paused);
-      } else if (k === ' ') {
-        e.preventDefault();
-        if (GAME.paused) togglePause(false);
-        else if (GAME.phase === 'build') { AUDIO.unlock(); GAME.startWave(); }
-        else togglePause(true);
-      } else if ((k === '1' || k === '2' || k === '3') && !GAME.paused) {
-        GAME.speed = { 1: 1, 2: 2, 3: 4 }[k];
-        $('btn-speed').textContent = GAME.speed + '×';
-      }
-    });
-
-    bindCanvas(UTIL.el('game-canvas'));
-    refreshMenu();
-
-    window.addEventListener('resize', () => { if (GAME.active) RENDER.resize(GAME); });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && GAME.active && GAME.phase === 'combat') togglePause(true);
-    });
+    $('btn-wave').onclick = () => { AUDIO.unlock(); GAME.startWave(); };
+    $('btn-pause').onclick = () => { GAME.paused = true; $('pause-overlay').classList.add('show'); syncMuteLabel(); };
+    $('btn-resume').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); };
+    $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(); INPUT.focusBase(); };
+    $('btn-mute').onclick = () => { AUDIO.setMuted(!SAVE.state.muted); syncMuteLabel(); };
+    $('btn-help').onclick = () => { $('pause-overlay').classList.remove('show'); $('help-overlay').classList.add('show'); };
+    $('btn-help-close').onclick = () => { $('help-overlay').classList.remove('show'); GAME.paused = false; };
+    $('btn-speed').onclick = () => {
+      GAME.speed = GAME.speed === 1 ? 2 : 1;
+      $('btn-speed').textContent = GAME.speed + '×';
+      AUDIO.sfx.click();
+    };
+    const best = SAVE.state.bestWave;
+    $('title-best').textContent = best ? 'BEST: WAVE ' + best + (SAVE.state.victories ? ' · ' + SAVE.state.victories + ' VICTORIES' : '') : '';
   }
+  function syncMuteLabel() { $('btn-mute').textContent = 'SOUND: ' + (SAVE.state.muted ? 'OFF' : 'ON'); }
 
-  return {
-    init, show, refreshMenu, openLevels,
-    enterGame, updateHUD, phaseBanner, toast, bossBar, hurtFlash,
-    closeSheets, showEnd, checkAchToasts,
-    showChipPicker, refreshAbilities,
-  };
+  return { init, onTap, updateHUD, onPhase, banner, toast, combo, hurt, showEnd, clearSel };
 })();

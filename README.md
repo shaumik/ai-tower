@@ -1,19 +1,21 @@
-# NEURAL SIEGE
+# NEURAL SPIRE
 
 **▶ Play: https://shaumik.github.io/ai-tower/**
 
-AI-themed tower defense, built for the **MHCP Creator Competition** (Tower
-Defense & Strategy). Single-player, portrait, pure HTML5 canvas — no engine,
-no external assets, zero network requests at runtime.
+Vertical tower defense built with Three.js for the **MHCP Creator Competition**
+(Tower Defense & Strategy). Single-player, portrait, zero network requests.
 
-50 levels, 32 enemy types, 5 sector bosses, 12 tower families with tier-3
-branch specializations — build between waves, then watch your defense hold.
-Damage types with weaknesses and resistances, terrain tiles, pre-wave deals,
-spreading corruption, and status combos keep every node fresh.
+The map is a literal tower: rogue processes climb a helical ramp toward the
+summit core, and you mount defenses on sockets spiraling up the outside.
+**Gravity is a weapon** — Repulsor turrets hurl climbers off the spire, and
+fall height pays a salvage bonus. The spire blocks its own defenses (no
+shooting through the column), fliers skip the ramp entirely, and the economy
+runs on three interlocking systems: salvage + interest on reserves, a hard
+power grid fed by socket-hungry generators, and overclock bursts.
 
 | | | |
 |---|---|---|
-| ![Menu](docs/screens/menu-v18.png) | ![Combat](docs/screens/combat-v18.png) | ![Tower panel](docs/screens/tower-panel-v18.png) |
+| ![Title](docs/screens/title.png) | ![Build](docs/screens/build.png) | ![Combat](docs/screens/combat.png) |
 
 ## Competition submission
 
@@ -21,14 +23,15 @@ The three MHCP artefacts:
 
 1. **Playable build** — `python3 tools/build_competition.py` assembles the
    modular sources (`css/`, `js/`) into a single readable, unminified
-   `dist/index.html` and packages `dist/neural-siege-mhcp.zip`
-   (index.html at the zip's top level; no third-party libraries used).
+   `dist/index.html` and packages `dist/neural-spire-mhcp.zip`
+   (index.html at the zip's top level; Three.js in `vendor/`, referenced
+   with a relative path).
 2. **Design Intent** — `submission/design-intent.docx`
 3. **Build Log** — `BUILD_LOG.md`
 
 ## Development
 
 Sources are modular for development: `js/*.js` + `css/style.css`, loaded by
-the root `index.html`. Open it with any static server (or `file://`) — there
-is no build step for dev. `mock.html` is the art-direction sandbox used to
-iterate the visual style.
+the root `index.html`; `vendor/three.min.js` is the only dependency. Open
+`index.html` with any static server or straight from `file://` — there is no
+build step for dev.

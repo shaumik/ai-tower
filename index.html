@@ -3,189 +3,118 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#05070d">
-<title>NEURAL SIEGE — AI Tower Defense</title>
+<meta name="theme-color" content="#04060c">
+<title>NEURAL SPIRE — Vertical Tower Defense</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div id="app">
 
-  <!-- ============ MAIN MENU ============ -->
-  <section id="screen-menu" class="screen active">
-    <div class="menu-bg" id="menu-bg-anim"></div>
-    <div class="menu-inner">
+  <!-- 3D viewport -->
+  <canvas id="gl"></canvas>
+
+  <!-- ============ TITLE ============ -->
+  <section id="screen-title" class="overlay show">
+    <div class="title-card">
       <div class="logo">
         <div class="logo-top">NEURAL</div>
-        <div class="logo-bottom">SIEGE</div>
-        <div class="logo-sub">AI TOWER DEFENSE</div>
+        <div class="logo-bottom">SPIRE</div>
+        <div class="logo-sub">VERTICAL TOWER DEFENSE</div>
       </div>
-      <div class="menu-buttons">
-        <button class="btn btn-primary btn-big" id="btn-play">DEPLOY</button>
-        <button class="btn" id="btn-research">RESEARCH LAB</button>
-        <button class="btn" id="btn-codex">THREAT CODEX</button>
-        <button class="btn" id="btn-achievements">ACHIEVEMENTS</button>
-        <button class="btn" id="btn-settings">SETTINGS</button>
-      </div>
-      <div class="menu-stats" id="menu-stats"></div>
+      <p class="title-pitch">Rogue processes are climbing the spire.<br>
+      Hold the summit core. <b>Gravity is a weapon.</b></p>
+      <button class="btn btn-primary btn-big" id="btn-start">DEFEND THE SPIRE</button>
+      <div class="title-best" id="title-best"></div>
     </div>
   </section>
 
-  <!-- ============ LEVEL SELECT ============ -->
-  <section id="screen-levels" class="screen">
-    <header class="screen-head">
-      <button class="btn btn-back" data-back="screen-menu">‹</button>
-      <h1>SELECT NODE</h1>
-      <div class="head-cores" id="levels-cores">◈ 0</div>
-    </header>
-    <div class="sector-tabs" id="sector-tabs"></div>
-    <div class="levels-scroll"><div class="level-grid" id="level-grid"></div></div>
-    <div class="level-detail" id="level-detail"></div>
-  </section>
-
-  <!-- ============ RESEARCH ============ -->
-  <section id="screen-research" class="screen">
-    <header class="screen-head">
-      <button class="btn btn-back" data-back="screen-menu">‹</button>
-      <h1>RESEARCH LAB</h1>
-      <div class="head-cores" id="research-cores">◈ 0</div>
-    </header>
-    <p class="screen-hint">Spend Data Cores ◈ earned from victories on permanent upgrades.</p>
-    <div class="research-scroll" id="research-list"></div>
-  </section>
-
-  <!-- ============ CODEX ============ -->
-  <section id="screen-codex" class="screen">
-    <header class="screen-head">
-      <button class="btn btn-back" data-back="screen-menu">‹</button>
-      <h1>CODEX</h1>
-      <div></div>
-    </header>
-    <div class="codex-tabs">
-      <button class="ctab active" data-ctab="threats">THREATS</button>
-      <button class="ctab" data-ctab="towers">DEFENSES</button>
-    </div>
-    <div class="codex-scroll" id="codex-list"></div>
-  </section>
-
-  <!-- ============ ACHIEVEMENTS ============ -->
-  <section id="screen-achievements" class="screen">
-    <header class="screen-head">
-      <button class="btn btn-back" data-back="screen-menu">‹</button>
-      <h1>ACHIEVEMENTS</h1>
-      <div id="ach-count"></div>
-    </header>
-    <div class="codex-scroll" id="ach-list"></div>
-  </section>
-
-  <!-- ============ SETTINGS ============ -->
-  <section id="screen-settings" class="screen">
-    <header class="screen-head">
-      <button class="btn btn-back" data-back="screen-menu">‹</button>
-      <h1>SETTINGS</h1>
-      <div></div>
-    </header>
-    <div class="settings-list" id="settings-list"></div>
-    <div class="settings-danger">
-      <button class="btn btn-danger" id="btn-wipe">WIPE SAVE DATA</button>
-      <p class="screen-hint">Version <span id="version-label"></span> · <span id="offline-hint">Works fully offline once loaded.</span></p>
-    </div>
-  </section>
-
-  <!-- ============ GAME ============ -->
-  <section id="screen-game" class="screen">
-    <canvas id="game-canvas"></canvas>
-    <div class="side-dress side-l"></div>
-    <div class="side-dress side-r"></div>
-
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="hidden">
     <div id="hud-top">
       <button class="hud-btn" id="btn-pause">☰</button>
-      <div class="hud-stat" id="hud-lives"><span class="ico">⬢</span><span id="hud-lives-v">20</span></div>
-      <div class="hud-stat" id="hud-cash"><span class="ico">¤</span><span id="hud-cash-v">0</span></div>
-      <div class="hud-stat" id="hud-wave"><span id="hud-wave-v">1/10</span></div>
+      <div class="hud-stat" id="hud-core"><span class="ico">⬢</span><span id="v-core">10</span></div>
+      <div class="hud-stat" id="hud-salvage"><span class="ico">¤</span><span id="v-salvage">0</span></div>
+      <div class="hud-stat" id="hud-power"><span class="ico">⚡</span><span id="v-power">0/8</span></div>
+      <div class="hud-stat" id="hud-wave"><span id="v-wave">1/15</span></div>
       <button class="hud-btn" id="btn-speed">1×</button>
     </div>
 
-    <div id="phase-banner"></div>
-    <div id="combo-ind"></div>
-    <div id="chip-ind"></div>
-
-    <div id="ability-bar">
-      <div id="energy-bar"><div id="energy-fill"></div></div>
-      <div id="ability-btns"></div>
-    </div>
-    <div id="boss-bar"><div id="boss-bar-name"></div><div class="boss-track"><div id="boss-bar-fill"></div></div></div>
+    <div id="banner"></div>
     <div id="toast-zone"></div>
-
-    <div id="place-actions">
-      <button class="pa-close" id="btn-place-cancel">✕</button>
-      <div id="place-info"></div>
-      <button class="btn btn-primary" id="btn-place-ok">✓ DEPLOY</button>
-    </div>
-
-    <div id="wave-intel"></div>
-    <div id="tile-pop"></div>
-    <div id="alert-chips"></div>
-
-    <div id="onboard-layer">
-      <div id="ob-ring"></div>
-      <div id="ob-arrow">▼</div>
-      <div id="ob-label"></div>
-      <button id="ob-skip">SKIP ✕</button>
-    </div>
+    <div id="combo-ind"></div>
+    <div id="hurt-vignette"></div>
 
     <div id="hud-bottom">
-      <div id="build-bar"></div>
-      <button class="btn btn-primary" id="btn-start-wave">▶ START WAVE</button>
+      <div id="wave-preview"></div>
+      <button class="btn btn-primary" id="btn-wave">▶ START WAVE</button>
     </div>
 
-    <div id="tower-panel" class="sheet">
+    <!-- build sheet: shown when an empty socket is selected -->
+    <div id="sheet-build" class="sheet">
       <div class="sheet-grip"></div>
-      <div id="tower-panel-body"></div>
+      <div class="sheet-title">BUILD — SOCKET <span id="build-socket-n"></span></div>
+      <div id="build-cards"></div>
     </div>
 
-    <div id="build-panel" class="sheet">
+    <!-- turret sheet: shown when a turret is selected -->
+    <div id="sheet-turret" class="sheet">
       <div class="sheet-grip"></div>
-      <div id="build-panel-body"></div>
+      <div id="turret-body"></div>
     </div>
+  </div>
 
-    <div id="pause-overlay" class="overlay">
-      <div class="overlay-card">
-        <h2>PAUSED</h2>
-        <button class="btn btn-primary" id="btn-resume">RESUME</button>
-        <button class="btn" id="btn-restart">RESTART NODE</button>
-        <button class="btn" id="btn-quit">ABANDON</button>
-        <button class="btn" id="btn-mainmenu">MAIN MENU</button>
-        <div class="pause-toggles" id="pause-toggles"></div>
-      </div>
+  <!-- ============ OVERLAYS ============ -->
+  <div id="pause-overlay" class="overlay">
+    <div class="overlay-card">
+      <h2>PAUSED</h2>
+      <button class="btn btn-primary" id="btn-resume">RESUME</button>
+      <button class="btn" id="btn-restart">RESTART RUN</button>
+      <button class="btn" id="btn-mute">SOUND: ON</button>
+      <button class="btn" id="btn-help">HOW TO PLAY</button>
     </div>
+  </div>
 
-    <div id="end-overlay" class="overlay">
-      <div class="overlay-card" id="end-card"></div>
-    </div>
+  <div id="end-overlay" class="overlay">
+    <div class="overlay-card" id="end-card"></div>
+  </div>
 
-    <div id="chip-overlay" class="overlay">
-      <div class="overlay-card" id="chip-card"></div>
+  <div id="help-overlay" class="overlay">
+    <div class="overlay-card help-card">
+      <h2>HOW TO PLAY</h2>
+      <p><b>Drag</b> to orbit and climb the spire. <b>Tap a socket</b> to build.</p>
+      <p>Threats climb the ramp from the base. If they reach the summit, the
+      core takes damage. Lose all 10 integrity and the spire falls.</p>
+      <p><b>¤ Salvage</b> comes from kills — and unspent salvage earns
+      <b>interest</b> every wave, so hoarding pays… until it doesn't.</p>
+      <p><b>⚡ Power</b> limits how much you can run. Generators add power but
+      occupy defense sockets.</p>
+      <p><b>Repulsors throw climbers off the spire.</b> The higher the fall,
+      the bigger the salvage bonus.</p>
+      <p>Fliers ignore the ramp and rise straight up — cover your airspace.</p>
+      <button class="btn btn-primary" id="btn-help-close">GOT IT</button>
     </div>
-  </section>
+  </div>
 
   <!-- portrait-orientation prompt: shown only on landscape phones -->
   <div id="rotate-overlay">
     <div class="rotate-icon">⟳</div>
     <div class="rotate-msg">PLEASE ROTATE YOUR DEVICE</div>
-    <div class="rotate-sub">NEURAL SIEGE is a portrait game.</div>
+    <div class="rotate-sub">NEURAL SPIRE is a portrait game.</div>
   </div>
 
 </div>
 
+<script src="vendor/three.min.js"></script>
 <script src="js/util.js"></script>
-<script src="js/data.js"></script>
+<script src="js/config.js"></script>
 <script src="js/save.js"></script>
 <script src="js/audio.js"></script>
-<script src="js/maps.js"></script>
-<script src="js/waves.js"></script>
-<script src="js/entities.js"></script>
-<script src="js/render.js"></script>
+<script src="js/spire.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/turrets.js"></script>
 <script src="js/game.js"></script>
+<script src="js/input.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 </body>
