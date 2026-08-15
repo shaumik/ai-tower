@@ -398,10 +398,14 @@ const GAME = (function () {
 
     for (const w of g.workers) w.update(dt, g);
     g.workers = g.workers.filter(w => w.alive);
-    // mercy rule: never soft-locked out of the economy
-    if (g.workers.length === 0 && g.minerals < ECO.workerCost && MAP.totalReserves() > 0) {
+    // mercy rule: never soft-locked out of the economy — but only between
+    // waves, and never as a conveyor of free corpses
+    g.mercyT = Math.max(0, (g.mercyT || 0) - dt);
+    if (g.phase === 'build' && g.mercyT === 0 &&
+        g.workers.length === 0 && g.minerals < ECO.workerCost && MAP.totalReserves() > 0) {
       UI.toast('EMERGENCY MINER DEPLOYED', 'warn');
       spawnWorker(true);
+      g.mercyT = 12;
     }
 
     for (const e of g.enemies) e.slowK = 1;   // stasis wells re-apply during building updates
