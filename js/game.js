@@ -14,6 +14,7 @@ const GAME = (function () {
     enemies: [],
     spawnQueue: [],
     combatT: 0,
+    prepT: 0,                  // build-phase countdown — waves launch themselves
     time: 0,
     speed: 1,
     paused: false,
@@ -39,6 +40,12 @@ const GAME = (function () {
       if (key.endsWith('Mult')) v *= m; else v += m;
     }
     return v;
+  }
+
+  // prep window before each wave: generous early, tightening as ops advance
+  function prepTime() {
+    const w = g.wave, L = g.level ? g.level.n : 1;
+    return Math.max(16, 32 - w * 0.8 - L * 0.6);
   }
 
   function interestRate() { return g.tech.compound ? 0.12 : ECO.interestRate; }
@@ -101,6 +108,7 @@ const GAME = (function () {
     // two starter workers — the economy begins immediately
     for (let i = 0; i < 2; i++) spawnWorker(true);
     g.phase = 'build';
+    g.prepT = prepTime() + 8;   // first wave: extra time to orient
     rollDirectives();
     UI.onPhase();
     UI.banner('OP ' + g.level.n + ' — ' + g.level.name, false);
@@ -245,10 +253,18 @@ const GAME = (function () {
   }
 
   // ---------------- waves ----------------
-  function startWave() {
+  function startWave(early) {
     if (g.phase !== 'build') return;
     g.dirOffer = null;
     g.waveEarn = { mined: 0, scrap: 0, interest: 0, lossPay: 0 };
+    // early-call bonus: pay for the prep time you gave up
+    if (early && g.prepT > 2) {
+      const bonus = Math.round(g.prepT * 1.3);
+      g.minerals += bonus;
+      g.waveEarn.earlyCall = bonus;
+      UI.toast('+' + bonus + ' ¤ EARLY-CALL BONUS', 'warn');
+      AUDIO.sfx.cash();
+    }
     const interest = Math.round(Math.min(interestCap(), g.minerals * interestRate()) * mod('interestMult', 1));
     if (interest > 0) {
       g.minerals += interest;
@@ -285,6 +301,7 @@ const GAME = (function () {
     const e = g.waveEarn;
     const parts = [];
     if (e.mined) parts.push('mined ¤' + e.mined);
+    if (e.earlyCall) parts.push('early call ¤' + e.earlyCall);
     if (e.scrap) parts.push('scrap ¤' + e.scrap);
     if (e.interest) parts.push('interest ¤' + e.interest);
     if (e.lossPay) parts.push('insurance ¤' + e.lossPay);
@@ -294,6 +311,7 @@ const GAME = (function () {
     g.wave++;
     if (!g.endless && g.wave > g.level.waves) { victoryEnd(); return; }
     g.phase = 'build';
+    g.prepT = prepTime();
     rollDirectives();
     UI.banner('WAVE CLEAR — REINFORCE', false);
     UI.onPhase();
@@ -380,6 +398,12 @@ const GAME = (function () {
     for (const e of g.enemies) e.slowK = 1;   // stasis wells re-apply during building updates
     for (const b of g.buildings) b.update(dt, g);
 
+    if (g.phase === 'build') {
+      g.prepT -= dt;
+      UI.tickPrep(g.prepT);
+      if (g.prepT <= 0) startWave(false);
+    }
+
     if (g.phase === 'combat') {
       g.combatT += dt;
       while (g.spawnQueue.length && g.spawnQueue[0].at <= g.combatT) {
@@ -397,7 +421,7 @@ const GAME = (function () {
 
   // public surface
   g.start = start;
-  g.startWave = startWave;
+  g.startWave = () => startWave(true);
   g.buyWorker = buyWorker;
   g.placeBuilding = placeBuilding;
   g.canPlace = canPlace;

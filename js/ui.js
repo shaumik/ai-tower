@@ -156,8 +156,7 @@ const UI = (function () {
     const b = $('btn-wave');
     if (GAME.phase === 'build') {
       b.classList.remove('hidden2');
-      const interest = Math.round(Math.min(GAME.interestCap(), GAME.minerals * GAME.interestRate()) * GAME.mod('interestMult', 1));
-      b.textContent = '▶ WAVE ' + GAME.wave + (interest > 0 ? ' (+' + interest + ' ¤)' : '');
+      tickPrep(GAME.prepT);
       renderPreview();
       renderDirectives();
     } else {
@@ -166,6 +165,18 @@ const UI = (function () {
       $('directive-bar').innerHTML = '';
     }
     renderBuildBar();
+  }
+
+  // wave button doubles as the countdown display
+  let lastPrepLabel = '';
+  function tickPrep(t) {
+    if (GAME.phase !== 'build') return;
+    const bonus = Math.round(Math.max(0, t) * 1.3);
+    const label = '▶ WAVE ' + GAME.wave + ' IN ' + Math.max(0, Math.ceil(t)) + 's' + (bonus > 2 ? ' — CALL NOW +¤' + bonus : '');
+    if (label !== lastPrepLabel) {
+      lastPrepLabel = label;
+      $('btn-wave').textContent = label;
+    }
   }
 
   function renderPreview() {
@@ -389,5 +400,5 @@ const UI = (function () {
   }
   function syncMuteLabel() { $('btn-mute').textContent = 'SOUND: ' + (SAVE.state.muted ? 'OFF' : 'ON'); }
 
-  return { init, onTap, updateHUD, onPhase, banner, toast, hurt, showEnd, clearSel, openLevels };
+  return { init, onTap, updateHUD, onPhase, banner, toast, hurt, showEnd, clearSel, openLevels, tickPrep };
 })();
