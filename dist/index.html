@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#04060c">
-<title>NEURAL SPIRE — Vertical Tower Defense</title>
+<title>HARVEST PROTOCOL — RTS Base Defense</title>
 <style>
 /* NEURAL SPIRE — HUD & overlay styles (dark neon, portrait-first) */
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -32,7 +32,7 @@ body {
   padding:5px 8px; font-size:11.5px; font-weight:800;
 }
 .hud-stat .ico { font-size:12px; opacity:.9; }
-#hud-core .ico { color:#ff5d7a; } #hud-salvage .ico { color:#ffd166; }
+#hud-core .ico { color:#ff5d7a; } #hud-minerals .ico { color:#ffd166; } #hud-workers .ico { color:#9dffb0; }
 #hud-power .ico { color:#7fdcff; }
 #hud-core.low { animation:blink .6s steps(2) infinite; border-color:#ff5d7a; }
 #hud-power.full { border-color:#ffd166; }
@@ -147,13 +147,13 @@ body {
 .b-desc { font-size:11px; color:#7fa8c9; line-height:1.5; min-height:32px; margin-top:8px; }
 .b-confirm { margin-top:8px; width:100%; }
 
-#turret-body .t-head { display:flex; align-items:center; gap:10px; }
-#turret-body .t-ico { font-size:26px; }
-#turret-body .t-name { font-size:13px; font-weight:800; letter-spacing:1px; }
-#turret-body .t-lvl { font-size:10px; color:#ffd166; letter-spacing:2px; font-weight:800; }
-#turret-body .t-stats { font-size:11px; color:#7fa8c9; margin:7px 0 9px; line-height:1.5; }
-#turret-body .t-row { display:flex; gap:8px; }
-#turret-body .t-row .btn { flex:1; padding:11px 6px; font-size:11.5px; letter-spacing:1px; }
+#sel-body .t-head { display:flex; align-items:center; gap:10px; }
+#sel-body .t-ico { font-size:26px; }
+#sel-body .t-name { font-size:13px; font-weight:800; letter-spacing:1px; }
+#sel-body .t-lvl { font-size:10px; color:#ffd166; letter-spacing:2px; font-weight:800; }
+#sel-body .t-stats { font-size:11px; color:#7fa8c9; margin:7px 0 9px; line-height:1.5; }
+#sel-body .t-row { display:flex; gap:8px; }
+#sel-body .t-row .btn { flex:1; padding:11px 6px; font-size:11.5px; letter-spacing:1px; }
 .oc-active { border-color:#ffd166 !important; color:#ffd166; }
 
 /* ---------------- overlays ---------------- */
@@ -273,6 +273,32 @@ body {
 .lvl-stars { font-size:13px; color:#ffd166; flex-shrink:0; letter-spacing:1px; }
 .lvl-stars .off { opacity:.22; }
 
+/* ---- build bar (RTS): always available, horizontally scrollable ---- */
+#build-bar {
+  display:flex; gap:6px; overflow-x:auto; max-width:100%;
+  padding:2px 2px 4px; pointer-events:auto;
+}
+#build-bar .b-card { flex:0 0 76px; padding:6px 5px; }
+#build-bar .bc-ico { font-size:18px; }
+#build-bar .bc-name { font-size:8.5px; }
+#build-bar .bc-cost { font-size:10px; }
+#build-bar .bc-pow { font-size:8.5px; }
+
+/* ---- placement confirm bar ---- */
+#place-bar {
+  position:absolute; left:10px; right:10px; bottom:calc(env(safe-area-inset-bottom) + 12px);
+  z-index:30; display:none; gap:8px; align-items:center;
+  background:rgba(8,14,26,.97); border:1px solid #2a78be; border-radius:16px;
+  padding:9px 10px; box-shadow:0 -6px 24px rgba(0,0,0,.5);
+}
+#place-bar.show { display:flex; }
+#place-bar .btn { padding:10px 13px; font-size:11.5px; flex-shrink:0; }
+#place-hint {
+  flex:1; text-align:center; font-size:9px; letter-spacing:1px; color:#5f89ad;
+  font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#btn-tech { padding:12px 15px; }
+
 </style>
 </head>
 <body>
@@ -285,24 +311,24 @@ body {
   <section id="screen-title" class="overlay show">
     <div class="title-card">
       <div class="logo">
-        <div class="logo-top">NEURAL</div>
-        <div class="logo-bottom">SPIRE</div>
-        <div class="logo-sub">VERTICAL TOWER DEFENSE</div>
+        <div class="logo-top">HARVEST</div>
+        <div class="logo-bottom">PROTOCOL</div>
+        <div class="logo-sub">MINE · BUILD · HOLD THE LINE</div>
       </div>
-      <p class="title-pitch">Rogue processes are climbing the spire.<br>
-      Hold the summit core. <b>Gravity is a weapon.</b></p>
-      <button class="btn btn-primary btn-big" id="btn-start">DEFEND THE SPIRE</button>
-      <button class="btn" id="btn-levels">SELECT NODE</button>
+      <p class="title-pitch">Your miners feed the war machine.<br>
+      Raiders feed on your miners. <b>The economy is the battle.</b></p>
+      <button class="btn btn-primary btn-big" id="btn-start">DEPLOY</button>
+      <button class="btn" id="btn-levels">SELECT OPERATION</button>
       <div class="title-best" id="title-best"></div>
     </div>
   </section>
 
-  <!-- ============ NODE SELECT ============ -->
+  <!-- ============ OPERATION SELECT ============ -->
   <section id="screen-levels" class="overlay">
     <div class="levels-card">
       <div class="levels-head">
         <button class="btn btn-sm" id="btn-levels-back">‹ BACK</button>
-        <div class="levels-title">SELECT NODE</div>
+        <div class="levels-title">OPERATIONS</div>
         <div class="levels-stars" id="levels-stars"></div>
       </div>
       <div class="levels-scroll" id="levels-list"></div>
@@ -313,44 +339,45 @@ body {
   <div id="hud" class="hidden">
     <div id="hud-top">
       <button class="hud-btn" id="btn-pause">☰</button>
-      <div class="hud-stat" id="hud-core"><span class="ico">⬢</span><span id="v-core">10</span></div>
-      <div class="hud-stat" id="hud-salvage"><span class="ico">¤</span><span id="v-salvage">0</span></div>
-      <div class="hud-stat" id="hud-power"><span class="ico">⚡</span><span id="v-power">0/8</span></div>
-      <div class="hud-stat" id="hud-wave"><span id="v-wave">1/15</span></div>
+      <div class="hud-stat" id="hud-core"><span class="ico">⬢</span><span id="v-core">20</span></div>
+      <div class="hud-stat" id="hud-minerals"><span class="ico">¤</span><span id="v-minerals">0</span></div>
+      <div class="hud-stat" id="hud-power"><span class="ico">⚡</span><span id="v-power">0/6</span></div>
+      <div class="hud-stat" id="hud-workers"><span class="ico">⛏</span><span id="v-workers">0/4</span></div>
+      <div class="hud-stat" id="hud-wave"><span id="v-wave"></span></div>
       <button class="hud-btn" id="btn-speed">1×</button>
     </div>
 
     <div id="banner"></div>
     <div id="toast-zone"></div>
-    <div id="combo-ind"></div>
     <div id="hurt-vignette"></div>
 
     <div id="hud-bottom">
       <div id="directive-bar"></div>
       <div id="wave-preview"></div>
+      <div id="build-bar"></div>
       <div id="bottom-row">
-        <button class="btn" id="btn-tech">⚙ SPIRE OS</button>
+        <button class="btn" id="btn-tech">⚙</button>
         <button class="btn btn-primary" id="btn-wave">▶ START WAVE</button>
       </div>
     </div>
 
-    <!-- build sheet: shown when an empty socket is selected -->
-    <div id="sheet-build" class="sheet">
-      <div class="sheet-grip"></div>
-      <div class="sheet-title">BUILD — SOCKET <span id="build-socket-n"></span></div>
-      <div id="build-cards"></div>
+    <!-- placement confirm -->
+    <div id="place-bar">
+      <button class="btn" id="btn-place-cancel">✕ CANCEL</button>
+      <div id="place-hint">DRAG TO POSITION</div>
+      <button class="btn btn-primary" id="btn-place-ok">✓ BUILD</button>
     </div>
 
-    <!-- turret sheet: shown when a turret is selected -->
-    <div id="sheet-turret" class="sheet">
+    <!-- selection sheet (building / worker / field) -->
+    <div id="sheet-sel" class="sheet">
       <div class="sheet-grip"></div>
-      <div id="turret-body"></div>
+      <div id="sel-body"></div>
     </div>
 
-    <!-- SPIRE OS: in-run tech tree -->
+    <!-- CORE OS: in-run tech tree -->
     <div id="sheet-tech" class="sheet">
       <div class="sheet-grip"></div>
-      <div class="sheet-title">⚙ SPIRE OS — PERMANENT UPGRADES THIS RUN</div>
+      <div class="sheet-title">⚙ CORE OS — PERMANENT UPGRADES THIS RUN</div>
       <div id="tech-list"></div>
     </div>
   </div>
@@ -360,7 +387,7 @@ body {
     <div class="overlay-card">
       <h2>PAUSED</h2>
       <button class="btn btn-primary" id="btn-resume">RESUME</button>
-      <button class="btn" id="btn-restart">RESTART RUN</button>
+      <button class="btn" id="btn-restart">RESTART OPERATION</button>
       <button class="btn" id="btn-mute">SOUND: ON</button>
       <button class="btn" id="btn-help">HOW TO PLAY</button>
     </div>
@@ -373,21 +400,18 @@ body {
   <div id="help-overlay" class="overlay">
     <div class="overlay-card help-card">
       <h2>HOW TO PLAY</h2>
-      <p><b>Drag</b> to orbit and climb the spire. <b>Tap a socket</b> to build.</p>
-      <p>Threats climb the ramp from the base. If they reach the summit, the
-      core takes damage. Lose all 10 integrity and the spire falls.</p>
-      <p><b>¤ Salvage</b> comes from kills — and unspent salvage earns
-      <b>interest</b> every wave, so hoarding pays… until it doesn't.</p>
-      <p><b>⚡ Power</b> limits how much you can run. Generators add power but
-      occupy defense sockets.</p>
-      <p>Between waves, <b>directives</b> offer one-wave economic trades, and
-      <b>⚙ SPIRE OS</b> sells permanent upgrades for the run.</p>
-      <p><b>Every node is a different spire</b> — switchbacks, steep risers
-      and plaza rings change where the good sockets are. Layouts are fixed
-      per node, so lost runs teach you the tower.</p>
-      <p><b>Repulsors throw climbers off the spire.</b> The higher the fall,
-      the bigger the salvage bonus.</p>
-      <p>Fliers ignore the ramp and rise straight up — cover your airspace.</p>
+      <p><b>Drag</b> to pan the battlefield. <b>Tap</b> to select.</p>
+      <p><b>¤ Minerals come from mining, not kills.</b> Buy miners at the
+      core; they haul crystal loads to a drop-off. More miners = more income
+      — and raiders hunt them.</p>
+      <p><b>⚡ Power</b> limits your turrets. Generators add power.
+      <b>Depots</b> add remote drop-offs and +2 miner cap. <b>Walls</b> block
+      the ground routes — shape the approach, but they can be broken.</p>
+      <p>Crystal fields <b>run dry</b>. Expanding toward far fields pays more
+      and defends worse.</p>
+      <p>Between waves, <b>directives</b> offer one-wave trades and
+      <b>⚙ CORE OS</b> sells permanent upgrades. Unspent minerals earn
+      <b>interest</b> every wave.</p>
       <button class="btn btn-primary" id="btn-help-close">GOT IT</button>
     </div>
   </div>
@@ -396,7 +420,7 @@ body {
   <div id="rotate-overlay">
     <div class="rotate-icon">⟳</div>
     <div class="rotate-msg">PLEASE ROTATE YOUR DEVICE</div>
-    <div class="rotate-sub">NEURAL SPIRE is a portrait game.</div>
+    <div class="rotate-sub">HARVEST PROTOCOL is a portrait game.</div>
   </div>
 
 </div>
@@ -439,186 +463,202 @@ const UTIL = (function () {
 </script>
 <script>
 /* ====================== js/config.js ====================== */
-/* NEURAL SPIRE — all tuning data in one place */
+/* HARVEST PROTOCOL — all tuning data in one place */
 'use strict';
 const CONFIG = (function () {
 
-  // ---------------- spire geometry defaults ----------------
-  // Levels override height / socket spacing / segment weights to give each
-  // node a distinct topology (see LEVELS below).
-  const SPIRE = {
-    height: 34,
-    rCol: 2.1,         // central column radius (blocks line of sight)
-    rPath: 3.7,        // nominal ramp radius
-    socketEvery: 3.2,  // ramp arc-length between sockets
-  };
-
   // ---------------- economy ----------------
+  // Income comes from MINING, not kills. Workers shuttle crystal loads to
+  // drop-offs; kills pay only token scrap. The economy is the game.
   const ECONOMY = {
-    startSalvage: 130,
-    coreHP: 10,
-    powerBase: 8,
-    interestRate: 0.10,
-    interestCap: 50,
+    startMinerals: 120,
+    coreHP: 20,
+    powerBase: 6,          // power supplied by the core itself
+    workerCost: 50,
+    workerCarry: 8,        // minerals per trip
+    workerCapBase: 4,      // +2 per depot
+    workerHP: 24,
+    mineTime: 1.6,         // seconds at the crystal per load
+    scrapMult: 1,          // token scrap from kills (small)
+    interestRate: 0.08,    // paid on unspent minerals at each wave start
+    interestCap: 40,
     sellRefund: 0.7,
     overclockCost: 25,
     overclockTime: 8,
     overclockCooldown: 18,
-    fallBonusPerUnit: 1.2,
+    repairCostPerHP: 0.5,
   };
 
-  // ---------------- turrets ----------------
-  const TURRETS = {
-    blaster: {
-      name: 'Blaster', ico: '✛', color: 0x7fdcff,
-      cost: 50, power: 2, dmg: 7, rate: 1.7, range: 7.5,
+  // ---------------- buildings ----------------
+  // blocks: occupies grid cells enemies must path around (walls only —
+  // combat/economy structures sit on hover pads and don't block).
+  const BUILDINGS = {
+    cannon: {
+      name: 'Cannon', ico: '✛', color: 0x7fdcff, kind: 'turret',
+      cost: 60, power: 2, hp: 90, dmg: 8, rate: 1.5, range: 8,
       desc: 'Reliable single-target fire. Backbone of any defense.',
     },
     stasis: {
-      name: 'Stasis Well', ico: '❉', color: 0x7fffd4,
-      cost: 70, power: 2, dmg: 0, rate: 0, range: 5.6, slow: 0.48,
-      desc: 'Aura that slows every climber in range. Pairs with anything.',
+      name: 'Stasis Well', ico: '❉', color: 0x7fffd4, kind: 'turret',
+      cost: 70, power: 2, hp: 70, dmg: 0, rate: 0, range: 6, slow: 0.45,
+      desc: 'Aura that slows every hostile in range. Pairs with anything.',
     },
-    repulsor: {
-      name: 'Repulsor', ico: '◎', color: 0xffd166,
-      cost: 90, power: 3, dmg: 3, rate: 0.45, range: 5.2, knock: 9,
-      desc: 'Shockwave hurls climbers off the spire. Fall height pays salvage bonus. Fliers and bosses resist.',
+    mortar: {
+      name: 'Mortar', ico: '◎', color: 0xffd166, kind: 'turret',
+      cost: 95, power: 3, hp: 80, dmg: 14, rate: 0.5, range: 10, minRange: 3.5, splash: 2.2,
+      desc: 'Long-range shells with splash. Blind up close — screen it.',
     },
     tesla: {
-      name: 'Arc Node', ico: '⌁', color: 0xb08cff,
-      cost: 110, power: 3, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
-      desc: 'Lightning forks between up to 3 climbers. Shreds swarms.',
+      name: 'Arc Node', ico: '⌁', color: 0xb08cff, kind: 'turret',
+      cost: 110, power: 3, hp: 80, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
+      desc: 'Lightning forks between up to 3 hostiles. Shreds packs.',
     },
     generator: {
-      name: 'Generator', ico: '⚡', color: 0xffe9a0,
-      cost: 80, power: 0, gen: 6, dmg: 0, rate: 0, range: 0,
-      desc: '+6 power. No weapon — it spends a defense socket to grow your grid.',
+      name: 'Generator', ico: '⚡', color: 0xffe9a0, kind: 'eco',
+      cost: 80, power: 0, gen: 6, hp: 70,
+      desc: '+6 power to the grid. Turrets go dark without it.',
+    },
+    depot: {
+      name: 'Depot', ico: '⬒', color: 0x9dffb0, kind: 'eco',
+      cost: 100, power: 1, hp: 110, dropoff: true, workerCap: 2,
+      desc: 'Drop-off point for miners (+2 worker cap). Mine far fields without the long haul.',
+    },
+    wall: {
+      name: 'Wall', ico: '▦', color: 0x8fa8c8, kind: 'wall',
+      cost: 15, power: 0, hp: 160, blocks: true,
+      desc: 'Blocks ground hostiles — they must break it or walk around. Shape their approach.',
     },
   };
-  const TURRET_ORDER = ['blaster', 'stasis', 'repulsor', 'tesla', 'generator'];
-  const UPGRADES = [
-    { cost: 0.9, dmg: 1.65, rate: 1.12, range: 1.12, gen: 1.5, slow: 1.12, knock: 1.25 },
-    { cost: 1.6, dmg: 1.65, rate: 1.12, range: 1.12, gen: 1.5, slow: 1.12, knock: 1.25 },
+  const BUILD_ORDER = ['cannon', 'stasis', 'mortar', 'tesla', 'wall', 'generator', 'depot'];
+  const UPGRADES = [   // turret levels 2 and 3
+    { cost: 0.9, dmg: 1.6, rate: 1.1, range: 1.1, hp: 1.4, gen: 1.5, slow: 1.1 },
+    { cost: 1.6, dmg: 1.6, rate: 1.1, range: 1.1, hp: 1.4, gen: 1.5, slow: 1.1 },
   ];
 
   // ---------------- enemies ----------------
-  // pts = encounter-budget cost used by the wave composer
+  // target: core | workers | buildings. pts = encounter-budget cost.
   const ENEMIES = {
-    crawler:  { name: 'Crawler',  ico: '●', color: 0xff6a4d, hp: 22,  speed: 1.15, salvage: 8,  size: 0.42, dmg: 1, pts: 1.0 },
-    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 13,  speed: 2.1,  salvage: 10, size: 0.34, dmg: 1, pts: 1.4 },
-    gnat:     { name: 'Gnat',     ico: '✦', color: 0x9dff5d, hp: 18,  speed: 1.25, salvage: 12, size: 0.30, dmg: 1, flying: true, pts: 1.8 },
-    brute:    { name: 'Brute',    ico: '■', color: 0xff3d6e, hp: 120, speed: 0.62, salvage: 26, size: 0.62, dmg: 2, armor: 3, pts: 4.5 },
-    boss:     { name: 'ARCHON',   ico: '◆', color: 0xff2255, hp: 800, speed: 0.5,  salvage: 160, size: 1.0, dmg: 3, armor: 4, boss: true, knockImmune: true, pts: 0 },
+    crawler:  { name: 'Crawler', ico: '●', color: 0xff6a4d, hp: 26,  speed: 1.5, scrap: 3, size: 0.42, dmg: 1, pts: 1.0, target: 'core' },
+    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 15,  speed: 2.6, scrap: 4, size: 0.34, dmg: 1, pts: 1.4, target: 'core' },
+    raider:   { name: 'Raider',  ico: '✕', color: 0x9dff5d, hp: 30,  speed: 2.9, scrap: 5, size: 0.36, dmg: 8, pts: 2.0, target: 'workers', atkRate: 0.8 },
+    brute:    { name: 'Brute',   ico: '■', color: 0xff3d6e, hp: 150, speed: 0.9, scrap: 10, size: 0.62, dmg: 12, pts: 4.5, target: 'buildings', armor: 3, atkRate: 0.7 },
+    boss:     { name: 'ARCHON',  ico: '◆', color: 0xff2255, hp: 1100, speed: 0.75, scrap: 60, size: 1.0, dmg: 4, pts: 0, target: 'core', armor: 4, boss: true, wallBreaker: 3 },
   };
 
-  // ---------------- the campaign: 9 authored nodes ----------------
-  // Design intent per node, following classic TD level-design structure:
-  //   - fixed seed: each node IS its spire — attempts are learnable
-  //   - one new element per node (threat, turret, or twist), taught in a
-  //     low-pressure showcase wave before it appears under pressure
-  //   - topology is a difficulty knob: path length buys DPS time, socket
-  //     spacing buys build room, plazas showcase repulsors
-  //   - a breather wave precedes every finale so the player can re-invest
+  // ---------------- the campaign: 9 authored operations ----------------
+  // Fixed seeds: each node IS its map. One new element per node; topology
+  // (field spread, gate directions, rock cover) is a difficulty knob; twist
+  // nodes bend the economy. Maps are portrait: gates north, core south.
   const LEVELS = [
     {
-      n: 1, name: 'BOOTSTRAP', sub: 'Learn the climb', seed: 4021, waves: 8,
-      palette: ['crawler', 'sprinter'], turrets: ['blaster', 'stasis', 'generator'],
-      spire: { height: 30, socketEvery: 2.9, w: { arc: 0.62, sb: 0.14, riser: 0.09, plaza: 0.15 }, plazaMax: 1 },
-      eco: { startSalvage: 150 },
-      intro: 'A gentle spiral with generous sockets. Hold the line.',
-      topo: 'WIDE SPIRAL · DENSE SOCKETS',
+      n: 1, name: 'CLAIM', sub: 'Stake it, mine it, hold it', seed: 811, waves: 8,
+      palette: ['crawler', 'sprinter'], buildings: ['cannon', 'stasis', 'wall', 'generator'],
+      map: { w: 34, h: 52, rocks: 10, fields: [
+        { x: 0.5, y: 0.72, r: 900 }, { x: 0.26, y: 0.6, r: 700 }, { x: 0.74, y: 0.62, r: 700 },
+      ], gates: [0.5] },
+      intro: 'Three close fields, one gate. Learn the mining line.',
+      topo: 'CLOSE FIELDS · ONE GATE',
     },
     {
-      n: 2, name: 'AIRGAP', sub: 'They can fly', seed: 7712, waves: 9,
-      palette: ['crawler', 'sprinter', 'gnat'], turrets: ['blaster', 'stasis', 'generator', 'repulsor'],
-      teach: { wave: 4, type: 'gnat', text: '✦ GNATS SKIP THE RAMP — THEY RISE STRAIGHT UP. COVER YOUR AIRSPACE.' },
-      unlockNote: '◎ REPULSOR UNLOCKED — THROW CLIMBERS OFF THE SPIRE',
-      spire: { height: 32, socketEvery: 3.0, w: { arc: 0.5, sb: 0.15, riser: 0.1, plaza: 0.25 }, plazaMax: 2 },
-      intro: 'Plaza rings are repulsor country. Fliers ignore all of it.',
-      topo: 'TWIN PLAZAS · OPEN AIR',
+      n: 2, name: 'POACHERS', sub: 'They hunt your miners', seed: 922, waves: 9,
+      palette: ['crawler', 'sprinter', 'raider'], buildings: ['cannon', 'stasis', 'wall', 'generator', 'depot'],
+      teach: { wave: 3, type: 'raider', text: '✕ RAIDERS IGNORE YOUR CORE — THEY KILL WORKERS. GUARD THE MINING LINE.' },
+      unlockNote: '⬒ DEPOT UNLOCKED — REMOTE DROP-OFF, +2 WORKER CAP',
+      map: { w: 34, h: 54, rocks: 12, fields: [
+        { x: 0.5, y: 0.75, r: 700 }, { x: 0.2, y: 0.45, r: 900 }, { x: 0.8, y: 0.47, r: 900 },
+      ], gates: [0.25, 0.75] },
+      intro: 'Rich fields sit far from home. Depots shorten the haul — and widen the front.',
+      topo: 'FAR FIELDS · TWO GATES',
     },
     {
-      n: 3, name: 'SWARM PROTOCOL', sub: 'Quantity is a quality', seed: 1583, waves: 10,
-      palette: ['crawler', 'sprinter', 'gnat'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      unlockNote: '⌁ ARC NODE UNLOCKED — LIGHTNING FORKS THROUGH SWARMS',
-      bosses: { 10: 1 },
-      swarm: true,   // composer: more, weaker enemies in tighter packs
-      spire: { height: 32, socketEvery: 3.1, w: { arc: 0.66, sb: 0.2, riser: 0.07, plaza: 0.07 }, plazaMax: 1 },
-      intro: 'Dense packs, tight spiral. First ARCHON at the summit push.',
-      topo: 'TIGHT COIL · SWARM WAVES',
+      n: 3, name: 'SCRAPLINE', sub: 'Quantity is a quality', seed: 133, waves: 10,
+      palette: ['crawler', 'sprinter', 'raider'], buildings: ['cannon', 'stasis', 'mortar', 'wall', 'generator', 'depot'],
+      unlockNote: '◎ MORTAR UNLOCKED — SPLASH SHELLS FOR DENSE PACKS',
+      bosses: { 10: 1 }, swarm: true,
+      map: { w: 36, h: 52, rocks: 8, fields: [
+        { x: 0.35, y: 0.68, r: 800 }, { x: 0.65, y: 0.68, r: 800 }, { x: 0.5, y: 0.4, r: 1000 },
+      ], gates: [0.2, 0.5, 0.8] },
+      intro: 'Open ground, three gates, dense packs. First ARCHON at the end.',
+      topo: 'OPEN GROUND · THREE GATES',
     },
     {
-      n: 4, name: 'SIEGE', sub: 'Armor climbs slow', seed: 9034, waves: 10,
-      palette: ['crawler', 'sprinter', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      teach: { wave: 3, type: 'brute', text: '■ BRUTES SHRUG OFF WEAK HITS — ARMOR 3. UPGRADE OR OUTSMART.' },
-      spire: { height: 27, socketEvery: 3.6, w: { arc: 0.34, sb: 0.16, riser: 0.44, plaza: 0.06 }, plazaMax: 1 },
-      intro: 'A short, steep climb and few sockets. Every placement counts.',
-      topo: 'SHORT ASCENT · SPARSE SOCKETS',
+      n: 4, name: 'BREAKERS', sub: 'They come for your buildings', seed: 244, waves: 10,
+      palette: ['crawler', 'sprinter', 'brute'], buildings: ['cannon', 'stasis', 'mortar', 'tesla', 'wall', 'generator', 'depot'],
+      teach: { wave: 3, type: 'brute', text: '■ BRUTES SIEGE STRUCTURES — ARMOR 3, BUILDING-KILLER. FOCUS THEM DOWN.' },
+      unlockNote: '⌁ ARC NODE UNLOCKED — CHAIN LIGHTNING',
+      map: { w: 32, h: 50, rocks: 16, fields: [
+        { x: 0.5, y: 0.66, r: 900 }, { x: 0.75, y: 0.35, r: 1100 },
+      ], gates: [0.35, 0.65] },
+      intro: 'Tight canyons and crystal-poor ground. Every structure is a target now.',
+      topo: 'CANYONS · CRYSTAL-POOR',
     },
     {
-      n: 5, name: 'BLACKOUT', sub: 'The core is damaged', seed: 3377, waves: 11,
-      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      eco: { powerBase: 5, startSalvage: 160 },   // enough to seed the grid
+      n: 5, name: 'BROWNOUT', sub: 'The grid is failing', seed: 355, waves: 11,
+      palette: ['crawler', 'sprinter', 'raider', 'brute'], buildings: ['cannon', 'stasis', 'mortar', 'tesla', 'wall', 'generator', 'depot'],
+      eco: { powerBase: 3, startMinerals: 150 },
       bosses: { 11: 1 },
-      spire: { height: 33, socketEvery: 3.2, w: { arc: 0.55, sb: 0.2, riser: 0.15, plaza: 0.1 }, plazaMax: 1 },
-      intro: 'Core power is down to 5. Generators are not optional here.',
-      topo: 'STANDARD SPIRE · POWER CRISIS', twist: '⚡ CORE POWER 5 (NORMALLY 8)',
+      map: { w: 34, h: 54, rocks: 12, fields: [
+        { x: 0.3, y: 0.7, r: 800 }, { x: 0.7, y: 0.7, r: 800 }, { x: 0.5, y: 0.35, r: 1200 },
+      ], gates: [0.5, 0.85] },
+      intro: 'Core power is down to 3. Generators first, guns second.',
+      topo: 'STANDARD GROUND · POWER CRISIS', twist: '⚡ CORE POWER 3 (NORMALLY 6)',
     },
     {
-      n: 6, name: 'STORMFRONT', sub: 'Updraft', seed: 6119, waves: 11,
-      palette: ['sprinter', 'gnat', 'crawler'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      mods: { gnatSpeedMult: 1.3 },
+      n: 6, name: 'DUST RUSH', sub: 'Thin veins, fast raids', seed: 466, waves: 11,
+      palette: ['sprinter', 'raider', 'crawler'], buildings: ['cannon', 'stasis', 'mortar', 'tesla', 'wall', 'generator', 'depot'],
+      mods: { raiderSpeedMult: 1.25 },
       bosses: { 11: 1 },
-      spire: { height: 29, socketEvery: 3.2, w: { arc: 0.5, sb: 0.26, riser: 0.18, plaza: 0.06 }, plazaMax: 1 },
-      intro: 'An updraft carries gnats 30% faster, and the spire is short.',
-      topo: 'SHORT SPIRE · FLIER SURGE', twist: '✦ GNATS +30% CLIMB SPEED',
+      map: { w: 36, h: 56, rocks: 10, fields: [
+        { x: 0.2, y: 0.75, r: 500 }, { x: 0.8, y: 0.75, r: 500 }, { x: 0.2, y: 0.35, r: 700 }, { x: 0.8, y: 0.35, r: 700 },
+      ], gates: [0.15, 0.5, 0.85] },
+      intro: 'Four thin fields in the corners. Raiders are faster; your line is long.',
+      topo: 'SCATTERED VEINS · RAIDER SURGE', twist: '✕ RAIDERS +25% SPEED',
     },
     {
-      n: 7, name: 'CRACKED MARKET', sub: 'The economy inverts', seed: 8251, waves: 12,
-      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      mods: { interestMult: 2, killMult: 0.8 },
-      eco: { startSalvage: 200 },   // capital endowment — the hoard strategy needs a seed
+      n: 7, name: 'CRASHED MARKET', sub: 'Only the vault pays', seed: 577, waves: 12,
+      palette: ['crawler', 'sprinter', 'raider', 'brute'], buildings: ['cannon', 'stasis', 'mortar', 'tesla', 'wall', 'generator', 'depot'],
+      mods: { interestMult: 2, mineMult: 0.75 },
+      eco: { startMinerals: 220 },
       bosses: { 12: 1 },
-      spire: { height: 34, socketEvery: 3.3, w: { arc: 0.5, sb: 0.14, riser: 0.11, plaza: 0.25 }, plazaMax: 2 },
-      intro: 'Kills pay −20%, but interest is doubled. Hoard, then strike.',
-      topo: 'TWIN PLAZAS · LONG CLIMB', twist: '¤ KILLS −20% · INTEREST ×2',
+      map: { w: 34, h: 54, rocks: 12, fields: [
+        { x: 0.5, y: 0.7, r: 1000 }, { x: 0.25, y: 0.4, r: 900 }, { x: 0.75, y: 0.4, r: 900 },
+      ], gates: [0.3, 0.7] },
+      intro: 'Crystals trade at 75%, but interest is doubled. Bank it, then spend big.',
+      topo: 'STANDARD GROUND · LONG CLIMB', twist: '¤ MINING −25% · INTEREST ×2',
     },
     {
-      n: 8, name: 'OVERRUN', sub: 'Everything, faster', seed: 2468, waves: 12,
-      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
-      bosses: { 6: 1, 12: 2 },
-      hot: true,     // composer: shorter gaps, denser openers
-      spire: { height: 28, socketEvery: 3.3, w: { arc: 0.6, sb: 0.25, riser: 0.12, plaza: 0.03 }, plazaMax: 1 },
-      intro: 'Short spire, relentless waves, twin ARCHONs at the end.',
-      topo: 'SHORT COIL · RELENTLESS', twist: '☠ TWIN ARCHON FINALE',
+      n: 8, name: 'OVERRUN', sub: 'Everything, everywhere', seed: 688, waves: 12,
+      palette: ['crawler', 'sprinter', 'raider', 'brute'], buildings: ['cannon', 'stasis', 'mortar', 'tesla', 'wall', 'generator', 'depot'],
+      bosses: { 6: 1, 12: 2 }, hot: true,
+      map: { w: 36, h: 52, rocks: 9, fields: [
+        { x: 0.5, y: 0.72, r: 900 }, { x: 0.3, y: 0.5, r: 800 }, { x: 0.7, y: 0.5, r: 800 },
+      ], gates: [0.15, 0.4, 0.6, 0.85] },
+      intro: 'Four gates, relentless waves, twin ARCHONs at the end.',
+      topo: 'FOUR GATES · RELENTLESS', twist: '☠ TWIN ARCHON FINALE',
     },
     {
-      n: 9, name: 'APEX', sub: 'The full stack', seed: 5555, waves: 13,
-      palette: ['crawler', 'sprinter', 'gnat', 'brute'], turrets: ['blaster', 'stasis', 'generator', 'repulsor', 'tesla'],
+      n: 9, name: 'MOTHERLODE', sub: 'The richest ground on the map', seed: 999, waves: 13,
+      palette: ['crawler', 'sprinter', 'raider', 'brute'], buildings: ['cannon', 'stasis', 'mortar', 'tesla', 'wall', 'generator', 'depot'],
       bosses: { 7: 1, 13: 2 },
-      spire: { height: 38, socketEvery: 3.4, w: { arc: 0.42, sb: 0.2, riser: 0.24, plaza: 0.14 }, plazaMax: 2 },
-      intro: 'The tallest spire and every threat in the codex. Hold it all.',
-      topo: 'MEGASPIRE · BOSS GAUNTLET', twist: '☠ ARCHON AT 7 · TWINS AT 13',
+      map: { w: 38, h: 58, rocks: 14, fields: [
+        { x: 0.5, y: 0.78, r: 600 }, { x: 0.2, y: 0.55, r: 800 }, { x: 0.8, y: 0.55, r: 800 }, { x: 0.5, y: 0.22, r: 1600 },
+      ], gates: [0.2, 0.5, 0.8] },
+      intro: 'The motherlode sits at the north wall — beside the gates. Greed or safety.',
+      topo: 'MOTHERLODE AT THE GATES · BOSS GAUNTLET', twist: '☠ ARCHON AT 7 · TWINS AT 13',
     },
   ];
 
   // ---------------- wave composer ----------------
-  // Encounter-budget waves with authored pacing roles:
-  //   opener (light) → ramp → surge every 4th → breather before finale →
-  //   finale (heavy, + bosses where scripted). Deterministic per (node, wave).
-  // Difficulty sawtooth: every node OPENS near a baseline the player can
-  // handle from starting salvage, and the within-node ramp carries most of
-  // the pressure. Node number raises the ramp's slope and the finale's
-  // ceiling, not the opener — so node HP scaling phases in across the level
-  // (40% at wave 1, full strength by ~70% depth).
+  // Encounter-budget waves with authored pacing (opener → ramp → surge →
+  // breather → finale). Node scaling phases in across the level so openers
+  // stay survivable from starting resources.
   function hpMult(level, n) {
     const L = level.n, W = level.waves;
     const ramp = 0.4 + 0.6 * Math.min(1, n / (W * 0.7));
     return (1 + 0.18 * (L - 1) * ramp) * (1 + 0.05 * (n - 1));
   }
-  // later nodes open with a bigger endowment — more tools on day one
-  function startSalvage(level) {
-    return (level.eco && level.eco.startSalvage) || (130 + 8 * (level.n - 1));
+  function startMinerals(level) {
+    return (level.eco && level.eco.startMinerals) || (120 + 8 * (level.n - 1));
   }
 
   function wave(level, n) {
@@ -628,34 +668,28 @@ const CONFIG = (function () {
     const groups = [];
     const G = (type, count, gap, delay) => groups.push({ type, count, gap, delay: delay || 0, hpMult: hm });
 
-    // teaching wave: the new threat appears alone, in a readable line —
-    // sized by encounter points so it demonstrates, never punishes
     if (level.teach && level.teach.wave === n) {
       const def = ENEMIES[level.teach.type];
       const count = Math.max(3, Math.min(8, Math.round((6 + level.n * 1.5) / def.pts)));
-      G(level.teach.type, count, def.pts >= 4 ? 2.4 : (def.flying ? 1.6 : 1.3), 0.5);
+      G(level.teach.type, count, def.pts >= 4 ? 2.4 : 1.5, 0.5);
       return groups;
     }
 
-    // pacing role
     let mult = 0.62 + 0.78 * (n / W);
     if (n === 1) mult *= 0.55;
     else if (n === W) mult *= 1.4;
-    else if (n === W - 1 && W > 5) mult *= 0.58;   // breather: bank, breathe, rebuild
-    else if (n % 4 === 0) mult *= 1.22;            // surge beat
+    else if (n === W - 1 && W > 5) mult *= 0.58;
+    else if (n % 4 === 0) mult *= 1.22;
     let budget = (8 + level.n * 1.1) * mult * (1 + Math.min(1.3, (0.05 + 0.011 * level.n) * (n - 1)));
 
-    // scripted bosses spend none of the budget; escorts come from what's left
     const nBoss = (level.bosses && level.bosses[n]) || 0;
     for (let b = 0; b < nBoss; b++) G('boss', 1, 0, b * 9);
     if (nBoss) budget *= 0.55;
 
-    // spend the budget on groups drawn from the node's palette.
-    // Openers are income waves (no heavies before wave 3), and a threat
-    // never appears in a regular wave before its showcase teaches it.
     let palette = level.palette.filter(t => !(level.teach && level.teach.type === t && n < level.teach.wave));
     if (n <= 2) palette = palette.filter(t => ENEMIES[t].pts <= 1.5);
     if (!palette.length) palette = [level.palette[0]];
+
     let delay = nBoss ? 4 : 0;
     let guard = 0;
     while (budget > 0.9 && guard++ < 12) {
@@ -663,10 +697,10 @@ const CONFIG = (function () {
       const def = ENEMIES[type];
       const maxN = Math.max(2, Math.floor(budget / def.pts));
       let count = Math.min(maxN, def.pts >= 4 ? 2 + Math.floor(R() * 2) : (level.swarm ? 6 : 4) + Math.floor(R() * 4));
-      let gap = def.pts >= 4 ? 2.6 : (def.flying ? 1.1 : 0.85);
+      let gap = def.pts >= 4 ? 2.6 : (def.speed > 2.4 ? 1.0 : 0.85);
       if (level.swarm) gap *= 0.85;
       if (level.hot) gap *= 0.7;
-      gap *= Math.max(0.55, 1 - 0.02 * (level.n + n));   // waves pack tighter as pressure rises
+      gap *= Math.max(0.55, 1 - 0.02 * (level.n + n));
       G(type, count, gap, delay);
       budget -= count * def.pts;
       delay += 2 + R() * 3;
@@ -675,31 +709,29 @@ const CONFIG = (function () {
   }
 
   // ---------------- wave directives ----------------
-  // Between waves the player picks one of three market-style modifiers (or
-  // skips). Each is a real economic trade, not a free buff.
   const DIRECTIVES = [
-    { id: 'bull',      ico: '📈', name: 'BULL MARKET',   desc: 'Kills pay +40% this wave. No interest this wave.', mods: { killMult: 1.4, interestMult: 0 } },
+    { id: 'surge',     ico: '⛏', name: 'MINING SURGE',  desc: 'Miners work +30% faster this wave. Threats +10% speed.', mods: { mineSpeedMult: 1.3, enemySpeedMult: 1.1 } },
     { id: 'haven',     ico: '🏦', name: 'SAFE HAVEN',    desc: 'Interest ×2 this wave. Threats +15% integrity.', mods: { interestMult: 2, enemyHpMult: 1.15 } },
     { id: 'overvolt',  ico: '⚡', name: 'OVERVOLT',      desc: 'Pay ¤30 now for +2 grid power, permanently.', cost: 30, mods: { permPower: 2 } },
-    { id: 'drones',    ico: '🛰', name: 'SCRAP DRONES',  desc: '+3 salvage on every kill this wave.', mods: { killFlat: 3 } },
-    { id: 'tailwind',  ico: '🌀', name: 'TAILWIND',      desc: 'Turrets +15% fire rate; threats +10% speed.', mods: { rateMult: 1.15, enemySpeedMult: 1.1 } },
-    { id: 'insurance', ico: '🛡', name: 'INSURANCE',     desc: 'Each core leak this wave is compensated ¤60.', mods: { leakPay: 60 } },
-    { id: 'royalty',   ico: '🪂', name: 'GRAVITY ROYALTIES', desc: 'Fall bonuses pay double this wave.', mods: { fallMult: 2 } },
-    { id: 'bonds',     ico: '📜', name: 'WAR BONDS',     desc: '+¤120 now. Kills pay −20% for the next 3 waves.', mods: { instant: 120, killMult: 0.8, duration: 3 } },
+    { id: 'convoy',    ico: '🛰', name: 'ESCORT DRONES', desc: 'Workers take half damage this wave.', mods: { workerArmorMult: 0.5 } },
+    { id: 'bounty',    ico: '💰', name: 'BOUNTY MARKET', desc: 'Kills pay triple scrap this wave. Mining −20%.', mods: { scrapMult: 3, mineMult: 0.8 } },
+    { id: 'insurance', ico: '🛡', name: 'INSURANCE',     desc: 'Every worker or building lost this wave is compensated ¤40.', mods: { lossPay: 40 } },
+    { id: 'bonds',     ico: '📜', name: 'WAR BONDS',     desc: '+¤120 now. Mining pays −20% for the next 3 waves.', mods: { instant: 120, mineMult: 0.8, duration: 3 } },
     { id: 'coldsnap',  ico: '❄', name: 'COLD SNAP',     desc: 'Pay ¤35: all threats 12% slower this wave.', cost: 35, mods: { enemySpeedMult: 0.88 } },
+    { id: 'crackdown', ico: '🎯', name: 'CRACKDOWN',    desc: 'Turrets +15% fire rate this wave; miners −10% speed.', mods: { rateMult: 1.15, mineSpeedMult: 0.9 } },
   ];
 
-  // ---------------- SPIRE OS: in-run tech tree ----------------
+  // ---------------- CORE OS: in-run tech tree ----------------
   const TECH = [
-    { id: 'coretap',  ico: '⚡', name: 'CORE TAP',          cost: 150, desc: '+3 power from the summit core.' },
-    { id: 'compound', ico: '¤',  name: 'COMPOUND PROTOCOL', cost: 200, desc: 'Interest 10% → 14%, cap ¤50 → ¤90.' },
-    { id: 'lenses',   ico: '✛',  name: 'FOCUS LENSES',      cost: 180, desc: 'Blasters and Arc Nodes +25% damage.' },
-    { id: 'massdrv',  ico: '◎',  name: 'MASS DRIVERS',      cost: 160, desc: 'Repulsors +30% force, fall bonus +50%.' },
-    { id: 'harmonic', ico: '❉',  name: 'FIELD HARMONICS',   cost: 140, desc: 'Stasis Wells slow 12% harder, +15% range.' },
+    { id: 'coretap',  ico: '⚡', name: 'CORE TAP',          cost: 150, desc: '+3 power from the core.' },
+    { id: 'compound', ico: '¤',  name: 'COMPOUND PROTOCOL', cost: 200, desc: 'Interest 8% → 12%, cap ¤40 → ¤80.' },
+    { id: 'lenses',   ico: '✛',  name: 'FOCUS LENSES',      cost: 180, desc: 'Cannons and Arc Nodes +25% damage.' },
+    { id: 'drills',   ico: '⛏', name: 'PLASMA DRILLS',     cost: 160, desc: 'Miners mine 25% faster and carry +4.' },
+    { id: 'plating',  ico: '▦',  name: 'HARDENED PLATING',  cost: 140, desc: 'Buildings and walls +40% integrity (new and existing).' },
     { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
   ];
 
-  return { SPIRE, ECONOMY, TURRETS, TURRET_ORDER, UPGRADES, ENEMIES, LEVELS, wave, hpMult, startSalvage, DIRECTIVES, TECH };
+  return { ECONOMY, BUILDINGS, BUILD_ORDER, UPGRADES, ENEMIES, LEVELS, wave, hpMult, startMinerals, DIRECTIVES, TECH };
 })();
 </script>
 <script>
@@ -707,7 +739,7 @@ const CONFIG = (function () {
 /* NEURAL SPIRE — localStorage persistence: campaign progress + sound pref */
 'use strict';
 const SAVE = (function () {
-  const KEY = 'neural-spire-v2';
+  const KEY = 'harvest-protocol-v1';
   let state = { furthest: 1, levels: {}, muted: false };
   function load() {
     try {
@@ -816,392 +848,315 @@ const AUDIO = (function () {
 })();
 </script>
 <script>
-/* ====================== js/spire.js ====================== */
-/* NEURAL SPIRE — the tower: scene, generated climb path, build sockets.
-   Each campaign node owns a fixed seed + topology parameters, so every node
-   IS its spire: same layout on every attempt (learnable), different between
-   nodes (tall lazy spirals, short steep risers, plaza-ring kill boxes). */
+/* ====================== js/map.js ====================== */
+/* HARVEST PROTOCOL — the map: ground, rocks, crystal fields, gates, core,
+   plus the navigation grid (flowfield to the core, A* for point-to-point).
+   Portrait battlefield: gates on the north edge, your core in the south. */
 'use strict';
-const SPIRE = (function () {
-  const S = CONFIG.SPIRE;
+const MAP = (function () {
+  const CS = 1.6;                 // grid cell size
   let scene = null, group = null;
-  let sockets = [];
-  let path = null;
-  let coreMesh = null, coreLight = null, coreBasePos = null, crownLamp = null;
-  let curSeed = 1, H = S.height;
+  let W = 34, H = 52, cols = 0, rows = 0;
+  let blocked = null;             // static blockers: rocks (+ walls via addBlock)
+  let flow = null;                // per-cell step direction toward the core
+  let fields = [];                // { pos, reserves, max, crystals[], workers:Set }
+  let gates = [];                 // { pos }
+  let corePos = null, coreMesh = null, coreLight = null;
 
-  // ---------------- path generation ----------------
-  function buildPath(seed, params) {
-    const R = UTIL.rng(seed);
-    const w = (params && params.w) || { arc: 0.55, sb: 0.16, riser: 0.14, plaza: 0.15 };
-    const plazaMax = (params && params.plazaMax !== undefined) ? params.plazaMax : 2;
-    H = (params && params.height) || S.height;
+  // ---------------- grid helpers ----------------
+  const idx = (cx, cz) => cz * cols + cx;
+  function worldToCell(x, z) {
+    return { cx: UTIL.clamp(Math.floor((x + W / 2) / CS), 0, cols - 1), cz: UTIL.clamp(Math.floor((z + H / 2) / CS), 0, rows - 1) };
+  }
+  function cellToWorld(cx, cz) {
+    return { x: cx * CS - W / 2 + CS / 2, z: cz * CS - H / 2 + CS / 2 };
+  }
+  function isBlocked(cx, cz) {
+    if (cx < 0 || cz < 0 || cx >= cols || cz >= rows) return true;
+    return blocked[idx(cx, cz)] > 0;
+  }
+  function addBlock(x, z) { const c = worldToCell(x, z); blocked[idx(c.cx, c.cz)]++; rebuildFlow(); return c; }
+  function removeBlock(cx, cz) { blocked[idx(cx, cz)] = Math.max(0, blocked[idx(cx, cz)] - 1); rebuildFlow(); }
 
-    path = { points: [], cum: [], total: 0 };
-    let ang = R() * Math.PI * 2;
-    let y = 0.6;
-    let dir = R() < 0.5 ? 1 : -1;
-    let radius = S.rPath;
-    let plazas = 0, segsSinceFlip = 0;
-
-    const segs = [];
-    while (y < H - 1.2) {
-      // weighted segment pick
-      let type = 'arc';
-      const total = w.arc + w.sb + w.riser + w.plaza;
-      let roll = R() * total;
-      if ((roll -= w.arc) < 0) type = 'arc';
-      else if ((roll -= w.sb) < 0) type = segsSinceFlip >= 1 ? 'switchback' : 'arc';
-      else if ((roll -= w.riser) < 0) type = 'riser';
-      else type = (plazas < plazaMax && y > 5 && y < H - 7) ? 'plaza' : 'arc';
-
-      let dAng, dY, rTarget = 3.2 + R() * 1.3;
-      if (type === 'arc') { dAng = (Math.PI * 0.6 + R() * Math.PI * 0.6) * dir; dY = 3.2 + R() * 1.6; segsSinceFlip++; }
-      else if (type === 'switchback') { dir = -dir; segsSinceFlip = 0; dAng = (Math.PI * 0.7 + R() * Math.PI * 0.5) * dir; dY = 2.6 + R() * 1.2; }
-      else if (type === 'riser') { dAng = (Math.PI * 0.2 + R() * Math.PI * 0.15) * dir; dY = 4.2 + R() * 1.6; segsSinceFlip++; }
-      else { plazas++; dAng = Math.PI * 2 * dir; dY = 1.3; rTarget = 3.9 + R() * 0.7; segsSinceFlip++; }
-      dY = Math.min(dY, H - 1.0 - y);
-      segs.push({ ang0: ang, dAng, y0: y, dY, r0: radius, r1: rTarget });
-      ang += dAng; y += dY; radius = rTarget;
-    }
-
-    let prev = null, d = 0;
-    for (const sg of segs) {
-      const steps = Math.max(10, Math.round(Math.abs(sg.dAng) * 22));
-      for (let i = 0; i < steps; i++) {
-        const t = i / steps;
-        const a = sg.ang0 + sg.dAng * t;
-        const r = UTIL.lerp(sg.r0, sg.r1, t * t * (3 - 2 * t));
-        const p = new THREE.Vector3(Math.sin(a) * r, sg.y0 + sg.dY * t, Math.cos(a) * r);
-        if (prev) d += p.distanceTo(prev);
-        path.points.push(p);
-        path.cum.push(d);
-        prev = p;
+  // BFS flowfield toward the core: each cell stores the next cell to step to
+  function rebuildFlow() {
+    flow = new Int32Array(cols * rows).fill(-1);
+    const cc = worldToCell(corePos.x, corePos.z);
+    const q = [idx(cc.cx, cc.cz)];
+    const seen = new Uint8Array(cols * rows);
+    seen[q[0]] = 1;
+    let head = 0;
+    while (head < q.length) {
+      const cur = q[head++];
+      const cx = cur % cols, cz = (cur / cols) | 0;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = cx + dx, nz = cz + dz;
+        if (nx < 0 || nz < 0 || nx >= cols || nz >= rows) continue;
+        const ni = idx(nx, nz);
+        if (seen[ni] || blocked[ni]) continue;
+        if (dx && dz && (blocked[idx(cx + dx, cz)] || blocked[idx(cx, cz + dz)])) continue; // no corner cutting
+        seen[ni] = 1;
+        flow[ni] = cur;
+        q.push(ni);
       }
     }
-    path.total = d;
+  }
+  // next waypoint toward the core from world pos; null = no path (walled off)
+  function flowStep(x, z) {
+    const c = worldToCell(x, z);
+    const next = flow[idx(c.cx, c.cz)];
+    if (next < 0) return null;
+    const w = cellToWorld(next % cols, (next / cols) | 0);
+    return new THREE.Vector3(w.x, 0, w.z);
   }
 
-  function at(d) {
-    d = UTIL.clamp(d, 0, path.total);
-    let lo = 0, hi = path.cum.length - 1;
-    while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (path.cum[mid] <= d) lo = mid; else hi = mid; }
-    const span = path.cum[hi] - path.cum[lo] || 1;
-    const f = (d - path.cum[lo]) / span;
-    const pos = path.points[lo].clone().lerp(path.points[hi], f);
-    const tangent = path.points[hi].clone().sub(path.points[lo]).normalize();
-    return { pos, tangent };
+  // A* for point-to-point (workers, raiders); returns [Vector3] or null
+  function findPath(x0, z0, x1, z1) {
+    const s = worldToCell(x0, z0), t = worldToCell(x1, z1);
+    if (isBlocked(t.cx, t.cz)) {
+      // nudge target to nearest free neighbour
+      let found = false;
+      for (let r = 1; r <= 3 && !found; r++) {
+        for (let dx = -r; dx <= r && !found; dx++) for (let dz = -r; dz <= r && !found; dz++) {
+          if (!isBlocked(t.cx + dx, t.cz + dz)) { t.cx += dx; t.cz += dz; found = true; }
+        }
+      }
+      if (!found) return null;
+    }
+    const open = [[0, s.cx, s.cz]];
+    const g = new Map([[idx(s.cx, s.cz), 0]]);
+    const from = new Map();
+    const h = (cx, cz) => Math.hypot(cx - t.cx, cz - t.cz);
+    while (open.length) {
+      let bi = 0;
+      for (let i = 1; i < open.length; i++) if (open[i][0] < open[bi][0]) bi = i;
+      const [, cx, cz] = open.splice(bi, 1)[0];
+      if (cx === t.cx && cz === t.cz) {
+        const pts = [];
+        let cur = idx(cx, cz);
+        while (from.has(cur)) {
+          const w = cellToWorld(cur % cols, (cur / cols) | 0);
+          pts.unshift(new THREE.Vector3(w.x, 0, w.z));
+          cur = from.get(cur);
+        }
+        return pts.length ? pts : [new THREE.Vector3(x1, 0, z1)];
+      }
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = cx + dx, nz = cz + dz;
+        if (isBlocked(nx, nz)) continue;
+        if (dx && dz && (isBlocked(cx + dx, cz) || isBlocked(cx, cz + dz))) continue;
+        const ni = idx(nx, nz);
+        const ng = g.get(idx(cx, cz)) + Math.hypot(dx, dz);
+        if (g.has(ni) && g.get(ni) <= ng) continue;
+        g.set(ni, ng);
+        from.set(ni, idx(cx, cz));
+        open.push([ng + h(nx, nz), nx, nz]);
+      }
+      if (g.size > 2600) return null; // safety valve
+    }
+    return null;
   }
 
-  function losBlocked(a, b) {
-    const ax = a.x, az = a.z, bx = b.x, bz = b.z;
-    const dx = bx - ax, dz = bz - az;
-    const len2 = dx * dx + dz * dz;
-    let t = len2 ? -(ax * dx + az * dz) / len2 : 0;
-    t = UTIL.clamp(t, 0, 1);
-    const cx = ax + dx * t, cz = az + dz * t;
-    return (cx * cx + cz * cz) < S.rCol * S.rCol * 0.92;
-  }
-
-  // ---------------- procedural textures ----------------
-  function columnTexture() {
+  // ---------------- visuals ----------------
+  function groundTexture(seedR) {
     const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 1024;
+    cv.width = 512; cv.height = 512;
     const c = cv.getContext('2d');
-    c.fillStyle = '#0e1728';
-    c.fillRect(0, 0, 512, 1024);
-    // panel plates with slight tonal variation
-    for (let py = 0; py < 1024; py += 64) {
-      for (let px = 0; px < 512; px += 128) {
-        c.fillStyle = Math.random() < 0.5 ? '#101a2e' : '#0c1524';
-        c.fillRect(px + 2, py + 2, 124, 60);
-      }
+    c.fillStyle = '#0a1120';
+    c.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 900; i++) {
+      c.fillStyle = seedR() < 0.5 ? 'rgba(20,32,58,0.5)' : 'rgba(6,10,20,0.6)';
+      const s = 2 + seedR() * 8;
+      c.fillRect(seedR() * 512, seedR() * 512, s, s);
     }
-    // seams
-    c.strokeStyle = '#070d1a'; c.lineWidth = 3;
-    for (let py = 0; py <= 1024; py += 64) { c.beginPath(); c.moveTo(0, py); c.lineTo(512, py); c.stroke(); }
-    for (let px = 0; px <= 512; px += 128) { c.beginPath(); c.moveTo(px, 0); c.lineTo(px, 1024); c.stroke(); }
-    // lit windows — sparse, in loose bands so it reads as a live machine
-    for (let i = 0; i < 260; i++) {
-      const px = 8 + Math.random() * 496;
-      const py = 8 + Math.random() * 1008;
-      const on = Math.random();
-      if (on < 0.55) c.fillStyle = 'rgba(42,120,190,0.85)';
-      else if (on < 0.8) c.fillStyle = 'rgba(127,220,255,0.9)';
-      else if (on < 0.9) c.fillStyle = 'rgba(255,209,102,0.85)';
-      else c.fillStyle = 'rgba(20,40,70,0.9)';
-      c.fillRect(px, py, 3 + Math.random() * 3, 5 + Math.random() * 4);
+    c.strokeStyle = 'rgba(42,120,190,0.13)'; c.lineWidth = 1;
+    for (let p = 0; p <= 512; p += 32) {
+      c.beginPath(); c.moveTo(0, p); c.lineTo(512, p); c.stroke();
+      c.beginPath(); c.moveTo(p, 0); c.lineTo(p, 512); c.stroke();
     }
     const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.repeat.set(2, 1);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(W / 16, H / 16);
     return tex;
   }
 
-  function skyTexture() {
-    const cv = document.createElement('canvas');
-    cv.width = 16; cv.height = 512;
-    const c = cv.getContext('2d');
-    const g = c.createLinearGradient(0, 0, 0, 512);
-    g.addColorStop(0, '#03040a');
-    g.addColorStop(0.45, '#0a1430');
-    g.addColorStop(0.75, '#0d1a3d');
-    g.addColorStop(1, '#050810');
-    c.fillStyle = g;
-    c.fillRect(0, 0, 16, 512);
-    return new THREE.CanvasTexture(cv);
+  function makeCrystal(scale, mat) {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(0.32 * scale, 1.1 * scale, 5), mat);
+    m.rotation.x = (Math.random() - 0.5) * 0.35;
+    m.rotation.z = (Math.random() - 0.5) * 0.35;
+    return m;
   }
 
-  // quad strip between two polylines, normals computed
-  function strip(ptsA, ptsB, material) {
-    const verts = [], idx = [];
-    for (let i = 0; i < ptsA.length; i++) {
-      verts.push(ptsA[i].x, ptsA[i].y, ptsA[i].z, ptsB[i].x, ptsB[i].y, ptsB[i].z);
-      if (i) {
-        const a = (i - 1) * 2, b = a + 1, c = i * 2, e = c + 1;
-        idx.push(a, b, c, b, e, c);
-      }
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    g.setIndex(idx);
-    g.computeVertexNormals();
-    return new THREE.Mesh(g, material);
-  }
-
-  // ---------------- build / regen ----------------
-  function disposeGroup() {
+  function dispose() {
     if (!group) return;
     scene.remove(group);
     group.traverse(o => {
       if (o.geometry) o.geometry.dispose();
       const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
-      for (const m of mats) {
-        if (m.map) m.map.dispose();
-        if (m.emissiveMap && m.emissiveMap !== m.map) m.emissiveMap.dispose();
-        m.dispose();
-      }
+      for (const m of mats) { if (m.map) m.map.dispose(); m.dispose(); }
     });
     group = null;
-    sockets = [];
-    coreMesh = null; coreLight = null; crownLamp = null;
   }
 
-  function regen(seed, params) {
-    curSeed = seed;
-    disposeGroup();
+  function build(sc, level) {
+    scene = sc;
+    dispose();
     group = new THREE.Group();
     scene.add(group);
-    buildPath(seed, params);
-    const socketEvery = (params && params.socketEvery) || S.socketEvery;
+    fields = []; gates = [];
 
-    // ---- sky dome ----
-    const sky = new THREE.Mesh(
-      new THREE.SphereGeometry(130, 24, 16),
-      new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false })
-    );
-    sky.position.y = 10;
-    group.add(sky);
+    const def = level.map;
+    W = def.w; H = def.h;
+    cols = Math.ceil(W / CS); rows = Math.ceil(H / CS);
+    blocked = new Uint8Array(cols * rows);
+    const R = UTIL.rng(level.seed);
 
-    // ---- central column: tapered, panel-textured, window lights ----
-    const colTex = columnTexture();
-    const colMat = new THREE.MeshStandardMaterial({
-      map: colTex, emissiveMap: colTex, emissive: 0xffffff, emissiveIntensity: 0.35,
-      roughness: 0.7, metalness: 0.45,
-    });
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(S.rCol * 0.72, S.rCol * 1.06, H, 24, 1), colMat);
-    col.position.y = H / 2;
-    group.add(col);
-    // seam rings at thirds
-    for (const f of [0.25, 0.5, 0.75]) {
-      const rr = UTIL.lerp(S.rCol * 1.06, S.rCol * 0.72, f);
-      const seam = new THREE.Mesh(
-        new THREE.TorusGeometry(rr + 0.02, 0.05, 6, 40),
-        new THREE.MeshBasicMaterial({ color: 0x2a78be, transparent: true, opacity: 0.85 })
-      );
-      seam.rotation.x = Math.PI / 2;
-      seam.position.y = H * f;
-      group.add(seam);
-    }
-    // base skirt + foundation
-    const skirt = new THREE.Mesh(
-      new THREE.CylinderGeometry(S.rCol * 1.06, S.rCol * 1.8, 1.6, 24),
-      new THREE.MeshStandardMaterial({ color: 0x111c30, roughness: 0.8, metalness: 0.4 })
-    );
-    skirt.position.y = 0.8;
-    group.add(skirt);
-    const found = new THREE.Mesh(
-      new THREE.CylinderGeometry(S.rCol * 2.4, S.rCol * 2.7, 0.5, 28),
-      new THREE.MeshStandardMaterial({ color: 0x0d1626, roughness: 0.9 })
-    );
-    found.position.y = 0.25;
-    group.add(found);
-    // crown antenna
-    const mast = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.1, 3.2, 8),
-      new THREE.MeshStandardMaterial({ color: 0x1c2a45, roughness: 0.5, metalness: 0.7 })
-    );
-    mast.position.y = H + 3.2;
-    group.add(mast);
-    crownLamp = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0xff3d6e })
-    );
-    crownLamp.position.y = H + 4.8;
-    group.add(crownLamp);
-
-    // ---- ramp: extruded (top / walls / bottom), with center lane + rails ----
-    const N = path.points.length;
-    const HALF = 0.55, THICK = 0.30;
-    const topIn = [], topOut = [], botIn = [], botOut = [], laneIn = [], laneOut = [], railPts = [];
-    for (let i = 0; i < N; i++) {
-      const p = path.points[i];
-      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
-      const sa = Math.sin(Math.atan2(p.x, p.z)), ca = Math.cos(Math.atan2(p.x, p.z));
-      topIn.push(new THREE.Vector3(sa * (pr - HALF), p.y, ca * (pr - HALF)));
-      topOut.push(new THREE.Vector3(sa * (pr + HALF), p.y, ca * (pr + HALF)));
-      botIn.push(new THREE.Vector3(sa * (pr - HALF), p.y - THICK, ca * (pr - HALF)));
-      botOut.push(new THREE.Vector3(sa * (pr + HALF), p.y - THICK, ca * (pr + HALF)));
-      laneIn.push(new THREE.Vector3(sa * (pr - 0.22), p.y + 0.02, ca * (pr - 0.22)));
-      laneOut.push(new THREE.Vector3(sa * (pr + 0.22), p.y + 0.02, ca * (pr + 0.22)));
-      if (i % 2 === 0) railPts.push(new THREE.Vector3(sa * (pr + HALF), p.y + 0.06, ca * (pr + HALF)));
-    }
-    group.add(strip(topIn, topOut, new THREE.MeshStandardMaterial({ color: 0x24344f, roughness: 0.55, metalness: 0.5 })));
-    group.add(strip(topOut, botOut, new THREE.MeshStandardMaterial({ color: 0x141f33, roughness: 0.7, metalness: 0.4 })));
-    group.add(strip(botIn, topIn, new THREE.MeshStandardMaterial({ color: 0x141f33, roughness: 0.7, metalness: 0.4 })));
-    group.add(strip(botOut, botIn, new THREE.MeshStandardMaterial({ color: 0x0e1626, roughness: 0.8, metalness: 0.3 })));
-    // glowing center lane: the enemy route reads at a glance
-    group.add(strip(laneIn, laneOut, new THREE.MeshBasicMaterial({ color: 0x1b5288, transparent: true, opacity: 0.9 })));
-    // outer rail glow
-    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(railPts), new THREE.LineBasicMaterial({ color: 0x3f9be8 })));
-
-    // support struts from ramp underside to the column
-    const strutMat = new THREE.MeshStandardMaterial({ color: 0x16233b, roughness: 0.7, metalness: 0.5 });
-    for (let i = 6; i < N - 4; i += 16) {
-      const p = path.points[i];
-      const pr = Math.max(0.6, Math.hypot(p.x, p.z));
-      const sa = p.x / pr, ca = p.z / pr;
-      const a = new THREE.Vector3(sa * (pr - HALF * 0.5), p.y - THICK, ca * (pr - HALF * 0.5));
-      const b = new THREE.Vector3(sa * S.rCol * 0.95, p.y - 1.5, ca * S.rCol * 0.95);
-      const len = a.distanceTo(b);
-      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, len), strutMat);
-      strut.position.copy(a).lerp(b, 0.5);
-      strut.lookAt(b);
-      group.add(strut);
-    }
-
-    // ---- build sockets ----
-    const padG = new THREE.CylinderGeometry(0.52, 0.62, 0.18, 6);
-    const nSock = Math.floor(path.total / socketEvery) - 1;
-    const armMat = new THREE.MeshStandardMaterial({ color: 0x131e33, roughness: 0.8, metalness: 0.3 });
-    for (let i = 1; i <= nSock; i++) {
-      const d = i * socketEvery;
-      const { pos } = at(d);
-      const pr = Math.max(0.6, Math.hypot(pos.x, pos.z));
-      const ang = Math.atan2(pos.x, pos.z);
-      const sp = new THREE.Vector3(Math.sin(ang) * (pr + 1.0), pos.y - 0.05, Math.cos(ang) * (pr + 1.0));
-      const pad = new THREE.Mesh(padG, new THREE.MeshStandardMaterial({
-        color: 0x1a2b4a, roughness: 0.5, metalness: 0.5,
-        emissive: 0x0a2038, emissiveIntensity: 1,
-      }));
-      pad.position.copy(sp);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 1.1), armMat);
-      arm.position.copy(sp).lerp(pos, 0.5);
-      arm.lookAt(pos.x, arm.position.y, pos.z);
-      group.add(arm);
-      pad.userData.socket = sockets.length;
-      group.add(pad);
-      sockets.push({ i: sockets.length, pos: sp, mesh: pad, turret: null });
-    }
-
-    // ---- summit core ----
-    coreBasePos = new THREE.Vector3(0, H + 1.3, 0);
-    coreMesh = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.05, 1),
-      new THREE.MeshStandardMaterial({ color: 0x66ddff, emissive: 0x2299dd, emissiveIntensity: 1.6, roughness: 0.25 })
-    );
-    coreMesh.position.copy(coreBasePos);
-    group.add(coreMesh);
-    const cage = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.45, 0),
-      new THREE.MeshBasicMaterial({ color: 0x2a78be, wireframe: true, transparent: true, opacity: 0.5 })
-    );
-    cage.position.copy(coreBasePos);
-    coreMesh.userData.cage = cage;
-    group.add(cage);
-    coreLight = new THREE.PointLight(0x55ccff, 1.5, 26);
-    coreLight.position.copy(coreBasePos);
-    group.add(coreLight);
-
-    // ---- base: spawn portal + danger light + ground ----
-    const p0 = path.points[0];
-    const portal = new THREE.Mesh(
-      new THREE.TorusGeometry(1.3, 0.13, 8, 40),
-      new THREE.MeshBasicMaterial({ color: 0xff3d6e })
-    );
-    portal.rotation.x = Math.PI / 2;
-    portal.position.set(p0.x, 0.28, p0.z);
-    group.add(portal);
-    const baseLight = new THREE.PointLight(0xff3050, 0.9, 14);
-    baseLight.position.set(p0.x, 2, p0.z);
-    group.add(baseLight);
-
+    // ground
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(60, 48),
-      new THREE.MeshStandardMaterial({ color: 0x05080f, roughness: 1 })
+      new THREE.PlaneGeometry(W, H),
+      new THREE.MeshStandardMaterial({ map: groundTexture(R), roughness: 0.95, metalness: 0.1 })
     );
     ground.rotation.x = -Math.PI / 2;
     group.add(ground);
-    const grid = new THREE.PolarGridHelper(30, 12, 8, 48, 0x10203a, 0x0a1422);
-    grid.position.y = 0.02;
-    group.add(grid);
-    const glow = new THREE.Mesh(
-      new THREE.RingGeometry(S.rCol * 2.7, S.rCol * 2.75, 40),
-      new THREE.MeshBasicMaterial({ color: 0x2a78be, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+    // out-of-bounds apron fades to darkness
+    const apron = new THREE.Mesh(
+      new THREE.PlaneGeometry(W * 4, H * 4),
+      new THREE.MeshBasicMaterial({ color: 0x04070e })
     );
-    glow.rotation.x = -Math.PI / 2;
-    glow.position.y = 0.06;
-    group.add(glow);
+    apron.rotation.x = -Math.PI / 2;
+    apron.position.y = -0.06;
+    group.add(apron);
+    // border glow
+    const border = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-W / 2, 0.05, -H / 2), new THREE.Vector3(W / 2, 0.05, -H / 2),
+        new THREE.Vector3(W / 2, 0.05, H / 2), new THREE.Vector3(-W / 2, 0.05, H / 2),
+      ]),
+      new THREE.LineBasicMaterial({ color: 0x2a78be, transparent: true, opacity: 0.6 })
+    );
+    group.add(border);
 
-    // ---- starfield ----
-    const starPts = [];
-    for (let i = 0; i < 420; i++) {
-      const r = 55 + Math.random() * 60, th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 1.6 - 0.8);
-      starPts.push(new THREE.Vector3(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) + 14, r * Math.sin(ph) * Math.sin(th)));
+    // core (south center)
+    corePos = new THREE.Vector3(0, 0, H / 2 - 5);
+    const coreBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.4, 2.9, 0.8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x1c2a45, roughness: 0.6, metalness: 0.5 })
+    );
+    coreBase.position.set(corePos.x, 0.4, corePos.z);
+    group.add(coreBase);
+    coreMesh = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.35, 1),
+      new THREE.MeshStandardMaterial({ color: 0x66ddff, emissive: 0x2299dd, emissiveIntensity: 1.5, roughness: 0.25 })
+    );
+    coreMesh.position.set(corePos.x, 2.1, corePos.z);
+    coreMesh.userData.isCore = true;
+    group.add(coreMesh);
+    const cage = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.85, 0),
+      new THREE.MeshBasicMaterial({ color: 0x2a78be, wireframe: true, transparent: true, opacity: 0.45 })
+    );
+    cage.position.copy(coreMesh.position);
+    coreMesh.userData.cage = cage;
+    group.add(cage);
+    coreLight = new THREE.PointLight(0x55ccff, 1.6, 24);
+    coreLight.position.set(corePos.x, 4, corePos.z);
+    group.add(coreLight);
+
+    // rocks: blocking clusters, kept off the core/gate approaches' immediate area
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x18243c, roughness: 0.9, metalness: 0.2 });
+    for (let i = 0; i < def.rocks; i++) {
+      const rx = (R() - 0.5) * (W - 8);
+      const rz = -H / 2 + 8 + R() * (H - 20);
+      if (Math.hypot(rx - corePos.x, rz - corePos.z) < 8) continue;
+      const cluster = new THREE.Group();
+      const n = 2 + Math.floor(R() * 3);
+      for (let k = 0; k < n; k++) {
+        const s = 0.8 + R() * 1.1;
+        const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), rockMat);
+        rock.position.set(rx + (R() - 0.5) * 2.2, s * 0.55, rz + (R() - 0.5) * 2.2);
+        rock.rotation.set(R() * 3, R() * 3, R() * 3);
+        cluster.add(rock);
+        const c = worldToCell(rock.position.x, rock.position.z);
+        blocked[idx(c.cx, c.cz)] = 1;
+      }
+      group.add(cluster);
     }
-    const stars = new THREE.Points(
-      new THREE.BufferGeometry().setFromPoints(starPts),
-      new THREE.PointsMaterial({ color: 0x9fc3e8, size: 0.16, transparent: true, opacity: 0.8 })
-    );
-    stars.material.fog = false;
-    group.add(stars);
+
+    // crystal fields
+    for (const f of def.fields) {
+      const fx = (f.x - 0.5) * W;
+      const fz = (f.y - 0.5) * H;    // def y: 0=north (gates) … 1=south (core)
+      const field = {
+        pos: new THREE.Vector3(fx, 0, fz),
+        reserves: f.r, max: f.r,
+        crystals: [], workers: new Set(),
+        mesh: new THREE.Group(),
+      };
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x7fdcff, emissive: 0x2aa8ff, emissiveIntensity: 0.9,
+        roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.95,
+      });
+      const n = 5 + Math.floor(R() * 3);
+      for (let k = 0; k < n; k++) {
+        const cr = makeCrystal(0.9 + R() * 0.9, mat);
+        cr.position.set(fx + (R() - 0.5) * 3.2, 0.5, fz + (R() - 0.5) * 3.2);
+        field.crystals.push(cr);
+        field.mesh.add(cr);
+      }
+      const glow = new THREE.PointLight(0x2aa8ff, 0.8, 9);
+      glow.position.set(fx, 2, fz);
+      field.mesh.add(glow);
+      field.light = glow;
+      group.add(field.mesh);
+      fields.push(field);
+    }
+
+    // gates on the north edge
+    const gateMat = new THREE.MeshBasicMaterial({ color: 0xff3d6e });
+    for (const gx of def.gates) {
+      const x = (gx - 0.5) * W;
+      const z = -H / 2 + 1.2;
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.16, 8, 24, Math.PI), gateMat);
+      arch.position.set(x, 0.1, z);
+      group.add(arch);
+      const gl = new THREE.PointLight(0xff3050, 0.8, 10);
+      gl.position.set(x, 2, z);
+      group.add(gl);
+      gates.push({ pos: new THREE.Vector3(x, 0, z + 1) });
+    }
+
+    rebuildFlow();
   }
 
-  function build(sc, seed, params) {
-    scene = sc;
-    regen(seed, params);
+  // deplete crystals visually as reserves drain
+  function mineFrom(field, amount) {
+    const got = Math.min(field.reserves, amount);
+    field.reserves -= got;
+    const k = field.reserves / field.max;
+    for (let i = 0; i < field.crystals.length; i++) {
+      const cr = field.crystals[i];
+      const keep = (i + 1) / field.crystals.length <= k + 0.15;
+      cr.scale.setScalar(Math.max(0.18, k * (keep ? 1 : 0.5)));
+    }
+    if (field.light) field.light.intensity = 0.15 + k * 0.7;
+    return got;
   }
+  function richestField() {
+    let best = null;
+    for (const f of fields) if (f.reserves > 0 && (!best || f.reserves > best.reserves)) best = f;
+    return best;
+  }
+  function totalReserves() { return fields.reduce((s, f) => s + f.reserves, 0); }
 
-  // idle animation + socket affordance pulse
   let t = 0;
-  function update(dt, canAfford) {
+  function update(dt) {
     t += dt;
     if (coreMesh) {
       coreMesh.rotation.y += dt * 0.5;
       coreMesh.userData.cage.rotation.y -= dt * 0.3;
-      coreMesh.userData.cage.rotation.x += dt * 0.17;
-      const s = 1 + Math.sin(t * 2.2) * 0.04;
-      coreMesh.scale.setScalar(s);
-      coreLight.intensity = 1.4 + Math.sin(t * 2.2) * 0.25;
-    }
-    if (crownLamp) crownLamp.material.color.setHex(Math.sin(t * 3) > 0 ? 0xff3d6e : 0x571225);
-    const pulse = 0.5 + Math.sin(t * 3.5) * 0.5;
-    for (const s of sockets) {
-      if (!s.turret && canAfford) s.mesh.material.emissiveIntensity = 1 + pulse * 1.6;
-      else s.mesh.material.emissiveIntensity = 0.6;
+      coreLight.intensity = 1.5 + Math.sin(t * 2.2) * 0.25;
     }
   }
-
   function coreHitFlash() {
     if (!coreMesh) return;
     coreMesh.material.emissive.setHex(0xff2244);
@@ -1209,13 +1164,13 @@ const SPIRE = (function () {
   }
 
   return {
-    build, regen, update, at, losBlocked, coreHitFlash,
-    get sockets() { return sockets; },
-    get pathTotal() { return path.total; },
-    get corePos() { return coreBasePos; },
-    get height() { return H; },
-    get rPath() { return S.rPath; },
-    get seed() { return curSeed; },
+    build, update, coreHitFlash,
+    worldToCell, cellToWorld, isBlocked, addBlock, removeBlock, flowStep, findPath,
+    mineFrom, richestField, totalReserves,
+    get fields() { return fields; },
+    get gates() { return gates; },
+    get corePos() { return corePos; },
+    get W() { return W; }, get H() { return H; }, get CS() { return CS; },
   };
 })();
 </script>
@@ -1331,13 +1286,457 @@ const FX = (function () {
 })();
 </script>
 <script>
+/* ====================== js/units.js ====================== */
+/* HARVEST PROTOCOL — harvester drones: the little workers the whole economy
+   rides on. They path to a crystal field, mine a load, haul it to the
+   nearest drop-off, repeat — and raiders will hunt them. */
+'use strict';
+const WORKER = (function () {
+  const ECO = CONFIG.ECONOMY;
+
+  function makeMesh() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2a3a58, emissive: 0x7fdcff, emissiveIntensity: 0.5, roughness: 0.4 })
+    );
+    body.position.y = 0.55;
+    g.add(body);
+    const eye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a0 })
+    );
+    eye.position.set(0, 0.6, 0.26);
+    g.add(eye);
+    // carried crystal (visible when hauling)
+    const load = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.2),
+      new THREE.MeshStandardMaterial({ color: 0x7fdcff, emissive: 0x2aa8ff, emissiveIntensity: 1.2 })
+    );
+    load.position.set(0, 1.0, 0);
+    load.visible = false;
+    g.add(load);
+    g.userData.body = body;
+    g.userData.load = load;
+    return g;
+  }
+
+  class Worker {
+    constructor(scene, pos) {
+      this.scene = scene;
+      this.hp = this.maxHp = ECO.workerHP;
+      this.alive = true;
+      this.state = 'idle';       // idle | toField | mining | toDrop
+      this.field = null;
+      this.path = null; this.pathI = 0;
+      this.mineT = 0;
+      this.carry = 0;
+      this.mesh = makeMesh();
+      this.mesh.position.copy(pos);
+      this.mesh.userData.worker = this;
+      scene.add(this.mesh);
+    }
+
+    // choose the closest field with reserves and room (2 slots + 1 per depot nearby)
+    pickField(game) {
+      let best = null, bd = 1e9;
+      for (const f of MAP.fields) {
+        if (f.reserves <= 0) continue;
+        if (f.workers.size >= 3) continue;
+        const d = f.pos.distanceTo(this.mesh.position);
+        if (d < bd) { bd = d; best = f; }
+      }
+      return best;
+    }
+
+    nearestDrop(game) {
+      let best = MAP.corePos, bd = this.mesh.position.distanceTo(MAP.corePos);
+      for (const b of game.buildings) {
+        if (!b.def.dropoff || !b.alive) continue;
+        const d = this.mesh.position.distanceTo(b.mesh.position);
+        if (d < bd) { bd = d; best = b.mesh.position; }
+      }
+      return best;
+    }
+
+    goTo(target) {
+      const p = this.mesh.position;
+      this.path = MAP.findPath(p.x, p.z, target.x, target.z);
+      this.pathI = 0;
+      return !!this.path;
+    }
+
+    update(dt, game) {
+      if (!this.alive) return;
+      const speedK = game.mod('mineSpeedMult', 1) * (game.tech.drills ? 1.12 : 1);
+      const speed = 3.1 * speedK;
+
+      if (this.state === 'idle') {
+        this.field = this.pickField(game);
+        if (this.field) {
+          this.field.workers.add(this);
+          if (this.goTo(this.field.pos)) this.state = 'toField';
+          else { this.field.workers.delete(this); this.field = null; }
+        }
+        return;
+      }
+
+      if (this.state === 'toField' || this.state === 'toDrop') {
+        if (!this.path || this.pathI >= this.path.length) {
+          if (this.state === 'toField') { this.state = 'mining'; this.mineT = ECO.mineTime / speedK; }
+          else this.deposit(game);
+          return;
+        }
+        const wp = this.path[this.pathI];
+        const p = this.mesh.position;
+        const dx = wp.x - p.x, dz = wp.z - p.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 0.25) { this.pathI++; return; }
+        p.x += (dx / d) * speed * dt;
+        p.z += (dz / d) * speed * dt;
+        this.mesh.rotation.y = Math.atan2(dx, dz);
+        this.mesh.position.y = Math.abs(Math.sin(performance.now() / 130)) * 0.07; // busy little hop
+        return;
+      }
+
+      if (this.state === 'mining') {
+        if (!this.field || this.field.reserves <= 0) {
+          if (this.field) this.field.workers.delete(this);
+          this.field = null; this.state = 'idle';
+          return;
+        }
+        this.mineT -= dt;
+        if (this.mineT <= 0) {
+          const carryMax = ECO.workerCarry + (game.tech.drills ? 4 : 0);
+          this.carry = MAP.mineFrom(this.field, carryMax);
+          this.mesh.userData.load.visible = true;
+          this.field.workers.delete(this);
+          if (this.goTo(this.nearestDrop(game))) this.state = 'toDrop';
+          else this.state = 'idle';
+        }
+        return;
+      }
+    }
+
+    deposit(game) {
+      if (this.carry > 0) {
+        const pay = Math.round(this.carry * game.mod('mineMult', 1));
+        game.onMined(pay, this.mesh.position);
+        this.carry = 0;
+        this.mesh.userData.load.visible = false;
+      }
+      this.state = 'idle';
+      if (this.field) { this.field.workers.delete(this); this.field = null; }
+    }
+
+    hit(dmg, game) {
+      if (!this.alive) return;
+      const real = dmg * game.mod('workerArmorMult', 1);
+      this.hp -= real;
+      this.mesh.userData.body.material.emissiveIntensity = 1.6;
+      setTimeout(() => { if (this.alive) this.mesh.userData.body.material.emissiveIntensity = 0.5; }, 100);
+      if (this.hp <= 0) this.die(game);
+    }
+
+    die(game) {
+      this.alive = false;
+      if (this.field) this.field.workers.delete(this);
+      FX.burst(this.mesh.position, 0x7fdcff, 12, 0.24);
+      AUDIO.sfx.kill();
+      game.onWorkerLost(this);
+      this.remove();
+    }
+
+    remove() {
+      this.alive = false;
+      this.scene.remove(this.mesh);
+      this.mesh.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+    }
+  }
+
+  return { Worker };
+})();
+</script>
+<script>
+/* ====================== js/buildings.js ====================== */
+/* HARVEST PROTOCOL — structures: turrets, generators, depots, walls.
+   Buildings have integrity and can be sieged; walls block the nav grid. */
+'use strict';
+const BUILDING = (function () {
+
+  function statFor(def, level, key) {
+    let v = def[key] || 0;
+    for (let i = 2; i <= level; i++) {
+      const u = CONFIG.UPGRADES[i - 2];
+      if (u && u[key]) v *= u[key];
+    }
+    return v;
+  }
+  function upgradeCost(def, level) {
+    const u = CONFIG.UPGRADES[level - 1];
+    return u ? Math.round(def.cost * u.cost) : null;
+  }
+
+  function makeMesh(type, def) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x223350, emissive: def.color, emissiveIntensity: 0.5, roughness: 0.35, metalness: 0.5,
+    });
+    if (type === 'wall') {
+      const w = new THREE.Mesh(
+        new THREE.BoxGeometry(MAP.CS * 0.92, 1.5, MAP.CS * 0.92),
+        new THREE.MeshStandardMaterial({ color: 0x2c3c5c, roughness: 0.7, metalness: 0.4, emissive: 0x101b30, emissiveIntensity: 1 })
+      );
+      w.position.y = 0.75;
+      g.add(w);
+      g.userData.head = w; g.userData.mat = w.material;
+      return g;
+    }
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.68, 0.35, 6),
+      new THREE.MeshStandardMaterial({ color: 0x1c2b47, roughness: 0.5, metalness: 0.6 })
+    );
+    base.position.y = 0.2;
+    g.add(base);
+    let head;
+    if (type === 'cannon') {
+      head = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.95, 8), mat);
+      head.rotation.x = Math.PI / 2;
+    } else if (type === 'tesla') {
+      head = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), mat);
+    } else if (type === 'mortar') {
+      head = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 0.7, 8), mat);
+      head.rotation.x = -0.7;
+    } else if (type === 'stasis') {
+      head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 10), mat);
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 16, 10),
+        new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.07, side: THREE.DoubleSide })
+      );
+      dome.position.y = 0.6;
+      g.add(dome);
+      g.userData.dome = dome;
+    } else if (type === 'generator') {
+      head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), mat);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), new THREE.MeshBasicMaterial({ color: def.color }));
+      ring.position.y = 0.7;
+      g.add(ring);
+      g.userData.ring = ring;
+    } else { // depot
+      head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 1.1), mat);
+      const pad = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.8, 0.8, 0.06, 6),
+        new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.5 })
+      );
+      pad.position.y = 0.56;
+      g.add(pad);
+    }
+    head.position.y = 0.75;
+    g.add(head);
+    g.userData.head = head;
+    g.userData.mat = mat;
+    return g;
+  }
+
+  class Building {
+    constructor(scene, type, pos, game) {
+      this.type = type;
+      this.def = CONFIG.BUILDINGS[type];
+      this.level = 1;
+      this.alive = true;
+      this.cooldown = 0;
+      this.overclockT = 0;
+      this.ocCooldown = 0;
+      this.kills = 0;
+      this.spent = this.def.cost;
+      this.scene = scene;
+      this.mesh = makeMesh(type, this.def);
+      if (type !== 'wall') this.mesh.scale.setScalar(1.45);  // readable at RTS camera distance
+      this.mesh.position.copy(pos);
+      this.mesh.userData.building = this;
+      scene.add(this.mesh);
+      this.hp = this.maxHp = this.stat('hp') * (game && game.tech.plating ? 1.4 : 1);
+      if (this.def.blocks) {
+        const c = MAP.addBlock(pos.x, pos.z);
+        this.cell = c;
+      }
+    }
+
+    stat(key) {
+      let v = statFor(this.def, this.level, key);
+      const tech = (typeof GAME !== 'undefined' && GAME.tech) || {};
+      if (tech.lenses && key === 'dmg' && (this.type === 'cannon' || this.type === 'tesla')) v *= 1.25;
+      if (tech.plating && key === 'hp') v *= 1.4;
+      return v;
+    }
+    get upgradeCost() { return upgradeCost(this.def, this.level); }
+
+    upgrade() {
+      this.spent += this.upgradeCost;
+      this.level++;
+      const frac = this.hp / this.maxHp;
+      this.maxHp = this.stat('hp');
+      this.hp = this.maxHp * frac;
+      const s = 1 + (this.level - 1) * 0.16;
+      this.mesh.userData.head.scale.setScalar(s);
+      if (this.mesh.userData.mat) this.mesh.userData.mat.emissiveIntensity = 0.5 + (this.level - 1) * 0.35;
+      FX.ring(this.mesh.position, 1.6, this.def.color);
+    }
+
+    overclock(cooldown) {
+      this.overclockT = CONFIG.ECONOMY.overclockTime;
+      this.ocCooldown = CONFIG.ECONOMY.overclockTime + cooldown;
+      FX.ring(this.mesh.position, 2.2, 0xffd166);
+      AUDIO.sfx.overclock();
+    }
+
+    muzzle() { return this.mesh.position.clone().add(new THREE.Vector3(0, 0.8, 0)); }
+
+    findTarget(enemies) {
+      const range = this.stat('range');
+      const minR = this.def.minRange || 0;
+      const from = this.muzzle();
+      let best = null, bestScore = -1;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const d = e.mesh.position.distanceTo(from);
+        if (d > range || d < minR) continue;
+        const score = 1000 - e.mesh.position.distanceTo(MAP.corePos); // closest to core first
+        if (score > bestScore) { bestScore = score; best = e; }
+      }
+      return best;
+    }
+
+    update(dt, game) {
+      if (!this.alive) return;
+      const m = this.mesh;
+      if (this.overclockT > 0) this.overclockT -= dt;
+      if (this.ocCooldown > 0) this.ocCooldown -= dt;
+      const boosted = this.overclockT > 0;
+      if (m.userData.mat) m.userData.mat.emissiveIntensity = boosted ? 1.8 : 0.5 + (this.level - 1) * 0.35;
+
+      if (this.type === 'generator') {
+        if (m.userData.ring) m.userData.ring.rotation.z += dt * (boosted ? 6 : 2);
+        return;
+      }
+      if (this.type === 'depot' || this.type === 'wall') return;
+
+      // powered? unpowered turrets go dark
+      if (game.powerUsed() > game.powerCap()) {
+        if (m.userData.mat) m.userData.mat.emissiveIntensity = 0.12;
+        return;
+      }
+
+      if (this.type === 'stasis') {
+        const r = this.stat('range');
+        const slow = 1 - this.stat('slow') * (boosted ? 1.25 : 1);
+        for (const e of game.enemies) {
+          if (!e.alive) continue;
+          if (e.mesh.position.distanceTo(m.position) <= r) e.slowK = Math.min(e.slowK, Math.max(0.2, slow));
+        }
+        if (m.userData.dome) m.userData.dome.scale.setScalar(r);
+        return;
+      }
+
+      this.cooldown -= dt * (boosted ? 2 : 1);
+      if (this.cooldown > 0) return;
+      const target = this.findTarget(game.enemies);
+      if (!target) return;
+      this.cooldown = 1 / (this.stat('rate') * game.mod('rateMult', 1));
+      const from = this.muzzle();
+      m.userData.head.lookAt(target.mesh.position);
+
+      if (this.type === 'cannon') {
+        FX.beam(from, target.mesh.position.clone(), this.def.color);
+        AUDIO.sfx.fire('blaster');
+        target.hit(this.stat('dmg'), game, { showDmg: true });
+        if (!target.alive) this.kills++;
+      } else if (this.type === 'mortar') {
+        const at = target.mesh.position.clone();
+        FX.beam(from, at, this.def.color);
+        FX.ring(at, this.def.splash, this.def.color);
+        AUDIO.sfx.fire('repulsor');
+        for (const e of game.enemies.slice()) {
+          if (!e.alive) continue;
+          if (e.mesh.position.distanceTo(at) <= this.def.splash) {
+            e.hit(this.stat('dmg'), game, { showDmg: e === target });
+            if (!e.alive) this.kills++;
+          }
+        }
+      } else if (this.type === 'tesla') {
+        let cur = target;
+        const hitSet = [target];
+        const chain = this.def.chain + (this.level - 1);
+        FX.zap(from, cur.mesh.position.clone(), this.def.color);
+        for (let i = 1; i < chain; i++) {
+          let next = null, nd = 4.5;
+          for (const e of game.enemies) {
+            if (!e.alive || hitSet.includes(e)) continue;
+            const d = e.mesh.position.distanceTo(cur.mesh.position);
+            if (d < nd) { nd = d; next = e; }
+          }
+          if (!next) break;
+          FX.zap(cur.mesh.position.clone(), next.mesh.position.clone(), this.def.color);
+          hitSet.push(next);
+          cur = next;
+        }
+        AUDIO.sfx.fire('tesla');
+        for (const e of hitSet) {
+          e.hit(this.stat('dmg'), game, { showDmg: hitSet.length < 3 });
+          if (!e.alive) this.kills++;
+        }
+      }
+    }
+
+    hit(dmg, game) {
+      if (!this.alive) return;
+      this.hp -= dmg;
+      if (this.mesh.userData.mat) {
+        this.mesh.userData.mat.emissive.setHex(0xff4444);
+        setTimeout(() => { if (this.alive && this.mesh.userData.mat) this.mesh.userData.mat.emissive.setHex(this.def.color); }, 110);
+      }
+      if (this.hp <= 0) this.destroyed(game);
+    }
+
+    destroyed(game) {
+      FX.burst(this.mesh.position, this.def.color, 16, 0.3);
+      AUDIO.sfx.splat();
+      game.onBuildingLost(this);
+      this.remove();
+    }
+
+    remove() {
+      this.alive = false;
+      if (this.cell) MAP.removeBlock(this.cell.cx, this.cell.cz);
+      this.scene.remove(this.mesh);
+      this.mesh.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+    }
+
+    sellValue() { return Math.round(this.spent * CONFIG.ECONOMY.sellRefund); }
+    sell() {
+      const v = this.sellValue();
+      this.remove();
+      return v;
+    }
+  }
+
+  return { Building };
+})();
+</script>
+<script>
 /* ====================== js/enemies.js ====================== */
-/* NEURAL SPIRE — climbers, fliers, and the physics of being thrown off a tower */
+/* HARVEST PROTOCOL — hostiles. Crawlers/sprinters push the core along the
+   nav grid, raiders hunt your miners, brutes siege structures, and the
+   ARCHON walks through walls. */
 'use strict';
 const ENEMY = (function () {
 
-  // shared radial-glow texture: every threat carries an additive halo so it
-  // reads instantly against the dark spire
   let glowTex = null;
   function getGlowTex() {
     if (glowTex) return glowTex;
@@ -1367,24 +1766,21 @@ const ENEMY = (function () {
         new THREE.MeshBasicMaterial({ color: def.color, wireframe: true, transparent: true, opacity: 0.6 })
       );
       g.add(spikes); g.userData.spin = spikes;
-    } else if (def.flying) {
-      body = new THREE.Mesh(new THREE.TetrahedronGeometry(def.size), mat);
-      const wing = new THREE.Mesh(
-        new THREE.OctahedronGeometry(def.size * 0.9),
-        new THREE.MeshBasicMaterial({ color: def.color, wireframe: true, transparent: true, opacity: 0.7 })
-      );
-      g.add(wing); g.userData.spin = wing;
+    } else if (def.target === 'workers') {
+      body = new THREE.Mesh(new THREE.TetrahedronGeometry(def.size * 1.1), mat);
     } else if (def.armor) {
       body = new THREE.Mesh(new THREE.DodecahedronGeometry(def.size), mat);
     } else {
       body = new THREE.Mesh(new THREE.IcosahedronGeometry(def.size, 1), mat);
     }
+    body.position.y = def.size + 0.1;
     g.add(body);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.55,
+      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.5,
       blending: THREE.AdditiveBlending, depthWrite: false,
     }));
     halo.scale.setScalar(def.size * (def.boss ? 6 : 4.5));
+    halo.position.y = def.size + 0.1;
     g.add(halo);
     g.userData.body = body;
     g.userData.mat = mat;
@@ -1392,73 +1788,165 @@ const ENEMY = (function () {
   }
 
   class Enemy {
-    constructor(scene, type, hpMult) {
+    constructor(scene, type, hpMult, gate) {
       const def = CONFIG.ENEMIES[type];
       this.type = type;
       this.def = def;
       this.hp = this.maxHp = Math.round(def.hp * hpMult);
       this.speed = def.speed;
       this.alive = true;
-      this.state = def.flying ? 'fly' : 'climb'; // climb | fly | air (knocked) | dead
-      this.d = 0;                    // distance along ramp (climbers)
-      this.y = 0.6;                  // altitude (fliers)
-      this.flyAng = Math.random() * Math.PI * 2; // fliers rise in a fixed vertical lane
-      this.slowK = 1;                // stasis multiplier, recomputed each frame
-      this.vel = null;               // ballistic velocity once knocked
-      this.fellFrom = 0;
-      this.hitT = 0;
-      this.dmgAcc = 0; this.dmgAccT = 0;  // aggregated floating damage numbers
+      this.slowK = 1;
+      this.attackT = 0;
+      this.victim = null;          // worker or building being attacked/hunted
+      this.path = null; this.pathI = 0;
+      this.repathT = 0;
+      this.dmgAcc = 0; this.dmgAccT = 0;
       this.scene = scene;
       this.mesh = makeMesh(def);
+      const jitter = () => (Math.random() - 0.5) * 2.2;
+      this.mesh.position.set(gate.pos.x + jitter(), 0, gate.pos.z + Math.random() * 1.5);
       this.mesh.userData.enemy = this;
       scene.add(this.mesh);
-      this.place(0);
     }
 
-    place(dt) {
-      const m = this.mesh;
-      if (this.state === 'climb') {
-        const { pos, tangent } = SPIRE.at(this.d);
-        m.position.set(pos.x, pos.y + this.def.size + 0.12, pos.z);
-        m.lookAt(pos.clone().add(tangent).setY(m.position.y));
-      } else if (this.state === 'fly') {
-        const r = 5.3; // outside even the widest ramp sections
-        m.position.set(Math.sin(this.flyAng) * r, this.y, Math.cos(this.flyAng) * r);
-        if (m.userData.spin) m.userData.spin.rotation.y += dt * 6;
-      } else if (this.state === 'air') {
-        this.vel.y -= 22 * dt;
-        m.position.addScaledVector(this.vel, dt);
-        m.rotation.x += dt * 7; m.rotation.z += dt * 5;
+    moveToward(wp, dt) {
+      const p = this.mesh.position;
+      const dx = wp.x - p.x, dz = wp.z - p.z;
+      const d = Math.hypot(dx, dz);
+      const step = this.speed * this.slowK * dt;
+      if (d < 0.2) return true;
+      p.x += (dx / d) * step;
+      p.z += (dz / d) * step;
+      this.mesh.rotation.y = Math.atan2(dx, dz);
+      return false;
+    }
+
+    // nearest wall adjacent to our cell (we're blocked — break through)
+    blockingWall(game) {
+      let best = null, bd = MAP.CS * 2.2;
+      for (const b of game.buildings) {
+        if (!b.alive || !b.def.blocks) continue;
+        const d = b.mesh.position.distanceTo(this.mesh.position);
+        if (d < bd) { bd = d; best = b; }
       }
-      if (m.userData.spin && this.state !== 'fly') m.userData.spin.rotation.y += dt * 2;
+      return best;
     }
 
     update(dt, game) {
       if (!this.alive) return;
-      if (this.hitT > 0) {
-        this.hitT -= dt;
-        if (this.hitT <= 0) this.mesh.userData.mat.emissiveIntensity = 0.85;
-      }
-      // flush aggregated damage as one readable number, not a spam stack
       if (this.dmgAcc > 0) {
         this.dmgAccT -= dt;
         if (this.dmgAccT <= 0) {
-          FX.text(this.mesh.position.clone().add(new THREE.Vector3(0, 0.8, 0)), String(this.dmgAcc), '#cfe8ff', 0.55);
+          FX.text(this.mesh.position.clone().add(new THREE.Vector3(0, 1.1, 0)), String(this.dmgAcc), '#cfe8ff', 0.55);
           this.dmgAcc = 0;
         }
       }
-      if (this.state === 'climb') {
-        this.d += this.speed * this.slowK * dt;
-        if (this.d >= SPIRE.pathTotal) { this.reachCore(game); return; }
-      } else if (this.state === 'fly') {
-        this.y += this.speed * this.slowK * dt;
-        if (this.y >= SPIRE.height + 1.2) { this.reachCore(game); return; }
-      } else if (this.state === 'air') {
-        if (this.mesh.position.y <= 0.35) { this.splat(game); return; }
-        if (this.mesh.position.y < -5) { this.remove(); return; }
+      this.attackT -= dt;
+      const p = this.mesh.position;
+
+      // ---- raiders: hunt the mining line ----
+      if (this.def.target === 'workers') {
+        if (!this.victim || !this.victim.alive) {
+          this.victim = null;
+          let bd = 1e9;
+          for (const w of game.workers) {
+            if (!w.alive) continue;
+            const d = w.mesh.position.distanceTo(p);
+            if (d < bd) { bd = d; this.victim = w; }
+          }
+          this.path = null;
+        }
+        if (!this.victim) { this.pushCore(game, dt); return; }   // no workers left — join the push
+        const d = this.victim.mesh.position.distanceTo(p);
+        if (d < 1.1) {
+          if (this.attackT <= 0) {
+            this.attackT = 1 / this.def.atkRate;
+            this.victim.hit(this.def.dmg, game);
+            FX.beam(p.clone().setY(0.6), this.victim.mesh.position.clone().setY(0.6), this.def.color);
+          }
+        } else {
+          this.repathT -= dt;
+          if (!this.path || this.repathT <= 0) {
+            this.path = MAP.findPath(p.x, p.z, this.victim.mesh.position.x, this.victim.mesh.position.z);
+            this.pathI = 0;
+            this.repathT = 0.9;
+          }
+          if (this.path && this.pathI < this.path.length) {
+            if (this.moveToward(this.path[this.pathI], dt)) this.pathI++;
+          } else this.moveToward(this.victim.mesh.position, dt);
+        }
+        this.spin(dt);
+        return;
       }
-      this.slowK = 1; // re-applied by stasis wells each frame
-      this.place(dt);
+
+      // ---- brutes: siege the nearest structure ----
+      if (this.def.target === 'buildings') {
+        if (!this.victim || !this.victim.alive) {
+          this.victim = null;
+          let bd = 1e9;
+          for (const b of game.buildings) {
+            if (!b.alive) continue;
+            const d = b.mesh.position.distanceTo(p);
+            if (d < bd) { bd = d; this.victim = b; }
+          }
+          this.path = null;
+        }
+        if (!this.victim) { this.pushCore(game, dt); return; }   // nothing left to break
+        const d = this.victim.mesh.position.distanceTo(p);
+        if (d < 1.5) {
+          if (this.attackT <= 0) {
+            this.attackT = 1 / this.def.atkRate;
+            this.victim.hit(this.def.dmg, game);
+            FX.beam(p.clone().setY(0.8), this.victim.mesh.position.clone().setY(0.8), this.def.color);
+            AUDIO.sfx.fire('repulsor');
+          }
+        } else {
+          this.repathT -= dt;
+          if (!this.path || this.repathT <= 0) {
+            this.path = MAP.findPath(p.x, p.z, this.victim.mesh.position.x, this.victim.mesh.position.z);
+            this.pathI = 0;
+            this.repathT = 1.2;
+          }
+          if (this.path && this.pathI < this.path.length) {
+            if (this.moveToward(this.path[this.pathI], dt)) this.pathI++;
+          } else this.moveToward(this.victim.mesh.position, dt);
+        }
+        this.spin(dt);
+        return;
+      }
+
+      // ---- core pushers (crawler, sprinter, boss) ----
+      this.pushCore(game, dt);
+      this.spin(dt);
+    }
+
+    pushCore(game, dt) {
+      const p = this.mesh.position;
+      if (p.distanceTo(MAP.corePos) < 2.6) {
+        game.onCoreHit(this);
+        this.remove();
+        return;
+      }
+      const wp = MAP.flowStep(p.x, p.z);
+      if (!wp) {
+        // walled off — the ARCHON smashes straight through, others chew the wall
+        const wall = this.blockingWall(game);
+        if (wall) {
+          if (this.attackT <= 0) {
+            this.attackT = 1 / (this.def.atkRate || 1);
+            wall.hit(this.def.dmg * (this.def.wallBreaker || 1), game);
+            FX.beam(p.clone().setY(0.8), wall.mesh.position.clone().setY(0.8), this.def.color);
+          }
+        } else {
+          this.moveToward(MAP.corePos, dt); // open field fallback
+        }
+        return;
+      }
+      this.moveToward(wp, dt);
+    }
+
+    spin(dt) {
+      if (this.mesh.userData.spin) this.mesh.userData.spin.rotation.y += dt * 2;
     }
 
     hit(dmg, game, opts) {
@@ -1467,7 +1955,7 @@ const ENEMY = (function () {
       const real = Math.max(1, dmg - armor);
       this.hp -= real;
       this.mesh.userData.mat.emissiveIntensity = 1.6;
-      this.hitT = 0.1;
+      setTimeout(() => { if (this.alive) this.mesh.userData.mat.emissiveIntensity = 0.85; }, 100);
       if (opts && opts.showDmg) {
         if (this.dmgAcc === 0) this.dmgAccT = 0.45;
         this.dmgAcc += real;
@@ -1475,42 +1963,10 @@ const ENEMY = (function () {
       if (this.hp <= 0) this.die(game);
     }
 
-    knockback(force, from, game) {
-      if (!this.alive || this.def.knockImmune || this.def.flying) return false;
-      if (this.state !== 'climb') return false;
-      // impulse: outward from the spire axis, away from the repulsor, and up
-      const p = this.mesh.position;
-      const out = new THREE.Vector3(p.x, 0, p.z).normalize();
-      const away = p.clone().sub(from).setY(0).normalize();
-      this.vel = out.multiplyScalar(force * 0.8).add(away.multiplyScalar(force * 0.45));
-      this.vel.y = force * 0.5;
-      this.state = 'air';
-      this.fellFrom = p.y;
-      AUDIO.sfx.knockoff();
-      return true;
-    }
-
-    splat(game) {
-      // hit the ground after being thrown — gravity does the killing
-      const bonus = Math.round(this.fellFrom * CONFIG.ECONOMY.fallBonusPerUnit);
-      AUDIO.sfx.splat();
-      FX.burst(this.mesh.position, this.def.color, 14, 0.28);
-      FX.ring(this.mesh.position, 2.2, 0xffd166);
-      game.onKill(this, { fallBonus: bonus });
-      this.remove();
-    }
-
     die(game) {
       AUDIO.sfx.kill();
       FX.burst(this.mesh.position, this.def.color, this.def.boss ? 40 : 10, this.def.boss ? 0.4 : 0.2);
-      game.onKill(this, {});
-      this.remove();
-    }
-
-    reachCore(game) {
-      SPIRE.coreHitFlash();
-      FX.burst(this.mesh.position, 0xff2244, 16, 0.3);
-      game.onLeak(this);
+      game.onKill(this);
       this.remove();
     }
 
@@ -1522,272 +1978,44 @@ const ENEMY = (function () {
         if (o.material) o.material.dispose();
       });
     }
-
-    get progress() { // 0..1 how close to the core (for targeting priority)
-      return this.def.flying ? this.y / (SPIRE.height + 1.2) : this.d / SPIRE.pathTotal;
-    }
   }
 
   return { Enemy };
 })();
 </script>
 <script>
-/* ====================== js/turrets.js ====================== */
-/* NEURAL SPIRE — turrets: build, target (LOS matters), fire, upgrade, overclock */
-'use strict';
-const TURRET = (function () {
-
-  function statFor(def, level, key) {
-    let v = def[key] || 0;
-    for (let i = 2; i <= level; i++) {
-      const u = CONFIG.UPGRADES[i - 2];
-      if (u && u[key]) v *= u[key];
-    }
-    return v;
-  }
-  function upgradeCost(def, level) { // cost to go from level → level+1
-    const u = CONFIG.UPGRADES[level - 1];
-    return u ? Math.round(def.cost * u.cost) : null;
-  }
-
-  function makeMesh(type, def) {
-    const g = new THREE.Group();
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.5, 0.3, 6),
-      new THREE.MeshStandardMaterial({ color: 0x1c2b47, roughness: 0.5, metalness: 0.6 })
-    );
-    base.position.y = 0.22;
-    g.add(base);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x223350, emissive: def.color, emissiveIntensity: 0.5, roughness: 0.35, metalness: 0.5,
-    });
-    let head;
-    if (type === 'blaster') {
-      head = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.85, 8), mat);
-      head.rotation.x = Math.PI / 2;
-    } else if (type === 'tesla') {
-      head = new THREE.Mesh(new THREE.OctahedronGeometry(0.42), mat);
-    } else if (type === 'repulsor') {
-      head = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.13, 8, 20), mat);
-    } else if (type === 'stasis') {
-      head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 10), mat);
-      const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 16, 10),
-        new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.07, side: THREE.DoubleSide })
-      );
-      dome.position.y = 0.6;
-      g.add(dome);
-      g.userData.dome = dome;
-    } else { // generator
-      head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.5), mat);
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.52, 0.05, 6, 20),
-        new THREE.MeshBasicMaterial({ color: def.color })
-      );
-      ring.position.y = 0.62;
-      g.add(ring);
-      g.userData.ring = ring;
-    }
-    head.position.y = 0.62;
-    g.add(head);
-    g.userData.head = head;
-    g.userData.mat = mat;
-    return g;
-  }
-
-  class Turret {
-    constructor(scene, socket, type) {
-      this.type = type;
-      this.def = CONFIG.TURRETS[type];
-      this.level = 1;
-      this.socket = socket;
-      this.cooldown = 0;
-      this.overclockT = 0;   // active boost seconds remaining
-      this.ocCooldown = 0;   // seconds until overclock available again
-      this.kills = 0;
-      this.spent = this.def.cost;   // for sell refund
-      this.scene = scene;
-      this.mesh = makeMesh(type, this.def);
-      this.mesh.position.copy(socket.pos);
-      this.mesh.userData.turret = this;
-      scene.add(this.mesh);
-      socket.turret = this;
-    }
-
-    stat(key) {
-      let v = statFor(this.def, this.level, key);
-      // SPIRE OS tech modifies live stats
-      const tech = GAME.tech || {};
-      if (tech.lenses && key === 'dmg' && (this.type === 'blaster' || this.type === 'tesla')) v *= 1.25;
-      if (tech.massdrv && key === 'knock') v *= 1.3;
-      if (tech.harmonic && this.type === 'stasis') {
-        if (key === 'slow') v += 0.12;
-        if (key === 'range') v *= 1.15;
-      }
-      return v;
-    }
-    get upgradeCost() { return upgradeCost(this.def, this.level); }
-
-    upgrade() {
-      this.spent += this.upgradeCost;
-      this.level++;
-      const s = 1 + (this.level - 1) * 0.16;
-      this.mesh.userData.head.scale.setScalar(s);
-      this.mesh.userData.mat.emissiveIntensity = 0.5 + (this.level - 1) * 0.35;
-      if (this.mesh.userData.dome) {
-        const r = this.stat('range');
-        this.mesh.userData.dome.scale.setScalar(r / 1);
-      }
-      FX.ring(this.mesh.position, 1.6, this.def.color);
-    }
-
-    overclock(cooldown) {
-      this.overclockT = CONFIG.ECONOMY.overclockTime;
-      this.ocCooldown = CONFIG.ECONOMY.overclockTime + (cooldown !== undefined ? cooldown : CONFIG.ECONOMY.overclockCooldown);
-      FX.ring(this.mesh.position, 2.2, 0xffd166);
-      AUDIO.sfx.overclock();
-    }
-
-    muzzle() {
-      return this.mesh.position.clone().add(new THREE.Vector3(0, 0.65, 0));
-    }
-
-    findTarget(enemies) {
-      const range = this.stat('range');
-      const from = this.muzzle();
-      let best = null, bestProg = -1;
-      for (const e of enemies) {
-        if (!e.alive || e.state === 'air') continue;
-        const d = e.mesh.position.distanceTo(from);
-        if (d > range) continue;
-        if (SPIRE.losBlocked(from, e.mesh.position)) continue; // the spire blocks its own defenses
-        if (e.progress > bestProg) { bestProg = e.progress; best = e; }
-      }
-      return best;
-    }
-
-    update(dt, game) {
-      const m = this.mesh;
-      if (this.overclockT > 0) this.overclockT -= dt;
-      if (this.ocCooldown > 0) this.ocCooldown -= dt;
-      const boosted = this.overclockT > 0;
-      m.userData.mat.emissiveIntensity = (boosted ? 1.8 : 0.5 + (this.level - 1) * 0.35);
-
-      if (this.type === 'generator') {
-        if (m.userData.ring) m.userData.ring.rotation.z += dt * (boosted ? 6 : 2);
-        return;
-      }
-      if (this.type === 'stasis') {
-        const r = this.stat('range');
-        const slow = 1 - this.stat('slow') * (boosted ? 1.25 : 1);
-        for (const e of game.enemies) {
-          if (!e.alive || e.state === 'air') continue;
-          if (e.mesh.position.distanceTo(m.position) <= r) e.slowK = Math.min(e.slowK, Math.max(0.2, slow));
-        }
-        if (m.userData.dome) {
-          m.userData.dome.scale.setScalar(r);
-          m.userData.dome.material.opacity = 0.05 + Math.sin(game.time * 3) * 0.02;
-        }
-        return;
-      }
-
-      this.cooldown -= dt * (boosted ? 2 : 1);
-      if (this.cooldown > 0) return;
-      const target = this.findTarget(game.enemies);
-      if (!target) return;
-      this.cooldown = 1 / (this.stat('rate') * game.mod('rateMult', 1));
-      const from = this.muzzle();
-      m.userData.head.lookAt(target.mesh.position);
-
-      if (this.type === 'blaster') {
-        FX.beam(from, target.mesh.position.clone(), this.def.color);
-        AUDIO.sfx.fire('blaster');
-        target.hit(this.stat('dmg'), game, { showDmg: true });
-        if (!target.alive) this.kills++;
-      } else if (this.type === 'tesla') {
-        // chain to nearest neighbours of the first target
-        let cur = target, hitSet = [target];
-        const chain = this.def.chain + (this.level - 1);
-        FX.zap(from, cur.mesh.position.clone(), this.def.color);
-        for (let i = 1; i < chain; i++) {
-          let next = null, nd = 4.2;
-          for (const e of game.enemies) {
-            if (!e.alive || e.state === 'air' || hitSet.includes(e)) continue;
-            const d = e.mesh.position.distanceTo(cur.mesh.position);
-            if (d < nd) { nd = d; next = e; }
-          }
-          if (!next) break;
-          FX.zap(cur.mesh.position.clone(), next.mesh.position.clone(), this.def.color);
-          hitSet.push(next);
-          cur = next;
-        }
-        AUDIO.sfx.fire('tesla');
-        for (const e of hitSet) {
-          e.hit(this.stat('dmg'), game, { showDmg: hitSet.length < 3 });
-          if (!e.alive) this.kills++;
-        }
-      } else if (this.type === 'repulsor') {
-        const r = this.stat('range');
-        const force = this.stat('knock');
-        FX.ring(m.position.clone().add(new THREE.Vector3(0, 0.4, 0)), r, this.def.color);
-        AUDIO.sfx.fire('repulsor');
-        let thrown = 0;
-        for (const e of game.enemies.slice()) {
-          if (!e.alive) continue;
-          if (e.mesh.position.distanceTo(m.position) > r) continue;
-          e.hit(this.stat('dmg'), game, {});
-          if (e.alive && e.knockback(force, m.position, game)) thrown++;
-        }
-        if (thrown >= 2) game.onMultiThrow(thrown);
-      }
-    }
-
-    sell(scene) {
-      this.socket.turret = null;
-      this.scene.remove(this.mesh);
-      this.mesh.traverse(o => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) o.material.dispose();
-      });
-      return Math.round(this.spent * CONFIG.ECONOMY.sellRefund);
-    }
-  }
-
-  return { Turret, statFor, upgradeCost };
-})();
-</script>
-<script>
 /* ====================== js/game.js ====================== */
-/* NEURAL SPIRE — run state: economy, waves, win/lose, and the wiring between them */
+/* HARVEST PROTOCOL — run state: the mining economy, waves, win/lose.
+   Income is mined, not killed for. Protect the line that feeds you. */
 'use strict';
 const GAME = (function () {
   const ECO = CONFIG.ECONOMY;
   const g = {
     scene: null,
-    phase: 'title',          // title | build | combat | won | lost
+    phase: 'title',            // title | build | combat | won | lost
     wave: 1,
-    salvage: 0,
+    minerals: 0,
     coreHP: ECO.coreHP,
+    workers: [],
+    buildings: [],
     enemies: [],
-    turrets: [],
-    spawnQueue: [],          // { type, at, hpMult } — combat-time seconds
+    spawnQueue: [],
     combatT: 0,
     time: 0,
     speed: 1,
     paused: false,
     endless: false,
+    level: null,
+    tech: {},
+    permPower: 0,
+    activeDirs: [],
+    dirOffer: null,
+    waveEarn: null,
     stats: null,
-    comboThrows: 0, comboT: 0,
-    level: null,             // the current campaign node (CONFIG.LEVELS entry)
-    tech: {},                // purchased SPIRE OS nodes, by id
-    permPower: 0,            // permanent grid bonuses from directives
-    activeDirs: [],          // [{ def, mods, wavesLeft }]
-    dirOffer: null,          // the 3 directives offered this build phase
-    waveEarn: null,          // per-wave income breakdown for the report
+    stars: 0,
   };
 
-  // combined modifier: level twist mods first, then active directives.
-  // 'Mult' keys multiply, everything else adds.
+  // combined modifier: level twist mods first, then active directives
   function mod(key, base) {
     let v = base === undefined ? (key.endsWith('Mult') ? 1 : 0) : base;
     const lm = g.level && g.level.mods && g.level.mods[key];
@@ -1800,36 +2028,45 @@ const GAME = (function () {
     return v;
   }
 
-  // economy values, tech-aware
-  function interestRate() { return g.tech.compound ? 0.14 : ECO.interestRate; }
-  function interestCap() { return g.tech.compound ? 90 : ECO.interestCap; }
+  function interestRate() { return g.tech.compound ? 0.12 : ECO.interestRate; }
+  function interestCap() { return g.tech.compound ? 80 : ECO.interestCap; }
   function overclockCost() { return g.tech.cycles ? 15 : ECO.overclockCost; }
   function overclockCooldown() { return g.tech.cycles ? ECO.overclockCooldown - 6 : ECO.overclockCooldown; }
-  function fallBonusMult() { return (g.tech.massdrv ? 1.5 : 1) * mod('fallMult', 1); }
 
   function powerCap() {
     const base = (g.level && g.level.eco && g.level.eco.powerBase !== undefined) ? g.level.eco.powerBase : ECO.powerBase;
     let cap = base + g.permPower + (g.tech.coretap ? 3 : 0);
-    for (const t of g.turrets) cap += t.stat('gen') || 0;
+    for (const b of g.buildings) if (b.alive && b.def.gen) cap += b.stat('gen');
     return Math.round(cap);
-  }
-
-  // turrets available on the current node (unlock chain across the campaign)
-  function availableTurrets() {
-    return (g.level && g.level.turrets) || CONFIG.TURRET_ORDER;
   }
   function powerUsed() {
     let used = 0;
-    for (const t of g.turrets) used += t.def.power;
+    for (const b of g.buildings) if (b.alive) used += b.def.power;
     return used;
   }
+  function workerCap() {
+    let cap = ECO.workerCapBase;
+    for (const b of g.buildings) if (b.alive && b.def.workerCap) cap += b.def.workerCap;
+    return cap;
+  }
+  function availableBuildings() {
+    return (g.level && g.level.buildings) || CONFIG.BUILD_ORDER;
+  }
+  function miningRate() {   // rough ¤/min estimate for the HUD
+    const carry = ECO.workerCarry + (g.tech.drills ? 4 : 0);
+    let rate = 0;
+    for (const w of g.workers) if (w.alive) rate += carry / 14; // ~14s round trip typical
+    return Math.round(rate * 60 * mod('mineMult', 1));
+  }
 
+  // ---------------- lifecycle ----------------
   function reset() {
     for (const e of g.enemies) e.remove();
-    for (const t of g.turrets) t.sell();   // removes their meshes from the scene
-    g.enemies = []; g.turrets = [];
+    for (const w of g.workers) w.remove();
+    for (const b of g.buildings) if (b.alive) b.remove();
+    g.enemies = []; g.workers = []; g.buildings = [];
     g.wave = 1;
-    g.salvage = g.level ? CONFIG.startSalvage(g.level) : ECO.startSalvage;
+    g.minerals = CONFIG.startMinerals(g.level);
     g.coreHP = ECO.coreHP;
     g.spawnQueue = [];
     g.combatT = 0; g.time = 0;
@@ -1840,42 +2077,140 @@ const GAME = (function () {
     g.permPower = 0;
     g.activeDirs = [];
     g.dirOffer = null;
-    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
-    g.stats = { kills: 0, throws: 0, fallSalvage: 0, interest: 0, leaked: 0, built: 0, bestCombo: 0 };
+    g.waveEarn = { mined: 0, scrap: 0, interest: 0, lossPay: 0 };
+    g.stats = { mined: 0, kills: 0, workersLost: 0, buildingsLost: 0, leaked: 0, interest: 0, peakWorkers: 0 };
   }
 
   function start(levelN) {
-    // each node IS its spire: fixed seed + topology, learnable across attempts
     g.level = CONFIG.LEVELS[UTIL.clamp(levelN, 1, CONFIG.LEVELS.length) - 1];
-    SPIRE.regen(g.level.seed, g.level.spire);
+    MAP.build(g.scene, g.level);
     reset();
+    // two starter workers — the economy begins immediately
+    for (let i = 0; i < 2; i++) spawnWorker(true);
     g.phase = 'build';
     rollDirectives();
     UI.onPhase();
-    UI.banner('NODE ' + g.level.n + ' — ' + g.level.name, false);
+    UI.banner('OP ' + g.level.n + ' — ' + g.level.name, false);
     if (g.level.unlockNote) setTimeout(() => UI.toast(g.level.unlockNote, 'warn'), 1100);
     setTimeout(() => UI.toast(g.level.intro, ''), 2300);
     UI.updateHUD();
   }
 
-  // ---------------- directives ----------------
+  // ---------------- economy actions ----------------
+  function spawnWorker(free) {
+    const pos = MAP.corePos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 0, 2 + Math.random()));
+    const w = new WORKER.Worker(g.scene, pos);
+    g.workers.push(w);
+    g.stats.peakWorkers = Math.max(g.stats.peakWorkers, g.workers.filter(x => x.alive).length);
+    if (!free) FX.ring(pos, 1.2, 0x7fdcff);
+    return w;
+  }
+
+  function buyWorker() {
+    if (g.workers.filter(w => w.alive).length >= workerCap()) { UI.toast('WORKER CAP — BUILD A DEPOT', 'bad'); AUDIO.sfx.error(); return false; }
+    if (g.minerals < ECO.workerCost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= ECO.workerCost;
+    spawnWorker();
+    AUDIO.sfx.build();
+    UI.updateHUD();
+    return true;
+  }
+
+  function canPlace(type, x, z) {
+    if (Math.abs(x) > MAP.W / 2 - 1 || Math.abs(z) > MAP.H / 2 - 1) return false;
+    const c = MAP.worldToCell(x, z);
+    if (MAP.isBlocked(c.cx, c.cz)) return false;
+    // keep the core and gate mouths open
+    if (MAP.corePos.distanceTo(new THREE.Vector3(x, 0, z)) < 3.4) return false;
+    for (const gate of MAP.gates) if (gate.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 3.4) return false;
+    // no stacking on crystals or other buildings
+    for (const f of MAP.fields) if (f.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 2.6) return false;
+    const minGap = type === 'wall' ? MAP.CS * 0.9 : 1.4;
+    for (const b of g.buildings) {
+      if (!b.alive) continue;
+      if (b.mesh.position.distanceTo(new THREE.Vector3(x, 0, z)) < minGap) return false;
+    }
+    return true;
+  }
+
+  function placeBuilding(type, x, z) {
+    const def = CONFIG.BUILDINGS[type];
+    if (!availableBuildings().includes(type)) return null;
+    if (g.minerals < def.cost) { AUDIO.sfx.error(); return null; }
+    if (def.power && powerUsed() + def.power > powerCap()) { UI.toast('⚡ NOT ENOUGH POWER — BUILD A GENERATOR', 'bad'); AUDIO.sfx.error(); return null; }
+    // snap walls to the grid first so validation tests the real position
+    let px = x, pz = z;
+    if (def.blocks) {
+      const c = MAP.worldToCell(x, z);
+      const w = MAP.cellToWorld(c.cx, c.cz);
+      px = w.x; pz = w.z;
+    }
+    if (!canPlace(type, px, pz)) { AUDIO.sfx.error(); return null; }
+    g.minerals -= def.cost;
+    const b = new BUILDING.Building(g.scene, type, new THREE.Vector3(px, 0, pz), g);
+    g.buildings.push(b);
+    AUDIO.sfx.build();
+    FX.ring(b.mesh.position, 1.4, def.color);
+    UI.updateHUD();
+    return b;
+  }
+
+  function upgrade(b) {
+    const cost = b.upgradeCost;
+    if (cost === null || b.type === 'wall' || g.minerals < cost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= cost;
+    b.upgrade();
+    AUDIO.sfx.build();
+    UI.updateHUD();
+    return true;
+  }
+
+  function overclock(b) {
+    if (b.def.kind !== 'turret' || b.type === 'stasis') return false;
+    if (b.ocCooldown > 0 || g.minerals < overclockCost()) { AUDIO.sfx.error(); return false; }
+    g.minerals -= overclockCost();
+    b.overclock(overclockCooldown());
+    UI.updateHUD();
+    return true;
+  }
+
+  function repair(b) {
+    const missing = Math.ceil(b.maxHp - b.hp);
+    if (missing <= 0) return false;
+    const cost = Math.ceil(missing * ECO.repairCostPerHP);
+    if (g.minerals < cost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= cost;
+    b.hp = b.maxHp;
+    FX.ring(b.mesh.position, 1.2, 0x9dffb0);
+    AUDIO.sfx.build();
+    UI.updateHUD();
+    return true;
+  }
+
+  function sell(b) {
+    g.minerals += b.sell();
+    g.buildings.splice(g.buildings.indexOf(b), 1);
+    AUDIO.sfx.sell();
+    UI.updateHUD();
+  }
+
+  // ---------------- directives / tech ----------------
   function rollDirectives() {
     if (g.wave < 2) { g.dirOffer = null; return; }
-    const pool = CONFIG.DIRECTIVES.filter(d => (d.cost || 0) <= g.salvage);
+    const pool = CONFIG.DIRECTIVES.filter(d => (d.cost || 0) <= g.minerals);
     const offer = [];
     while (offer.length < 3 && pool.length) {
       offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
     }
     g.dirOffer = offer;
   }
-
   function pickDirective(def) {
     if (!g.dirOffer || !g.dirOffer.includes(def)) return false;
     if (def.cost) {
-      if (g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
-      g.salvage -= def.cost;
+      if (g.minerals < def.cost) { AUDIO.sfx.error(); return false; }
+      g.minerals -= def.cost;
     }
-    if (def.mods.instant) g.salvage += def.mods.instant;
+    if (def.mods.instant) g.minerals += def.mods.instant;
     if (def.mods.permPower) g.permPower += def.mods.permPower;
     g.activeDirs.push({ def, mods: def.mods, wavesLeft: def.mods.duration || 1 });
     g.dirOffer = null;
@@ -1884,82 +2219,26 @@ const GAME = (function () {
     UI.onPhase(); UI.updateHUD();
     return true;
   }
-
   function skipDirectives() { g.dirOffer = null; UI.onPhase(); }
-
-  // ---------------- tech ----------------
   function buyTech(def) {
-    if (g.tech[def.id] || g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
-    g.salvage -= def.cost;
+    if (g.tech[def.id] || g.minerals < def.cost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= def.cost;
     g.tech[def.id] = true;
+    if (def.id === 'plating') for (const b of g.buildings) if (b.alive) { b.maxHp *= 1.4; b.hp *= 1.4; }
     AUDIO.sfx.build();
     UI.toast('⚙ ' + def.name + ' INSTALLED', 'warn');
     UI.updateHUD();
     return true;
   }
 
-  // ---------------- economy actions ----------------
-  function canAffordAny() {
-    const cap = powerCap(), used = powerUsed();
-    for (const id of availableTurrets()) {
-      const d = CONFIG.TURRETS[id];
-      if (g.salvage >= d.cost && used + d.power <= cap) return true;
-    }
-    return false;
-  }
-
-  function build(socket, type) {
-    const def = CONFIG.TURRETS[type];
-    if (!availableTurrets().includes(type)) return false;
-    if (socket.turret || g.salvage < def.cost) return false;
-    if (powerUsed() + def.power > powerCap()) { UI.toast('⚡ NOT ENOUGH POWER — BUILD A GENERATOR', 'bad'); AUDIO.sfx.error(); return false; }
-    g.salvage -= def.cost;
-    const t = new TURRET.Turret(g.scene, socket, type);
-    g.turrets.push(t);
-    g.stats.built++;
-    AUDIO.sfx.build();
-    FX.ring(socket.pos, 1.4, def.color);
-    UI.updateHUD();
-    return t;
-  }
-
-  function upgrade(t) {
-    const cost = t.upgradeCost;
-    if (cost === null || g.salvage < cost) { AUDIO.sfx.error(); return false; }
-    g.salvage -= cost;
-    t.upgrade();
-    AUDIO.sfx.build();
-    UI.updateHUD();
-    return true;
-  }
-
-  function overclock(t) {
-    if (t.ocCooldown > 0 || g.salvage < overclockCost()) { AUDIO.sfx.error(); return false; }
-    if (t.type === 'generator' || t.type === 'stasis') return false;
-    g.salvage -= overclockCost();
-    t.overclock(overclockCooldown());
-    UI.updateHUD();
-    return true;
-  }
-
-  function sell(t) {
-    const refund = t.sell();
-    g.salvage += refund;
-    g.turrets.splice(g.turrets.indexOf(t), 1);
-    AUDIO.sfx.sell();
-    UI.toast('+' + refund + ' ¤ RECLAIMED', 'warn');
-    UI.updateHUD();
-  }
-
   // ---------------- waves ----------------
   function startWave() {
     if (g.phase !== 'build') return;
     g.dirOffer = null;
-    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
-    // interest on unspent salvage — the invest-or-hoard decision
-    const interest = Math.round(Math.min(interestCap(), g.salvage * interestRate()) * mod('interestMult', 1));
+    g.waveEarn = { mined: 0, scrap: 0, interest: 0, lossPay: 0 };
+    const interest = Math.round(Math.min(interestCap(), g.minerals * interestRate()) * mod('interestMult', 1));
     if (interest > 0) {
-      g.salvage += interest;
+      g.minerals += interest;
       g.stats.interest += interest;
       g.waveEarn.interest = interest;
       UI.toast('+' + interest + ' ¤ INTEREST ON RESERVES', 'warn');
@@ -1970,39 +2249,33 @@ const GAME = (function () {
     g.spawnQueue = [];
     const hpDirMult = mod('enemyHpMult', 1);
     const spdDirMult = mod('enemySpeedMult', 1);
-    const gnatMult = mod('gnatSpeedMult', 1);
+    const raiderMult = mod('raiderSpeedMult', 1);
     const comp = CONFIG.wave(g.level, g.wave);
     for (const grp of comp) {
       for (let i = 0; i < grp.count; i++) {
-        const flying = CONFIG.ENEMIES[grp.type].flying;
         g.spawnQueue.push({
           type: grp.type, at: grp.delay + i * grp.gap,
           hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - g.level.waves) * 0.25 : 1),
-          spdMult: spdDirMult * (flying ? gnatMult : 1),
+          spdMult: spdDirMult * (CONFIG.ENEMIES[grp.type].target === 'workers' ? raiderMult : 1),
         });
       }
     }
     g.spawnQueue.sort((a, b) => a.at - b.at);
     AUDIO.sfx.waveStart();
-    if (g.level.teach && g.level.teach.wave === g.wave) {
-      UI.banner(g.level.teach.text, true);
-    } else {
-      UI.banner('WAVE ' + g.wave + (g.wave > g.level.waves ? ' — OVERTIME' : ''), !!(g.level.bosses && g.level.bosses[g.wave]));
-    }
+    if (g.level.teach && g.level.teach.wave === g.wave) UI.banner(g.level.teach.text, true);
+    else UI.banner('WAVE ' + g.wave + (g.wave > g.level.waves ? ' — OVERTIME' : ''), !!(g.level.bosses && g.level.bosses[g.wave]));
     UI.onPhase();
     UI.updateHUD();
   }
 
   function endWave() {
-    // wave report: where the money came from
     const e = g.waveEarn;
     const parts = [];
-    if (e.kill) parts.push('kills ¤' + e.kill);
-    if (e.fall) parts.push('gravity ¤' + e.fall);
+    if (e.mined) parts.push('mined ¤' + e.mined);
+    if (e.scrap) parts.push('scrap ¤' + e.scrap);
     if (e.interest) parts.push('interest ¤' + e.interest);
-    if (e.leakPay) parts.push('insurance ¤' + e.leakPay);
+    if (e.lossPay) parts.push('insurance ¤' + e.lossPay);
     if (parts.length) UI.toast('WAVE ' + g.wave + ' INCOME — ' + parts.join(' · '), 'warn');
-    // expire directives
     for (const d of g.activeDirs) d.wavesLeft--;
     g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
@@ -2014,13 +2287,11 @@ const GAME = (function () {
     UI.updateHUD();
   }
 
-  // stars: an authored mastery target, not a participation prize
   function starRating() {
-    if (g.stats.leaked === 0) return 3;
-    if (g.stats.leaked <= 3) return 2;
+    if (g.stats.leaked === 0 && g.stats.workersLost === 0) return 3;
+    if (g.coreHP >= ECO.coreHP * 0.6) return 2;
     return 1;
   }
-
   function victoryEnd() {
     g.phase = 'won';
     g.stars = starRating();
@@ -2028,7 +2299,6 @@ const GAME = (function () {
     AUDIO.sfx.victory();
     UI.showEnd(true);
   }
-
   function defeat() {
     g.phase = 'lost';
     SAVE.recordLevel(g.level.n, 0, false);
@@ -2036,38 +2306,41 @@ const GAME = (function () {
     UI.showEnd(false);
   }
 
-  // ---------------- combat events ----------------
-  function onKill(e, opts) {
-    g.stats.kills++;
-    let pay = Math.round(e.def.salvage * mod('killMult', 1)) + mod('killFlat', 0);
-    g.waveEarn.kill += pay;
-    if (opts.fallBonus) {
-      const bonus = Math.round(opts.fallBonus * fallBonusMult());
-      pay += bonus;
-      g.stats.throws++;
-      g.stats.fallSalvage += bonus;
-      g.waveEarn.fall += bonus;
-      FX.text(e.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)), '+' + pay + ' ¤ GRAVITY', '#ffd166', 0.85);
-    }
-    g.salvage += pay;
+  // ---------------- events ----------------
+  function onMined(amount, pos) {
+    g.minerals += amount;
+    g.stats.mined += amount;
+    g.waveEarn.mined += amount;
+    FX.text(pos.clone().add(new THREE.Vector3(0, 1.4, 0)), '+' + amount, '#7fdcff', 0.5);
+    AUDIO.sfx.cash();
     UI.updateHUD();
   }
-
-  function onMultiThrow(n) {
-    g.comboThrows = n;
-    if (n > g.stats.bestCombo) g.stats.bestCombo = n;
-    UI.combo(n + '× LAUNCHED!');
+  function onKill(e) {
+    g.stats.kills++;
+    const pay = Math.round(e.def.scrap * mod('scrapMult', ECO.scrapMult));
+    if (pay > 0) { g.minerals += pay; g.waveEarn.scrap += pay; }
+    UI.updateHUD();
   }
-
-  function onLeak(e) {
+  function onWorkerLost(w) {
+    g.stats.workersLost++;
+    const pay = mod('lossPay', 0);
+    if (pay > 0) { g.minerals += pay; g.waveEarn.lossPay += pay; }
+    UI.toast('⚠ MINER DOWN', 'bad');
+    UI.updateHUD();
+  }
+  function onBuildingLost(b) {
+    g.stats.buildingsLost++;
+    const i = g.buildings.indexOf(b);
+    if (i >= 0) g.buildings.splice(i, 1);
+    const pay = mod('lossPay', 0);
+    if (pay > 0) { g.minerals += pay; g.waveEarn.lossPay += pay; }
+    UI.toast('⚠ ' + b.def.name.toUpperCase() + ' DESTROYED', 'bad');
+    UI.updateHUD();
+  }
+  function onCoreHit(e) {
     g.coreHP -= e.def.dmg;
     g.stats.leaked++;
-    const pay = mod('leakPay', 0);
-    if (pay > 0) {
-      g.salvage += pay;
-      g.waveEarn.leakPay += pay;
-      UI.toast('🛡 INSURANCE PAID ¤' + pay, 'warn');
-    }
+    MAP.coreHitFlash();
     AUDIO.sfx.leak();
     UI.hurt();
     UI.updateHUD();
@@ -2080,16 +2353,26 @@ const GAME = (function () {
     const dt = Math.min(rawDt, 0.05) * g.speed;
     g.time += dt;
 
-    SPIRE.update(dt, g.phase === 'build' && canAffordAny());
+    MAP.update(dt);
     FX.update(dt);
 
-    for (const t of g.turrets) t.update(dt, g);
+    for (const w of g.workers) w.update(dt, g);
+    g.workers = g.workers.filter(w => w.alive);
+    // mercy rule: never soft-locked out of the economy
+    if (g.workers.length === 0 && g.minerals < ECO.workerCost && MAP.totalReserves() > 0) {
+      UI.toast('EMERGENCY MINER DEPLOYED', 'warn');
+      spawnWorker(true);
+    }
+
+    for (const e of g.enemies) e.slowK = 1;   // stasis wells re-apply during building updates
+    for (const b of g.buildings) b.update(dt, g);
 
     if (g.phase === 'combat') {
       g.combatT += dt;
       while (g.spawnQueue.length && g.spawnQueue[0].at <= g.combatT) {
         const s = g.spawnQueue.shift();
-        const e = new ENEMY.Enemy(g.scene, s.type, s.hpMult);
+        const gate = MAP.gates[Math.floor(Math.random() * MAP.gates.length)];
+        const e = new ENEMY.Enemy(g.scene, s.type, s.hpMult, gate);
         if (s.spdMult) e.speed *= s.spdMult;
         g.enemies.push(e);
       }
@@ -2102,17 +2385,24 @@ const GAME = (function () {
   // public surface
   g.start = start;
   g.startWave = startWave;
-  g.build = build;
+  g.buyWorker = buyWorker;
+  g.placeBuilding = placeBuilding;
+  g.canPlace = canPlace;
   g.upgrade = upgrade;
   g.overclock = overclock;
+  g.repair = repair;
   g.sell = sell;
   g.update = update;
+  g.onMined = onMined;
   g.onKill = onKill;
-  g.onLeak = onLeak;
-  g.onMultiThrow = onMultiThrow;
+  g.onWorkerLost = onWorkerLost;
+  g.onBuildingLost = onBuildingLost;
+  g.onCoreHit = onCoreHit;
   g.powerCap = powerCap;
   g.powerUsed = powerUsed;
-  g.canAffordAny = canAffordAny;
+  g.workerCap = workerCap;
+  g.miningRate = miningRate;
+  g.availableBuildings = availableBuildings;
   g.pickDirective = pickDirective;
   g.skipDirectives = skipDirectives;
   g.buyTech = buyTech;
@@ -2120,24 +2410,24 @@ const GAME = (function () {
   g.overclockCost = overclockCost;
   g.interestRate = interestRate;
   g.interestCap = interestCap;
-  g.availableTurrets = availableTurrets;
   return g;
 })();
 </script>
 <script>
 /* ====================== js/input.js ====================== */
-/* NEURAL SPIRE — one-thumb camera (drag to orbit + climb) and tap picking */
+/* HARVEST PROTOCOL — one-thumb RTS camera: drag to pan the battlefield,
+   tap to select, drag the ghost while placing a building. */
 'use strict';
 const INPUT = (function () {
   let camera = null, dom = null;
-  let az = 0.6;              // azimuth around the spire
-  let focusY = 6;            // camera focus height
-  let dist = 19;
-  let lastUser = -1e9;       // time of last manual camera input
+  let tx = 0, tz = 10;          // camera target on the ground
+  let zoom = 1;                 // 0.7 (close) … 1.6 (far)
   const ray = new THREE.Raycaster();
   const ptr = new THREE.Vector2();
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-  let down = null;           // { x, y, t, moved }
+  let down = null;
+  let placing = null;           // { type, ghost, pos, valid }
 
   function init(cam, el, onTap) {
     camera = cam; dom = el;
@@ -2151,221 +2441,319 @@ const INPUT = (function () {
       const dx = e.clientX - down.x, dy = e.clientY - down.y;
       if (!down.moved && dx * dx + dy * dy < 64) return;
       down.moved = true;
-      az -= (e.clientX - (down.lx !== undefined ? down.lx : down.x)) * 0.007;
-      focusY += (e.clientY - (down.ly !== undefined ? down.ly : down.y)) * 0.035;
-      focusY = UTIL.clamp(focusY, 3, SPIRE.height + 3);
+      const px = e.clientX - (down.lx !== undefined ? down.lx : down.x);
+      const py = e.clientY - (down.ly !== undefined ? down.ly : down.y);
       down.lx = e.clientX; down.ly = e.clientY;
-      lastUser = performance.now();
+      const k = 0.035 * zoom;
+      if (placing) {
+        // in placement mode the drag moves the ghost, not the camera
+        placing.pos.x += px * k;
+        placing.pos.z += py * k;
+        clampToMap(placing.pos);
+        syncGhost();
+      } else {
+        tx -= px * k;
+        tz -= py * k;
+        clampCam();
+      }
     });
     el.addEventListener('pointerup', e => {
       if (down && !down.moved && performance.now() - down.t < 400) {
-        pick(e.clientX, e.clientY, onTap);
+        if (placing) {
+          const hit = groundAt(e.clientX, e.clientY);
+          if (hit) { placing.pos.copy(hit); clampToMap(placing.pos); syncGhost(); }
+        } else {
+          pick(e.clientX, e.clientY, onTap);
+        }
       }
       down = null;
     });
     el.addEventListener('pointercancel', () => { down = null; });
     el.addEventListener('wheel', e => {
-      focusY = UTIL.clamp(focusY + e.deltaY * 0.02, 3, SPIRE.height + 3);
-      lastUser = performance.now();
+      zoom = UTIL.clamp(zoom + e.deltaY * 0.0012, 0.7, 1.6);
     }, { passive: true });
     window.addEventListener('keydown', e => {
-      if (e.key === 'ArrowUp') { focusY = UTIL.clamp(focusY + 2, 3, SPIRE.height + 3); lastUser = performance.now(); }
-      if (e.key === 'ArrowDown') { focusY = UTIL.clamp(focusY - 2, 3, SPIRE.height + 3); lastUser = performance.now(); }
-      if (e.key === 'ArrowLeft') { az += 0.25; lastUser = performance.now(); }
-      if (e.key === 'ArrowRight') { az -= 0.25; lastUser = performance.now(); }
+      const step = 3;
+      if (e.key === 'ArrowUp') { tz -= step; clampCam(); }
+      if (e.key === 'ArrowDown') { tz += step; clampCam(); }
+      if (e.key === 'ArrowLeft') { tx -= step; clampCam(); }
+      if (e.key === 'ArrowRight') { tx += step; clampCam(); }
     });
+  }
+
+  function clampCam() {
+    tx = UTIL.clamp(tx, -MAP.W / 2 + 4, MAP.W / 2 - 4);
+    tz = UTIL.clamp(tz, -MAP.H / 2 + 4, MAP.H / 2 + 2);
+  }
+  function clampToMap(v) {
+    v.x = UTIL.clamp(v.x, -MAP.W / 2 + 1, MAP.W / 2 - 1);
+    v.z = UTIL.clamp(v.z, -MAP.H / 2 + 1, MAP.H / 2 - 1);
+  }
+
+  function groundAt(cx, cy) {
+    ptr.x = (cx / window.innerWidth) * 2 - 1;
+    ptr.y = -(cy / window.innerHeight) * 2 + 1;
+    ray.setFromCamera(ptr, camera);
+    const out = new THREE.Vector3();
+    return ray.ray.intersectPlane(groundPlane, out) ? out : null;
   }
 
   function pick(cx, cy, onTap) {
     ptr.x = (cx / window.innerWidth) * 2 - 1;
     ptr.y = -(cy / window.innerHeight) * 2 + 1;
     ray.setFromCamera(ptr, camera);
-    // turrets first (their meshes sit on sockets), then empty pads
-    const turretMeshes = GAME.turrets.map(t => t.mesh);
-    let hits = ray.intersectObjects(turretMeshes, true);
+    // buildings first, then workers, then crystal fields
+    const bMeshes = GAME.buildings.filter(b => b.alive).map(b => b.mesh);
+    let hits = ray.intersectObjects(bMeshes, true);
     if (hits.length) {
       let o = hits[0].object;
-      while (o && !o.userData.turret) o = o.parent;
-      if (o) { onTap({ turret: o.userData.turret }); return; }
+      while (o && !o.userData.building) o = o.parent;
+      if (o) { onTap({ building: o.userData.building }); return; }
     }
-    const padMeshes = SPIRE.sockets.filter(s => !s.turret).map(s => s.mesh);
-    hits = ray.intersectObjects(padMeshes, false);
+    const wMeshes = GAME.workers.filter(w => w.alive).map(w => w.mesh);
+    hits = ray.intersectObjects(wMeshes, true);
     if (hits.length) {
-      onTap({ socket: SPIRE.sockets[hits[0].object.userData.socket] });
-      return;
+      let o = hits[0].object;
+      while (o && !o.userData.worker) o = o.parent;
+      if (o) { onTap({ worker: o.userData.worker }); return; }
     }
-    onTap({});
-  }
-
-  // camera follows the action when the player is idle during combat
-  function update(dt) {
-    if (GAME.phase === 'combat' && performance.now() - lastUser > 5000) {
-      let leadY = null;
-      for (const e of GAME.enemies) {
-        if (!e.alive || e.state === 'air') continue;
-        const y = e.mesh.position.y;
-        if (leadY === null || y > leadY) leadY = y;
+    const fMeshes = MAP.fields.map(f => f.mesh);
+    hits = ray.intersectObjects(fMeshes, true);
+    if (hits.length) {
+      const fm = hits[0].object;
+      for (const f of MAP.fields) {
+        let found = false;
+        f.mesh.traverse(o => { if (o === fm) found = true; });
+        if (found) { onTap({ field: f }); return; }
       }
-      if (leadY !== null) focusY = UTIL.lerp(focusY, UTIL.clamp(leadY + 1.5, 3, SPIRE.height + 3), dt * 1.2);
     }
-    const px = Math.sin(az) * dist, pz = Math.cos(az) * dist;
-    camera.position.set(px, focusY + 6.5, pz);
-    camera.lookAt(0, focusY + 0.5, 0);
+    const gpt = groundAt(cx, cy);
+    onTap(gpt ? { ground: gpt } : {});
   }
 
-  function focusOn(y) { focusY = UTIL.clamp(y, 3, SPIRE.height + 3); }
-  function focusBase() { focusOn(5); }
+  // ---------------- placement ghost ----------------
+  function startPlacing(type) {
+    stopPlacing();
+    const def = CONFIG.BUILDINGS[type];
+    const geo = def.blocks
+      ? new THREE.BoxGeometry(MAP.CS * 0.92, 1.5, MAP.CS * 0.92)
+      : new THREE.CylinderGeometry(0.7, 0.7, 1.1, 8);
+    const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: def.color, transparent: true, opacity: 0.5, depthWrite: false,
+    }));
+    const ring = def.range ? new THREE.Mesh(
+      new THREE.RingGeometry(def.range - 0.08, def.range, 48),
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    ) : null;
+    if (ring) { ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; }
+    placing = { type, ghost, ring, pos: new THREE.Vector3(tx, 0, tz), valid: false };
+    GAME.scene.add(ghost);
+    if (ring) GAME.scene.add(ring);
+    syncGhost();
+  }
+  function syncGhost() {
+    if (!placing) return;
+    const p = placing;
+    // snap preview for walls
+    let px = p.pos.x, pz = p.pos.z;
+    if (CONFIG.BUILDINGS[p.type].blocks) {
+      const c = MAP.worldToCell(px, pz);
+      const w = MAP.cellToWorld(c.cx, c.cz);
+      px = w.x; pz = w.z;
+    }
+    p.ghost.position.set(px, 0.75, pz);
+    if (p.ring) p.ring.position.set(px, 0.06, pz);
+    p.valid = GAME.canPlace(p.type, px, pz);
+    p.ghost.material.color.setHex(p.valid ? CONFIG.BUILDINGS[p.type].color : 0xff3355);
+  }
+  function stopPlacing() {
+    if (!placing) return;
+    GAME.scene.remove(placing.ghost);
+    placing.ghost.geometry.dispose();
+    placing.ghost.material.dispose();
+    if (placing.ring) {
+      GAME.scene.remove(placing.ring);
+      placing.ring.geometry.dispose();
+      placing.ring.material.dispose();
+    }
+    placing = null;
+  }
+  function confirmPlacing() {
+    if (!placing || !placing.valid) { AUDIO.sfx.error(); return null; }
+    const b = GAME.placeBuilding(placing.type, placing.ghost.position.x, placing.ghost.position.z);
+    if (b) stopPlacing();
+    return b;
+  }
 
-  return { init, update, focusOn, focusBase };
+  function update(dt) {
+    const camH = 26 * zoom, camD = 13 * zoom;
+    camera.position.set(tx, camH, tz + camD);
+    camera.lookAt(tx, 0, tz);
+  }
+
+  function focusOn(x, z) { tx = x; tz = z; clampCam(); }
+  function focusBase() { focusOn(MAP.corePos.x, MAP.corePos.z - 6); }
+
+  return {
+    init, update, focusOn, focusBase,
+    startPlacing, stopPlacing, confirmPlacing,
+    get placing() { return placing; },
+  };
 })();
 </script>
 <script>
 /* ====================== js/ui.js ====================== */
-/* NEURAL SPIRE — DOM HUD: sheets, banners, end screens, wave preview */
+/* HARVEST PROTOCOL — DOM HUD: build bar, selection sheet, directives,
+   tech, operation select, end screens. */
 'use strict';
 const UI = (function () {
   const $ = UTIL.el;
-  let selSocket = null, selTurret = null, selType = null;
-  let rangeRing = null;   // 3D range indicator for the current selection
+  let selected = null;   // { building } | { worker } | { field }
 
-  // ---------------- range ring ----------------
-  function showRange(pos, r, color) {
-    hideRange();
-    rangeRing = new THREE.Mesh(
-      new THREE.TorusGeometry(r, 0.05, 6, 48),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55 })
-    );
-    rangeRing.rotation.x = Math.PI / 2;
-    rangeRing.position.copy(pos);
-    GAME.scene.add(rangeRing);
-  }
-  function hideRange() {
-    if (rangeRing) { GAME.scene.remove(rangeRing); rangeRing.geometry.dispose(); rangeRing.material.dispose(); rangeRing = null; }
-  }
-
-  // ---------------- selection / sheets ----------------
+  // ---------------- tap routing ----------------
   function onTap(hit) {
     AUDIO.unlock();
-    if (hit.turret) { selectTurret(hit.turret); return; }
-    if (hit.socket) { selectSocket(hit.socket); return; }
+    if (hit.building) { select({ building: hit.building }); return; }
+    if (hit.worker) { select({ worker: hit.worker }); return; }
+    if (hit.field) { select({ field: hit.field }); return; }
     clearSel();
   }
 
-  function selectSocket(s) {
-    selSocket = s; selTurret = null;
-    selType = selType || 'blaster';
-    renderBuildSheet();
-    $('sheet-turret').classList.remove('open');
-    $('sheet-build').classList.add('open');
-    INPUT.focusOn(s.pos.y + 2.5); // bring the selection above the sheet
-    AUDIO.sfx.click();
-  }
-
-  function selectTurret(t) {
-    selTurret = t; selSocket = null;
-    renderTurretSheet();
-    $('sheet-build').classList.remove('open');
-    $('sheet-turret').classList.add('open');
-    showRange(t.mesh.position, t.stat('range') || 1.2, t.def.color);
-    INPUT.focusOn(t.mesh.position.y + 2.5);
-    AUDIO.sfx.click();
-  }
-
-  function clearSel() {
-    selSocket = null; selTurret = null;
-    $('sheet-build').classList.remove('open');
-    $('sheet-turret').classList.remove('open');
+  function select(sel) {
+    selected = sel;
+    renderSel();
     $('sheet-tech').classList.remove('open');
-    hideRange();
+    $('sheet-sel').classList.add('open');
+    AUDIO.sfx.click();
+  }
+  function clearSel() {
+    selected = null;
+    $('sheet-sel').classList.remove('open');
+    $('sheet-tech').classList.remove('open');
   }
 
-  function renderBuildSheet() {
-    $('build-socket-n').textContent = '#' + (selSocket.i + 1);
-    const cards = $('build-cards');
-    cards.innerHTML = '';
-    const avail = GAME.availableTurrets();
-    if (!avail.includes(selType)) selType = avail[0];
-    const cap = GAME.powerCap(), used = GAME.powerUsed();
-    for (const id of avail) {
-      const d = CONFIG.TURRETS[id];
-      const afford = GAME.salvage >= d.cost && used + d.power <= cap;
-      const card = UTIL.h('div', 'b-card' + (selType === id ? ' sel' : '') + (afford ? '' : ' cant'),
+  function renderSel() {
+    const body = $('sel-body');
+    if (!selected) return;
+    if (selected.building) {
+      const b = selected.building;
+      if (!b.alive) { clearSel(); return; }
+      const col = '#' + b.def.color.toString(16).padStart(6, '0');
+      let stats = 'Integrity ' + Math.ceil(b.hp) + '/' + Math.round(b.maxHp);
+      if (b.def.kind === 'turret' && b.type !== 'stasis') stats += ' · DMG ' + b.stat('dmg').toFixed(1) + ' · ' + b.stat('rate').toFixed(1) + '/s · range ' + b.stat('range').toFixed(1) + ' · kills ' + b.kills;
+      if (b.type === 'stasis') stats += ' · slows ' + Math.round(b.stat('slow') * 100) + '% · range ' + b.stat('range').toFixed(1);
+      if (b.def.gen) stats += ' · +' + Math.round(b.stat('gen')) + ' ⚡';
+      if (b.def.dropoff) stats += ' · drop-off · +2 ⛏ cap';
+      body.innerHTML =
+        '<div class="t-head"><div class="t-ico" style="color:' + col + '">' + b.def.ico + '</div>' +
+        '<div><div class="t-name">' + b.def.name.toUpperCase() + '</div>' +
+        (b.def.kind === 'turret' ? '<div class="t-lvl">' + '▮'.repeat(b.level) + '▯'.repeat(3 - b.level) + ' LEVEL ' + b.level + '</div>' : '') +
+        '</div></div>' +
+        '<div class="t-stats">' + stats + '</div>';
+      const row = UTIL.h('div', 't-row');
+      if (b.def.kind === 'turret') {
+        const upCost = b.upgradeCost;
+        if (upCost !== null) {
+          const up = UTIL.h('button', 'btn btn-primary', '▲ ¤' + upCost);
+          up.disabled = GAME.minerals < upCost;
+          up.onclick = () => { if (GAME.upgrade(b)) renderSel(); };
+          row.appendChild(up);
+        }
+        if (b.type !== 'stasis') {
+          const ocCost = GAME.overclockCost();
+          const oc = UTIL.h('button', 'btn' + (b.overclockT > 0 ? ' oc-active' : ''),
+            b.overclockT > 0 ? '⚡ ON' : (b.ocCooldown > 0 ? '⚡ ' + Math.ceil(b.ocCooldown) + 's' : '⚡ ¤' + ocCost));
+          oc.disabled = b.ocCooldown > 0 || GAME.minerals < ocCost;
+          oc.onclick = () => { if (GAME.overclock(b)) renderSel(); };
+          row.appendChild(oc);
+        }
+      }
+      if (b.hp < b.maxHp - 1) {
+        const cost = Math.ceil((b.maxHp - b.hp) * CONFIG.ECONOMY.repairCostPerHP);
+        const rp = UTIL.h('button', 'btn', '🔧 ¤' + cost);
+        rp.disabled = GAME.minerals < cost;
+        rp.onclick = () => { if (GAME.repair(b)) renderSel(); };
+        row.appendChild(rp);
+      }
+      const sl = UTIL.h('button', 'btn', '✕ ¤' + b.sellValue());
+      sl.onclick = () => { GAME.sell(b); clearSel(); };
+      row.appendChild(sl);
+      body.appendChild(row);
+      return;
+    }
+    if (selected.worker) {
+      const w = selected.worker;
+      if (!w.alive) { clearSel(); return; }
+      const states = { idle: 'looking for work', toField: 'heading to crystals', mining: 'mining', toDrop: 'hauling a load home' };
+      body.innerHTML =
+        '<div class="t-head"><div class="t-ico" style="color:#7fdcff">⛏</div>' +
+        '<div><div class="t-name">HARVESTER DRONE</div></div></div>' +
+        '<div class="t-stats">Integrity ' + Math.ceil(w.hp) + '/' + w.maxHp + ' · ' + (states[w.state] || w.state) +
+        (w.carry ? ' · carrying ¤' + w.carry : '') + '</div>';
+      return;
+    }
+    if (selected.field) {
+      const f = selected.field;
+      const k = Math.round((f.reserves / f.max) * 100);
+      body.innerHTML =
+        '<div class="t-head"><div class="t-ico" style="color:#7fdcff">◆</div>' +
+        '<div><div class="t-name">CRYSTAL FIELD</div></div></div>' +
+        '<div class="t-stats">Reserves ¤' + Math.round(f.reserves) + ' of ¤' + f.max + ' (' + k + '%)' +
+        ' · ' + f.workers.size + ' miner' + (f.workers.size === 1 ? '' : 's') + ' working' +
+        (f.reserves <= 0 ? ' · <b style="color:#ff5d7a">DEPLETED</b>' : '') + '</div>';
+      return;
+    }
+  }
+
+  // ---------------- build bar ----------------
+  function renderBuildBar() {
+    const bar = $('build-bar');
+    bar.innerHTML = '';
+    // worker card first — the economy button
+    const alive = GAME.workers.filter(w => w.alive).length;
+    const wCard = UTIL.h('div', 'b-card' + (GAME.minerals >= CONFIG.ECONOMY.workerCost && alive < GAME.workerCap() ? '' : ' cant'),
+      '<div class="bc-ico" style="color:#7fdcff">⛏</div>' +
+      '<div class="bc-name">MINER</div>' +
+      '<div class="bc-cost">¤ ' + CONFIG.ECONOMY.workerCost + '</div>' +
+      '<div class="bc-pow">' + alive + '/' + GAME.workerCap() + '</div>');
+    wCard.onclick = () => { AUDIO.unlock(); GAME.buyWorker(); renderBuildBar(); };
+    bar.appendChild(wCard);
+    for (const id of GAME.availableBuildings()) {
+      const d = CONFIG.BUILDINGS[id];
+      const afford = GAME.minerals >= d.cost && (!d.power || GAME.powerUsed() + d.power <= GAME.powerCap());
+      const card = UTIL.h('div', 'b-card' + (afford ? '' : ' cant') + (INPUT.placing && INPUT.placing.type === id ? ' sel' : ''),
         '<div class="bc-ico" style="color:#' + d.color.toString(16).padStart(6, '0') + '">' + d.ico + '</div>' +
         '<div class="bc-name">' + d.name.toUpperCase() + '</div>' +
         '<div class="bc-cost">¤ ' + d.cost + '</div>' +
-        '<div class="bc-pow">' + (d.gen ? '+' + d.gen + ' ⚡' : d.power + ' ⚡') + '</div>');
-      card.onclick = () => { selType = id; renderBuildSheet(); AUDIO.sfx.click(); };
-      cards.appendChild(card);
+        '<div class="bc-pow">' + (d.gen ? '+' + d.gen + ' ⚡' : (d.power ? d.power + ' ⚡' : '&nbsp;')) + '</div>');
+      card.onclick = () => {
+        AUDIO.unlock(); AUDIO.sfx.click();
+        clearSel();
+        INPUT.startPlacing(id);
+        $('place-hint').textContent = d.desc.split('.')[0].toUpperCase();
+        $('place-bar').classList.add('show');
+        renderBuildBar();
+      };
+      bar.appendChild(card);
     }
-    const d = CONFIG.TURRETS[selType];
-    let body = $('sheet-build').querySelector('.b-desc');
-    if (!body) { body = UTIL.h('div', 'b-desc'); $('sheet-build').appendChild(body); }
-    body.innerHTML = d.desc;
-    let btn = $('sheet-build').querySelector('.b-confirm');
-    if (!btn) { btn = UTIL.h('button', 'btn btn-primary b-confirm'); $('sheet-build').appendChild(btn); }
-    const afford = GAME.salvage >= d.cost && GAME.powerUsed() + d.power <= GAME.powerCap();
-    btn.textContent = afford ? '✓ BUILD ' + d.name.toUpperCase() + ' — ¤ ' + d.cost : (GAME.salvage < d.cost ? 'NEED ¤ ' + d.cost : 'NEED ⚡ POWER');
-    btn.disabled = !afford;
-    btn.onclick = () => {
-      const t = GAME.build(selSocket, selType);
-      if (t) { clearSel(); selectTurret(t); }
-    };
-    // preview the range from this socket
-    if (d.range) showRange(selSocket.pos, d.range, d.color); else hideRange();
-  }
-
-  function renderTurretSheet() {
-    const t = selTurret;
-    const body = $('turret-body');
-    const col = '#' + t.def.color.toString(16).padStart(6, '0');
-    let stats = '';
-    if (t.type === 'generator') stats = '+' + Math.round(t.stat('gen')) + ' ⚡ power to the grid';
-    else if (t.type === 'stasis') stats = 'Slows ' + Math.round(t.stat('slow') * 100) + '% · range ' + t.stat('range').toFixed(1);
-    else stats = 'DMG ' + t.stat('dmg').toFixed(1) + ' · ' + t.stat('rate').toFixed(1) + '/s · range ' + t.stat('range').toFixed(1) + (t.def.knock ? ' · knock ' + t.stat('knock').toFixed(1) : '') + ' · kills ' + t.kills;
-    const upCost = t.upgradeCost;
-    body.innerHTML =
-      '<div class="t-head"><div class="t-ico" style="color:' + col + '">' + t.def.ico + '</div>' +
-      '<div><div class="t-name">' + t.def.name.toUpperCase() + '</div>' +
-      '<div class="t-lvl">' + '▮'.repeat(t.level) + '▯'.repeat(3 - t.level) + ' LEVEL ' + t.level + '</div></div></div>' +
-      '<div class="t-stats">' + stats + '</div>';
-    const row = UTIL.h('div', 't-row');
-    if (upCost !== null) {
-      const up = UTIL.h('button', 'btn btn-primary', '▲ UPGRADE ¤ ' + upCost);
-      up.disabled = GAME.salvage < upCost;
-      up.onclick = () => { if (GAME.upgrade(t)) renderTurretSheet(); };
-      row.appendChild(up);
-    } else {
-      row.appendChild(UTIL.h('button', 'btn', '★ MAX LEVEL')).disabled = true;
-    }
-    if (t.type !== 'generator' && t.type !== 'stasis') {
-      const ocCost = GAME.overclockCost();
-      const oc = UTIL.h('button', 'btn' + (t.overclockT > 0 ? ' oc-active' : ''),
-        t.overclockT > 0 ? '⚡ OVERCLOCKED' : (t.ocCooldown > 0 ? '⚡ COOLING ' + Math.ceil(t.ocCooldown) + 's' : '⚡ OVERCLOCK ¤ ' + ocCost));
-      oc.disabled = t.ocCooldown > 0 || GAME.salvage < ocCost;
-      oc.onclick = () => { if (GAME.overclock(t)) renderTurretSheet(); };
-      row.appendChild(oc);
-    }
-    const sl = UTIL.h('button', 'btn', '✕ SELL ¤ ' + Math.round(t.spent * CONFIG.ECONOMY.sellRefund));
-    sl.onclick = () => { GAME.sell(t); clearSel(); };
-    row.appendChild(sl);
-    body.appendChild(row);
-    showRange(t.mesh.position, t.stat('range') || 1.2, t.def.color);
   }
 
   // ---------------- HUD ----------------
   function updateHUD() {
     $('v-core').textContent = GAME.coreHP;
-    $('hud-core').classList.toggle('low', GAME.coreHP <= 3);
-    $('v-salvage').textContent = UTIL.fmt(GAME.salvage);
+    $('hud-core').classList.toggle('low', GAME.coreHP <= CONFIG.ECONOMY.coreHP * 0.3);
+    $('v-minerals').textContent = UTIL.fmt(GAME.minerals);
     const used = GAME.powerUsed(), cap = GAME.powerCap();
     $('v-power').textContent = used + '/' + cap;
     $('hud-power').classList.toggle('full', used >= cap);
+    const alive = GAME.workers.filter(w => w.alive).length;
+    $('v-workers').textContent = alive + '/' + GAME.workerCap();
     const W = GAME.level ? GAME.level.waves : 0;
     $('v-wave').textContent = GAME.level
-      ? ('N' + GAME.level.n + '·W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
+      ? ('W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
       : '';
-    // refresh open sheets so costs stay truthful
-    if (selSocket && $('sheet-build').classList.contains('open')) renderBuildSheet();
+    renderBuildBar();
+    if (selected && $('sheet-sel').classList.contains('open')) renderSel();
     if ($('sheet-tech').classList.contains('open')) renderTech();
   }
 
@@ -2373,17 +2761,30 @@ const UI = (function () {
     const b = $('btn-wave');
     if (GAME.phase === 'build') {
       b.classList.remove('hidden2');
-      $('btn-tech').classList.remove('hidden2');
-      const interest = Math.round(Math.min(GAME.interestCap(), GAME.salvage * GAME.interestRate()) * GAME.mod('interestMult', 1));
+      const interest = Math.round(Math.min(GAME.interestCap(), GAME.minerals * GAME.interestRate()) * GAME.mod('interestMult', 1));
       b.textContent = '▶ WAVE ' + GAME.wave + (interest > 0 ? ' (+' + interest + ' ¤)' : '');
       renderPreview();
       renderDirectives();
     } else {
       b.classList.add('hidden2');
-      $('btn-tech').classList.add('hidden2');
       $('wave-preview').innerHTML = '';
       $('directive-bar').innerHTML = '';
-      clearSel();
+    }
+    renderBuildBar();
+  }
+
+  function renderPreview() {
+    const box = $('wave-preview');
+    box.innerHTML = '<span style="opacity:.7">NEXT:</span>';
+    const comp = CONFIG.wave(GAME.level, GAME.wave);
+    const totals = {};
+    for (const grp of comp) totals[grp.type] = (totals[grp.type] || 0) + grp.count;
+    for (const type in totals) {
+      const d = CONFIG.ENEMIES[type];
+      const col = '#' + d.color.toString(16).padStart(6, '0');
+      box.appendChild(UTIL.h('span', 'wp-chip',
+        '<span style="color:' + col + '">' + d.ico + '</span> ' + d.name + ' <b>×' + totals[type] + '</b>' +
+        (d.target === 'workers' ? ' ⛏!' : '') + (d.target === 'buildings' ? ' 🏚' : '') + (d.boss ? ' ☠' : '')));
     }
   }
 
@@ -2409,7 +2810,7 @@ const UI = (function () {
     bar.appendChild(skip);
   }
 
-  // ---------------- SPIRE OS tech sheet ----------------
+  // ---------------- tech ----------------
   function renderTech() {
     const list = $('tech-list');
     list.innerHTML = '';
@@ -2420,7 +2821,7 @@ const UI = (function () {
         '<div class="th-body"><div class="th-name">' + t.name + '</div>' +
         '<div class="th-desc">' + t.desc + '</div></div>');
       const btn = UTIL.h('button', 'btn' + (owned ? '' : ' btn-primary'), owned ? '✓ OWNED' : '¤ ' + t.cost);
-      btn.disabled = owned || GAME.salvage < t.cost;
+      btn.disabled = owned || GAME.minerals < t.cost;
       btn.onclick = () => { if (GAME.buyTech(t)) renderTech(); };
       row.appendChild(btn);
       list.appendChild(row);
@@ -2433,21 +2834,6 @@ const UI = (function () {
     AUDIO.sfx.click();
   }
 
-  function renderPreview() {
-    const box = $('wave-preview');
-    box.innerHTML = '<span style="opacity:.7">NEXT:</span>';
-    const comp = CONFIG.wave(GAME.level, GAME.wave);
-    const totals = {};
-    for (const grp of comp) totals[grp.type] = (totals[grp.type] || 0) + grp.count;
-    for (const type in totals) {
-      const d = CONFIG.ENEMIES[type];
-      const col = '#' + d.color.toString(16).padStart(6, '0');
-      box.appendChild(UTIL.h('span', 'wp-chip',
-        '<span style="color:' + col + '">' + d.ico + '</span> ' + d.name + ' <b>×' + totals[type] + '</b>' +
-        (d.flying ? ' ✈' : '') + (d.boss ? ' ☠' : '')));
-    }
-  }
-
   // ---------------- feedback ----------------
   let bannerT = null;
   function banner(msg, warn) {
@@ -2456,20 +2842,12 @@ const UI = (function () {
     b.classList.toggle('warn', !!warn);
     b.classList.add('show');
     clearTimeout(bannerT);
-    bannerT = setTimeout(() => b.classList.remove('show'), 2200);
+    bannerT = setTimeout(() => b.classList.remove('show'), 2400);
   }
   function toast(msg, kind) {
     const t = UTIL.h('div', 'toast' + (kind ? ' ' + kind : ''), msg);
     $('toast-zone').appendChild(t);
     setTimeout(() => t.remove(), 2400);
-  }
-  let comboT = null;
-  function combo(msg) {
-    const c = $('combo-ind');
-    c.textContent = msg;
-    c.classList.add('show');
-    clearTimeout(comboT);
-    comboT = setTimeout(() => c.classList.remove('show'), 1400);
   }
   function hurt() {
     const h = $('hurt-vignette');
@@ -2479,27 +2857,30 @@ const UI = (function () {
 
   // ---------------- end screens ----------------
   function showEnd(won) {
+    INPUT.stopPlacing();
+    $('place-bar').classList.remove('show');
+    clearSel();
     const card = $('end-card');
     const s = GAME.stats;
     const lvl = GAME.level;
     card.innerHTML = '';
-    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'NODE SECURED' : 'CORE BREACHED'));
+    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'OPERATION SECURED' : 'CORE BREACHED'));
     if (won) {
       const st = GAME.stars;
       card.appendChild(UTIL.h('div', '', '<span style="font-size:30px;letter-spacing:4px;color:#ffd166">' +
         '★'.repeat(st) + '<span style="opacity:.22">' + '★'.repeat(3 - st) + '</span></span>' +
         '<div style="font-size:9.5px;color:#5f89ad;letter-spacing:1px;margin-top:2px">' +
-        (st === 3 ? 'FLAWLESS — ZERO LEAKS' : st === 2 ? '3 LEAKS OR FEWER' : 'SECURED, BARELY') + '</div>'));
+        (st === 3 ? 'FLAWLESS — NO LEAKS, NO MINERS LOST' : st === 2 ? 'CORE HELD STRONG' : 'SECURED, BARELY') + '</div>'));
     }
     card.appendChild(UTIL.h('div', 'end-line',
-      'NODE ' + lvl.n + ' · ' + lvl.name + ' — ' +
+      'OP ' + lvl.n + ' · ' + lvl.name + ' — ' +
       (won ? 'all ' + lvl.waves + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + lvl.waves + '.') +
-      '<br><b>' + s.kills + '</b> threats destroyed · <b>' + s.throws + '</b> thrown off the spire' +
-      '<br>gravity paid <b>¤ ' + s.fallSalvage + '</b> · interest paid <b>¤ ' + s.interest + '</b>' +
-      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked));
+      '<br>mined <b>¤ ' + s.mined + '</b> · interest <b>¤ ' + s.interest + '</b> · ' + s.kills + ' kills' +
+      '<br>peak crew <b>' + s.peakWorkers + '</b> · miners lost ' + s.workersLost + ' · structures lost ' + s.buildingsLost +
+      '<br>core leaks ' + s.leaked));
     if (won && lvl.n < CONFIG.LEVELS.length) {
       const next = CONFIG.LEVELS[lvl.n];
-      const nx = UTIL.h('button', 'btn btn-primary', '▶ NODE ' + next.n + ' — ' + next.name);
+      const nx = UTIL.h('button', 'btn btn-primary', '▶ OP ' + next.n + ' — ' + next.name);
       nx.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(next.n); INPUT.focusBase(); };
       card.appendChild(nx);
     }
@@ -2514,16 +2895,16 @@ const UI = (function () {
       };
       card.appendChild(cont);
     }
-    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ RETRY NODE ' + lvl.n);
+    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ RETRY OP ' + lvl.n);
     again.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(lvl.n); INPUT.focusBase(); };
     card.appendChild(again);
-    const sel = UTIL.h('button', 'btn', 'NODE SELECT');
-    sel.onclick = () => { $('end-overlay').classList.remove('show'); openLevels(); };
-    card.appendChild(sel);
+    const sel2 = UTIL.h('button', 'btn', 'OPERATIONS');
+    sel2.onclick = () => { $('end-overlay').classList.remove('show'); openLevels(); };
+    card.appendChild(sel2);
     $('end-overlay').classList.add('show');
   }
 
-  // ---------------- node select ----------------
+  // ---------------- operation select ----------------
   function renderLevels() {
     const list = $('levels-list');
     list.innerHTML = '';
@@ -2586,6 +2967,16 @@ const UI = (function () {
       AUDIO.unlock();
       if ($('sheet-tech').classList.contains('open')) clearSel(); else openTech();
     };
+    $('btn-place-ok').onclick = () => {
+      const b = INPUT.confirmPlacing();
+      if (b) { $('place-bar').classList.remove('show'); renderBuildBar(); }
+    };
+    $('btn-place-cancel').onclick = () => {
+      INPUT.stopPlacing();
+      $('place-bar').classList.remove('show');
+      AUDIO.sfx.click();
+      renderBuildBar();
+    };
     $('btn-pause').onclick = () => { GAME.paused = true; $('pause-overlay').classList.add('show'); syncMuteLabel(); };
     $('btn-resume').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); };
     $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(GAME.level ? GAME.level.n : 1); INPUT.focusBase(); };
@@ -2598,17 +2989,17 @@ const UI = (function () {
       AUDIO.sfx.click();
     };
     const cleared = SAVE.clearedCount();
-    $('btn-start').textContent = cleared ? '▶ CONTINUE — NODE ' + SAVE.state.furthest : 'DEFEND THE SPIRE';
-    $('title-best').textContent = cleared ? cleared + '/' + CONFIG.LEVELS.length + ' NODES SECURED' : '';
+    $('btn-start').textContent = cleared ? '▶ CONTINUE — OP ' + SAVE.state.furthest : 'DEPLOY';
+    $('title-best').textContent = cleared ? cleared + '/' + CONFIG.LEVELS.length + ' OPERATIONS SECURED' : '';
   }
   function syncMuteLabel() { $('btn-mute').textContent = 'SOUND: ' + (SAVE.state.muted ? 'OFF' : 'ON'); }
 
-  return { init, onTap, updateHUD, onPhase, banner, toast, combo, hurt, showEnd, clearSel, openLevels };
+  return { init, onTap, updateHUD, onPhase, banner, toast, hurt, showEnd, clearSel, openLevels };
 })();
 </script>
 <script>
 /* ====================== js/main.js ====================== */
-/* NEURAL SPIRE — bootstrap: renderer, scene, lights, loop */
+/* HARVEST PROTOCOL — bootstrap: renderer, scene, lights, loop */
 'use strict';
 (function () {
   SAVE.load();
@@ -2619,33 +3010,33 @@ const UI = (function () {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x04060c);
-  scene.fog = new THREE.Fog(0x04060c, 30, 75);
+  scene.fog = new THREE.Fog(0x04060c, 45, 95);
 
-  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 200);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 220);
 
-  // lighting: soft sky/ground hemisphere, cool key, blue rim
+  // lighting: soft hemisphere + cool key + blue rim, tuned for top-down
   scene.add(new THREE.HemisphereLight(0x4a6a9a, 0x0a0e1a, 0.95));
   scene.add(new THREE.AmbientLight(0x33455e, 0.55));
-  const key = new THREE.DirectionalLight(0xb8d4f0, 1.25);
-  key.position.set(8, 20, 12);
+  const key = new THREE.DirectionalLight(0xb8d4f0, 1.2);
+  key.position.set(10, 26, 8);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x3366cc, 0.85);
-  rim.position.set(-10, 8, -8);
+  const rim = new THREE.DirectionalLight(0x3366cc, 0.7);
+  rim.position.set(-12, 14, -10);
   scene.add(rim);
 
   GAME.scene = scene;
-  // title backdrop: node 1's spire
-  SPIRE.build(scene, CONFIG.LEVELS[0].seed, CONFIG.LEVELS[0].spire);
+  // title backdrop: operation 1's map
+  MAP.build(scene, CONFIG.LEVELS[0]);
   FX.init(scene);
   UI.init();
   INPUT.init(camera, canvas, UI.onTap);
+  INPUT.focusBase();
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // portrait-first: on narrow screens widen the vertical FOV so the spire fits
-    camera.fov = h > w ? 58 : 48;
+    camera.fov = h > w ? 50 : 42;
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
@@ -2663,7 +3054,7 @@ const UI = (function () {
   requestAnimationFrame(loop);
 
   // debug/test hooks
-  window.__TD = { GAME, CONFIG, SPIRE, UI, INPUT, SAVE, scene, camera, renderer };
+  window.__TD = { GAME, CONFIG, MAP, UI, INPUT, SAVE, scene, camera, renderer };
 })();
 </script>
 </body>

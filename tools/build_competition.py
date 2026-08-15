@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NEURAL SPIRE — MHCP competition packager.
+"""HARVEST PROTOCOL — MHCP competition packager.
 
 Assembles the modular dev sources (css/ + js/) into a single, readable,
 unminified index.html, then packages the submission .zip per the MHCP
@@ -12,7 +12,7 @@ Game Prototype rules:
   - no external network requests (verified below)
 
 Usage: python3 tools/build_competition.py
-Output: dist/index.html and dist/neural-spire-mhcp.zip
+Output: dist/index.html and dist/harvest-protocol-mhcp.zip
 """
 import re
 import sys
@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
-ZIP_NAME = "neural-spire-mhcp.zip"
+ZIP_NAME = "harvest-protocol-mhcp.zip"
 MAX_ZIP_MB = 35
 
 def main():

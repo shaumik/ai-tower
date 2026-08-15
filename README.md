@@ -1,34 +1,35 @@
-# NEURAL SPIRE
+# HARVEST PROTOCOL
 
 **▶ Play: https://shaumik.github.io/ai-tower/**
 
-Vertical tower defense built with Three.js for the **MHCP Creator Competition**
-(Tower Defense & Strategy). Single-player, portrait, zero network requests.
+RTS-economy base defense built with Three.js for the **MHCP Creator
+Competition** (Tower Defense & Strategy). Single-player, portrait, zero
+network requests.
 
-The map is a literal tower. Rogue processes climb a winding ramp toward the
-summit core; you mount defenses on sockets spiraling up the outside.
-**Gravity is a weapon** — Repulsor turrets hurl climbers off the spire, and
-fall height pays a salvage bonus. The spire blocks its own defenses (no
-shooting through the column) and fliers skip the ramp entirely.
+**The economy is the battlefield.** Income is mined, not earned per kill:
+harvester drones shuttle crystal loads from finite fields to your drop-offs,
+so worker count is income rate — and raiders ignore your core to hunt the
+miners instead. Every StarCraft macro question ports over: another miner or
+another cannon? Expand a depot toward the rich far field, or milk the safe
+one? Fields visibly shrink as they drain, forcing expansion onto worse
+ground mid-run.
 
-**A nine-node authored campaign**, built on classic TD level-design
-structure: each node is a fixed, learnable spire with its own topology
-(wide teaching spiral → short steep socket-starved climbs → the APEX
-megaspire), a threat palette that grows one element at a time with isolated
-showcase waves, twist nodes that bend the rules (power crisis, flier
-updraft, inverted economy), and encounter-budget waves with authored pacing
-— openers, surge beats, a breather before every finale, scripted bosses.
-Three-star ratings (3★ = zero leaks), sequential unlocks, persistent
+Defense is physical: walls block ground routes and get broken, brutes siege
+structures, buildings hold integrity and want repair minerals, and a hard
+power grid caps how many turrets can run. On top: interest on unspent
+minerals, pick-one wave directives, and the CORE OS tech tree competing with
+your next turret for the same minerals.
+
+**Nine authored operations** (fixed layouts, learnable), each adding one
+element through an isolated showcase wave or bending one rule — power
+crisis, raider surge, inverted market, the motherlode parked beside the
+enemy gates. Encounter-budget waves with authored pacing; ARCHON bosses
+smash through walls. Three-star ratings, sequential unlocks, persistent
 progress.
-
-The economy is the second front: salvage + interest on reserves, a hard
-power grid fed by socket-hungry generators, pick-one wave directives
-(Bull Market, War Bonds, Insurance…), the SPIRE OS tech tree, overclock
-bursts, and a wave-end income report.
 
 | | | |
 |---|---|---|
-| ![Node select](docs/screens/select.png) | ![Spire](docs/screens/spire.png) | ![Combat](docs/screens/combat.png) |
+| ![Base](docs/screens/base.png) | ![Mining](docs/screens/mining.png) | ![Combat](docs/screens/combat.png) |
 
 ## Competition submission
 
@@ -36,7 +37,7 @@ The three MHCP artefacts:
 
 1. **Playable build** — `python3 tools/build_competition.py` assembles the
    modular sources (`css/`, `js/`) into a single readable, unminified
-   `dist/index.html` and packages `dist/neural-spire-mhcp.zip`
+   `dist/index.html` and packages `dist/harvest-protocol-mhcp.zip`
    (index.html at the zip's top level; Three.js in `vendor/`, referenced
    with a relative path).
 2. **Design Intent** — `submission/design-intent.docx`
