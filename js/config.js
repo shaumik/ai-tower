@@ -30,32 +30,32 @@ const CONFIG = (function () {
   const BUILDINGS = {
     cannon: {
       name: 'Cannon', ico: '✛', color: 0x7fdcff, kind: 'turret',
-      cost: 60, power: 2, hp: 90, dmg: 8, rate: 1.5, range: 8,
+      cost: 60, power: 2, hp: 130, dmg: 8, rate: 1.5, range: 8,
       desc: 'Reliable single-target fire. Backbone of any defense.',
     },
     stasis: {
       name: 'Stasis Well', ico: '❉', color: 0x7fffd4, kind: 'turret',
-      cost: 70, power: 2, hp: 70, dmg: 0, rate: 0, range: 6, slow: 0.45,
+      cost: 70, power: 2, hp: 110, dmg: 0, rate: 0, range: 6, slow: 0.45,
       desc: 'Aura that slows every hostile in range. Pairs with anything.',
     },
     mortar: {
       name: 'Mortar', ico: '◎', color: 0xffd166, kind: 'turret',
-      cost: 95, power: 3, hp: 80, dmg: 14, rate: 0.5, range: 10, minRange: 3.5, splash: 2.2,
+      cost: 95, power: 3, hp: 120, dmg: 14, rate: 0.5, range: 10, minRange: 3.5, splash: 2.2,
       desc: 'Long-range shells with splash. Blind up close — screen it.',
     },
     tesla: {
       name: 'Arc Node', ico: '⌁', color: 0xb08cff, kind: 'turret',
-      cost: 110, power: 3, hp: 80, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
+      cost: 110, power: 3, hp: 120, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
       desc: 'Lightning forks between up to 3 hostiles. Shreds packs.',
     },
     generator: {
       name: 'Generator', ico: '⚡', color: 0xffe9a0, kind: 'eco',
-      cost: 80, power: 0, gen: 6, hp: 70,
+      cost: 80, power: 0, gen: 6, hp: 110,
       desc: '+6 power to the grid. Turrets go dark without it.',
     },
     depot: {
       name: 'Depot', ico: '⬒', color: 0x9dffb0, kind: 'eco',
-      cost: 100, power: 1, hp: 110, dropoff: true, workerCap: 2,
+      cost: 100, power: 1, hp: 150, dropoff: true, workerCap: 2,
       desc: 'Drop-off point for miners (+2 worker cap). Mine far fields without the long haul.',
     },
     wall: {
@@ -76,7 +76,7 @@ const CONFIG = (function () {
     crawler:  { name: 'Crawler', ico: '●', color: 0xff6a4d, hp: 26,  speed: 1.5, scrap: 3, size: 0.42, dmg: 1, pts: 1.0, target: 'core' },
     sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 15,  speed: 2.6, scrap: 4, size: 0.34, dmg: 1, pts: 1.4, target: 'core' },
     raider:   { name: 'Raider',  ico: '✕', color: 0x9dff5d, hp: 30,  speed: 2.9, scrap: 5, size: 0.36, dmg: 8, pts: 2.0, target: 'workers', atkRate: 0.8 },
-    brute:    { name: 'Brute',   ico: '■', color: 0xff3d6e, hp: 150, speed: 0.9, scrap: 10, size: 0.62, dmg: 12, pts: 4.5, target: 'buildings', armor: 3, atkRate: 0.7 },
+    brute:    { name: 'Brute',   ico: '■', color: 0xff3d6e, hp: 140, speed: 0.9, scrap: 10, size: 0.62, dmg: 8, pts: 4.5, target: 'buildings', armor: 3, atkRate: 0.6 },
     boss:     { name: 'ARCHON',  ico: '◆', color: 0xff2255, hp: 1100, speed: 0.75, scrap: 60, size: 1.0, dmg: 4, pts: 0, target: 'core', armor: 4, boss: true, wallBreaker: 3 },
   };
 
