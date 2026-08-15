@@ -190,7 +190,7 @@ const CONFIG = (function () {
   function hpMult(level, n) {
     const L = level.n, W = level.waves;
     const ramp = 0.4 + 0.6 * Math.min(1, n / (W * 0.7));
-    return (1 + 0.18 * (L - 1) * ramp) * (1 + 0.05 * (n - 1));
+    return (1 + 0.16 * (L - 1) * ramp) * (1 + 0.05 * (n - 1));
   }
   function startMinerals(level) {
     return (level.eco && level.eco.startMinerals) || (120 + 8 * (level.n - 1));

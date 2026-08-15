@@ -29,7 +29,7 @@ progress.
 
 | | | |
 |---|---|---|
-| ![Base](docs/screens/base.png) | ![Mining](docs/screens/mining.png) | ![Combat](docs/screens/combat.png) |
+|  ![Select](docs/screens/select.png) | ![Base](docs/screens/base.png) | ![Combat](docs/screens/combat.png) |
 
 ## Competition submission
 

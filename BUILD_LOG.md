@@ -265,3 +265,39 @@ sawtooth carried over — everything spatial was rebuilt.
   broken; it was geography); wall placement validated the pre-snap position
   and rejected legal builds; worker pacing tuned so a round trip pays in
   ~12s, not 22.
+
+## Session 10 — 2026-08-15 — real-time pressure and the tuning gauntlet
+
+The rebuilt game went through the same bot-playtest discipline as its
+predecessors, and this time the runs surfaced design holes, not just
+numbers. Every fix below came from a failed run.
+
+- **Waves launch themselves.** The first bot campaign exposed an idle
+  exploit: with an untimed build phase, idle mining is infinite money. Build
+  phases are now a prep countdown (32s tightening to 16s across the
+  campaign); calling the wave early pays a bonus scaled by the time given
+  up. Income rate vs incoming pressure is now the core tension.
+- **RECALL, the missing verb.** Raider waves were unanswerable — miners
+  mindlessly kept mining while being murdered. Players can now pull the
+  crew to shelter at the core (paid hauls finish first; no income while
+  hidden; auto-release at wave end). The greed-vs-safety call every raider
+  wave belongs to the player.
+- **Bugs the bot caught:** a fixed-timestep overshoot that wedged the whole
+  mining economy at fast-forward speeds (workers oscillating forever around
+  a waypoint they could never 'reach'); the free emergency miner spawning
+  every frame into a raider camp — a 388-corpse conveyor in one run — now
+  build-phase-only with a cooldown; raiders dealing their worker-attack
+  damage (8) to the core after a crew wipe — core damage is now its own
+  stat.
+- **Balance passes, evidence-driven:** brutes out-attrited the defense they
+  were meant to teach (siege dps halved, building integrity up ~40%);
+  raider HP cut so guard turrets actually deter; worker carry 8→12 so the
+  mining engine outpaces the pressure curve; late-campaign budget and HP
+  ceilings trimmed for casual reach.
+- **Verified curve** (bot = competent casual; zero console errors in every
+  run): OPs 1–6 all bot-clearable — OP1 2★, OP2 1★ (¤1720 mined through a
+  22-miner raider bloodbath), OP3 1★, OP4 2★ at 19/20 core, OP5 1★
+  (¤1686 mined through the power crisis), OP6 2★ with RECALL holding crew
+  losses to 4. OPs 7–9 are authored as the hard tail: the bot reaches
+  waves 8–10 of 12–13 with four-figure mining economies before folding —
+  they demand walls, mazing and tech the bot doesn't use.

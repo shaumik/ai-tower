@@ -358,6 +358,7 @@ body {
       <div id="bottom-row">
         <button class="btn" id="btn-tech">⚙</button>
         <button class="btn btn-primary" id="btn-wave">▶ START WAVE</button>
+        <button class="btn" id="btn-recall">⚠</button>
       </div>
     </div>
 
@@ -409,6 +410,8 @@ body {
       the ground routes — shape the approach, but they can be broken.</p>
       <p>Crystal fields <b>run dry</b>. Expanding toward far fields pays more
       and defends worse.</p>
+      <p><b>⚠ RECALL</b> pulls miners to safety at the core — no income while
+      they hide. Waves launch on a countdown; calling one early pays a bonus.</p>
       <p>Between waves, <b>directives</b> offer one-wave trades and
       <b>⚙ CORE OS</b> sells permanent upgrades. Unspent minerals earn
       <b>interest</b> every wave.</p>
@@ -475,7 +478,7 @@ const CONFIG = (function () {
     coreHP: 20,
     powerBase: 6,          // power supplied by the core itself
     workerCost: 50,
-    workerCarry: 8,        // minerals per trip
+    workerCarry: 12,       // minerals per trip
     workerCapBase: 4,      // +2 per depot
     workerHP: 24,
     mineTime: 1.6,         // seconds at the crystal per load
@@ -495,32 +498,32 @@ const CONFIG = (function () {
   const BUILDINGS = {
     cannon: {
       name: 'Cannon', ico: '✛', color: 0x7fdcff, kind: 'turret',
-      cost: 60, power: 2, hp: 90, dmg: 8, rate: 1.5, range: 8,
+      cost: 60, power: 2, hp: 130, dmg: 8, rate: 1.5, range: 8,
       desc: 'Reliable single-target fire. Backbone of any defense.',
     },
     stasis: {
       name: 'Stasis Well', ico: '❉', color: 0x7fffd4, kind: 'turret',
-      cost: 70, power: 2, hp: 70, dmg: 0, rate: 0, range: 6, slow: 0.45,
+      cost: 70, power: 2, hp: 110, dmg: 0, rate: 0, range: 6, slow: 0.45,
       desc: 'Aura that slows every hostile in range. Pairs with anything.',
     },
     mortar: {
       name: 'Mortar', ico: '◎', color: 0xffd166, kind: 'turret',
-      cost: 95, power: 3, hp: 80, dmg: 14, rate: 0.5, range: 10, minRange: 3.5, splash: 2.2,
+      cost: 95, power: 3, hp: 120, dmg: 14, rate: 0.5, range: 10, minRange: 3.5, splash: 2.2,
       desc: 'Long-range shells with splash. Blind up close — screen it.',
     },
     tesla: {
       name: 'Arc Node', ico: '⌁', color: 0xb08cff, kind: 'turret',
-      cost: 110, power: 3, hp: 80, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
+      cost: 110, power: 3, hp: 120, dmg: 5, rate: 0.9, range: 6.5, chain: 3,
       desc: 'Lightning forks between up to 3 hostiles. Shreds packs.',
     },
     generator: {
       name: 'Generator', ico: '⚡', color: 0xffe9a0, kind: 'eco',
-      cost: 80, power: 0, gen: 6, hp: 70,
+      cost: 80, power: 0, gen: 6, hp: 110,
       desc: '+6 power to the grid. Turrets go dark without it.',
     },
     depot: {
       name: 'Depot', ico: '⬒', color: 0x9dffb0, kind: 'eco',
-      cost: 100, power: 1, hp: 110, dropoff: true, workerCap: 2,
+      cost: 100, power: 1, hp: 150, dropoff: true, workerCap: 2,
       desc: 'Drop-off point for miners (+2 worker cap). Mine far fields without the long haul.',
     },
     wall: {
@@ -538,11 +541,11 @@ const CONFIG = (function () {
   // ---------------- enemies ----------------
   // target: core | workers | buildings. pts = encounter-budget cost.
   const ENEMIES = {
-    crawler:  { name: 'Crawler', ico: '●', color: 0xff6a4d, hp: 26,  speed: 1.5, scrap: 3, size: 0.42, dmg: 1, pts: 1.0, target: 'core' },
-    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 15,  speed: 2.6, scrap: 4, size: 0.34, dmg: 1, pts: 1.4, target: 'core' },
-    raider:   { name: 'Raider',  ico: '✕', color: 0x9dff5d, hp: 30,  speed: 2.9, scrap: 5, size: 0.36, dmg: 8, pts: 2.0, target: 'workers', atkRate: 0.8 },
-    brute:    { name: 'Brute',   ico: '■', color: 0xff3d6e, hp: 150, speed: 0.9, scrap: 10, size: 0.62, dmg: 12, pts: 4.5, target: 'buildings', armor: 3, atkRate: 0.7 },
-    boss:     { name: 'ARCHON',  ico: '◆', color: 0xff2255, hp: 1100, speed: 0.75, scrap: 60, size: 1.0, dmg: 4, pts: 0, target: 'core', armor: 4, boss: true, wallBreaker: 3 },
+    crawler:  { name: 'Crawler', ico: '●', color: 0xff6a4d, hp: 26,  speed: 1.5, scrap: 3, size: 0.42, dmg: 1, coreDmg: 1, pts: 1.0, target: 'core' },
+    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 15,  speed: 2.6, scrap: 4, size: 0.34, dmg: 1, coreDmg: 1, pts: 1.4, target: 'core' },
+    raider:   { name: 'Raider',  ico: '✕', color: 0x9dff5d, hp: 24,  speed: 2.9, scrap: 5, size: 0.36, dmg: 8, coreDmg: 1, pts: 2.0, target: 'workers', atkRate: 0.8 },
+    brute:    { name: 'Brute',   ico: '■', color: 0xff3d6e, hp: 120, speed: 0.9, scrap: 10, size: 0.62, dmg: 8, coreDmg: 2, pts: 4.5, target: 'buildings', armor: 2, atkRate: 0.6 },
+    boss:     { name: 'ARCHON',  ico: '◆', color: 0xff2255, hp: 1100, speed: 0.75, scrap: 60, size: 1.0, dmg: 6, coreDmg: 4, pts: 0, target: 'core', armor: 4, boss: true, wallBreaker: 3 },
   };
 
   // ---------------- the campaign: 9 authored operations ----------------
@@ -655,7 +658,7 @@ const CONFIG = (function () {
   function hpMult(level, n) {
     const L = level.n, W = level.waves;
     const ramp = 0.4 + 0.6 * Math.min(1, n / (W * 0.7));
-    return (1 + 0.18 * (L - 1) * ramp) * (1 + 0.05 * (n - 1));
+    return (1 + 0.16 * (L - 1) * ramp) * (1 + 0.05 * (n - 1));
   }
   function startMinerals(level) {
     return (level.eco && level.eco.startMinerals) || (120 + 8 * (level.n - 1));
@@ -680,7 +683,7 @@ const CONFIG = (function () {
     else if (n === W) mult *= 1.4;
     else if (n === W - 1 && W > 5) mult *= 0.58;
     else if (n % 4 === 0) mult *= 1.22;
-    let budget = (8 + level.n * 1.1) * mult * (1 + Math.min(1.3, (0.05 + 0.011 * level.n) * (n - 1)));
+    let budget = (8 + level.n * 1.1) * mult * (1 + Math.min(1.15, (0.05 + 0.011 * level.n) * (n - 1)));
 
     const nBoss = (level.bosses && level.bosses[n]) || 0;
     for (let b = 0; b < nBoss; b++) G('boss', 1, 0, b * 9);
@@ -699,7 +702,7 @@ const CONFIG = (function () {
       let count = Math.min(maxN, def.pts >= 4 ? 2 + Math.floor(R() * 2) : (level.swarm ? 6 : 4) + Math.floor(R() * 4));
       let gap = def.pts >= 4 ? 2.6 : (def.speed > 2.4 ? 1.0 : 0.85);
       if (level.swarm) gap *= 0.85;
-      if (level.hot) gap *= 0.7;
+      if (level.hot) gap *= 0.78;
       gap *= Math.max(0.55, 1 - 0.02 * (level.n + n));
       G(type, count, gap, delay);
       budget -= count * def.pts;
@@ -726,7 +729,7 @@ const CONFIG = (function () {
     { id: 'coretap',  ico: '⚡', name: 'CORE TAP',          cost: 150, desc: '+3 power from the core.' },
     { id: 'compound', ico: '¤',  name: 'COMPOUND PROTOCOL', cost: 200, desc: 'Interest 8% → 12%, cap ¤40 → ¤80.' },
     { id: 'lenses',   ico: '✛',  name: 'FOCUS LENSES',      cost: 180, desc: 'Cannons and Arc Nodes +25% damage.' },
-    { id: 'drills',   ico: '⛏', name: 'PLASMA DRILLS',     cost: 160, desc: 'Miners mine 25% faster and carry +4.' },
+    { id: 'drills',   ico: '⛏', name: 'PLASMA DRILLS',     cost: 160, desc: 'Miners mine 25% faster and carry +6.' },
     { id: 'plating',  ico: '▦',  name: 'HARDENED PLATING',  cost: 140, desc: 'Buildings and walls +40% integrity (new and existing).' },
     { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
   ];
@@ -1371,6 +1374,26 @@ const WORKER = (function () {
       const speedK = game.mod('mineSpeedMult', 1) * (game.tech.drills ? 1.12 : 1);
       const speed = 3.1 * speedK;
 
+      // recall: shelter at the core (finish the haul first — it's paid for)
+      if (game.recall && this.state !== 'toDrop' && this.state !== 'refuge') {
+        if (this.field) { this.field.workers.delete(this); this.field = null; }
+        const shelter = MAP.corePos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 4, 0, 2.5));
+        if (this.goTo(shelter)) this.state = 'refuge';
+      }
+      if (this.state === 'refuge') {
+        if (!game.recall) { this.state = 'idle'; return; }
+        if (this.path && this.pathI < this.path.length) {
+          const wp = this.path[this.pathI];
+          const p = this.mesh.position;
+          const dx = wp.x - p.x, dz = wp.z - p.z;
+          const d = Math.hypot(dx, dz);
+          const step = speed * dt;
+          if (d < 0.25 || step >= d) { p.x = wp.x; p.z = wp.z; this.pathI++; }
+          else { p.x += (dx / d) * step; p.z += (dz / d) * step; this.mesh.rotation.y = Math.atan2(dx, dz); }
+        }
+        return;
+      }
+
       if (this.state === 'idle') {
         this.field = this.pickField(game);
         if (this.field) {
@@ -1391,9 +1414,11 @@ const WORKER = (function () {
         const p = this.mesh.position;
         const dx = wp.x - p.x, dz = wp.z - p.z;
         const d = Math.hypot(dx, dz);
-        if (d < 0.25) { this.pathI++; return; }
-        p.x += (dx / d) * speed * dt;
-        p.z += (dz / d) * speed * dt;
+        const step = speed * dt;
+        // snap on arrival OR overshoot — high sim speeds must never oscillate
+        if (d < 0.25 || step >= d) { p.x = wp.x; p.z = wp.z; this.pathI++; return; }
+        p.x += (dx / d) * step;
+        p.z += (dz / d) * step;
         this.mesh.rotation.y = Math.atan2(dx, dz);
         this.mesh.position.y = Math.abs(Math.sin(performance.now() / 130)) * 0.07; // busy little hop
         return;
@@ -1407,7 +1432,7 @@ const WORKER = (function () {
         }
         this.mineT -= dt;
         if (this.mineT <= 0) {
-          const carryMax = ECO.workerCarry + (game.tech.drills ? 4 : 0);
+          const carryMax = ECO.workerCarry + (game.tech.drills ? 6 : 0);
           this.carry = MAP.mineFrom(this.field, carryMax);
           this.mesh.userData.load.visible = true;
           this.field.workers.delete(this);
@@ -1814,7 +1839,8 @@ const ENEMY = (function () {
       const dx = wp.x - p.x, dz = wp.z - p.z;
       const d = Math.hypot(dx, dz);
       const step = this.speed * this.slowK * dt;
-      if (d < 0.2) return true;
+      // snap on arrival OR overshoot — high sim speeds must never oscillate
+      if (d < 0.2 || step >= d) { p.x = wp.x; p.z = wp.z; return true; }
       p.x += (dx / d) * step;
       p.z += (dz / d) * step;
       this.mesh.rotation.y = Math.atan2(dx, dz);
@@ -2001,6 +2027,8 @@ const GAME = (function () {
     enemies: [],
     spawnQueue: [],
     combatT: 0,
+    prepT: 0,                  // build-phase countdown — waves launch themselves
+    recall: false,             // miners shelter at the core (greed vs safety)
     time: 0,
     speed: 1,
     paused: false,
@@ -2028,6 +2056,12 @@ const GAME = (function () {
     return v;
   }
 
+  // prep window before each wave: generous early, tightening as ops advance
+  function prepTime() {
+    const w = g.wave, L = g.level ? g.level.n : 1;
+    return Math.max(16, 32 - w * 0.8 - L * 0.6);
+  }
+
   function interestRate() { return g.tech.compound ? 0.12 : ECO.interestRate; }
   function interestCap() { return g.tech.compound ? 80 : ECO.interestCap; }
   function overclockCost() { return g.tech.cycles ? 15 : ECO.overclockCost; }
@@ -2053,7 +2087,7 @@ const GAME = (function () {
     return (g.level && g.level.buildings) || CONFIG.BUILD_ORDER;
   }
   function miningRate() {   // rough ¤/min estimate for the HUD
-    const carry = ECO.workerCarry + (g.tech.drills ? 4 : 0);
+    const carry = ECO.workerCarry + (g.tech.drills ? 6 : 0);
     let rate = 0;
     for (const w of g.workers) if (w.alive) rate += carry / 14; // ~14s round trip typical
     return Math.round(rate * 60 * mod('mineMult', 1));
@@ -2088,6 +2122,7 @@ const GAME = (function () {
     // two starter workers — the economy begins immediately
     for (let i = 0; i < 2; i++) spawnWorker(true);
     g.phase = 'build';
+    g.prepT = prepTime() + 8;   // first wave: extra time to orient
     rollDirectives();
     UI.onPhase();
     UI.banner('OP ' + g.level.n + ' — ' + g.level.name, false);
@@ -2220,6 +2255,13 @@ const GAME = (function () {
     return true;
   }
   function skipDirectives() { g.dirOffer = null; UI.onPhase(); }
+
+  function toggleRecall() {
+    g.recall = !g.recall;
+    UI.toast(g.recall ? '⚠ MINERS RECALLED — INCOME PAUSED' : '⛏ MINING RESUMED', g.recall ? 'bad' : 'warn');
+    AUDIO.sfx.click();
+    UI.updateHUD();
+  }
   function buyTech(def) {
     if (g.tech[def.id] || g.minerals < def.cost) { AUDIO.sfx.error(); return false; }
     g.minerals -= def.cost;
@@ -2232,10 +2274,18 @@ const GAME = (function () {
   }
 
   // ---------------- waves ----------------
-  function startWave() {
+  function startWave(early) {
     if (g.phase !== 'build') return;
     g.dirOffer = null;
     g.waveEarn = { mined: 0, scrap: 0, interest: 0, lossPay: 0 };
+    // early-call bonus: pay for the prep time you gave up
+    if (early && g.prepT > 2) {
+      const bonus = Math.round(g.prepT * 1.3);
+      g.minerals += bonus;
+      g.waveEarn.earlyCall = bonus;
+      UI.toast('+' + bonus + ' ¤ EARLY-CALL BONUS', 'warn');
+      AUDIO.sfx.cash();
+    }
     const interest = Math.round(Math.min(interestCap(), g.minerals * interestRate()) * mod('interestMult', 1));
     if (interest > 0) {
       g.minerals += interest;
@@ -2272,6 +2322,7 @@ const GAME = (function () {
     const e = g.waveEarn;
     const parts = [];
     if (e.mined) parts.push('mined ¤' + e.mined);
+    if (e.earlyCall) parts.push('early call ¤' + e.earlyCall);
     if (e.scrap) parts.push('scrap ¤' + e.scrap);
     if (e.interest) parts.push('interest ¤' + e.interest);
     if (e.lossPay) parts.push('insurance ¤' + e.lossPay);
@@ -2279,8 +2330,10 @@ const GAME = (function () {
     for (const d of g.activeDirs) d.wavesLeft--;
     g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
+    g.recall = false;   // all clear — back to work
     if (!g.endless && g.wave > g.level.waves) { victoryEnd(); return; }
     g.phase = 'build';
+    g.prepT = prepTime();
     rollDirectives();
     UI.banner('WAVE CLEAR — REINFORCE', false);
     UI.onPhase();
@@ -2338,7 +2391,7 @@ const GAME = (function () {
     UI.updateHUD();
   }
   function onCoreHit(e) {
-    g.coreHP -= e.def.dmg;
+    g.coreHP -= (e.def.coreDmg || 1);
     g.stats.leaked++;
     MAP.coreHitFlash();
     AUDIO.sfx.leak();
@@ -2358,14 +2411,24 @@ const GAME = (function () {
 
     for (const w of g.workers) w.update(dt, g);
     g.workers = g.workers.filter(w => w.alive);
-    // mercy rule: never soft-locked out of the economy
-    if (g.workers.length === 0 && g.minerals < ECO.workerCost && MAP.totalReserves() > 0) {
+    // mercy rule: never soft-locked out of the economy — but only between
+    // waves, and never as a conveyor of free corpses
+    g.mercyT = Math.max(0, (g.mercyT || 0) - dt);
+    if (g.phase === 'build' && g.mercyT === 0 &&
+        g.workers.length === 0 && g.minerals < ECO.workerCost && MAP.totalReserves() > 0) {
       UI.toast('EMERGENCY MINER DEPLOYED', 'warn');
       spawnWorker(true);
+      g.mercyT = 12;
     }
 
     for (const e of g.enemies) e.slowK = 1;   // stasis wells re-apply during building updates
     for (const b of g.buildings) b.update(dt, g);
+
+    if (g.phase === 'build') {
+      g.prepT -= dt;
+      UI.tickPrep(g.prepT);
+      if (g.prepT <= 0) startWave(false);
+    }
 
     if (g.phase === 'combat') {
       g.combatT += dt;
@@ -2384,7 +2447,7 @@ const GAME = (function () {
 
   // public surface
   g.start = start;
-  g.startWave = startWave;
+  g.startWave = () => startWave(true);
   g.buyWorker = buyWorker;
   g.placeBuilding = placeBuilding;
   g.canPlace = canPlace;
@@ -2406,6 +2469,7 @@ const GAME = (function () {
   g.pickDirective = pickDirective;
   g.skipDirectives = skipDirectives;
   g.buyTech = buyTech;
+  g.toggleRecall = toggleRecall;
   g.mod = mod;
   g.overclockCost = overclockCost;
   g.interestRate = interestRate;
@@ -2752,6 +2816,8 @@ const UI = (function () {
     $('v-wave').textContent = GAME.level
       ? ('W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
       : '';
+    $('btn-recall').classList.toggle('oc-active', GAME.recall);
+    $('btn-recall').textContent = GAME.recall ? '⛏ RESUME' : '⚠';
     renderBuildBar();
     if (selected && $('sheet-sel').classList.contains('open')) renderSel();
     if ($('sheet-tech').classList.contains('open')) renderTech();
@@ -2761,8 +2827,7 @@ const UI = (function () {
     const b = $('btn-wave');
     if (GAME.phase === 'build') {
       b.classList.remove('hidden2');
-      const interest = Math.round(Math.min(GAME.interestCap(), GAME.minerals * GAME.interestRate()) * GAME.mod('interestMult', 1));
-      b.textContent = '▶ WAVE ' + GAME.wave + (interest > 0 ? ' (+' + interest + ' ¤)' : '');
+      tickPrep(GAME.prepT);
       renderPreview();
       renderDirectives();
     } else {
@@ -2771,6 +2836,18 @@ const UI = (function () {
       $('directive-bar').innerHTML = '';
     }
     renderBuildBar();
+  }
+
+  // wave button doubles as the countdown display
+  let lastPrepLabel = '';
+  function tickPrep(t) {
+    if (GAME.phase !== 'build') return;
+    const bonus = Math.round(Math.max(0, t) * 1.3);
+    const label = '▶ WAVE ' + GAME.wave + ' IN ' + Math.max(0, Math.ceil(t)) + 's' + (bonus > 2 ? ' — CALL NOW +¤' + bonus : '');
+    if (label !== lastPrepLabel) {
+      lastPrepLabel = label;
+      $('btn-wave').textContent = label;
+    }
   }
 
   function renderPreview() {
@@ -2967,6 +3044,12 @@ const UI = (function () {
       AUDIO.unlock();
       if ($('sheet-tech').classList.contains('open')) clearSel(); else openTech();
     };
+    $('btn-recall').onclick = () => {
+      AUDIO.unlock();
+      GAME.toggleRecall();
+      $('btn-recall').classList.toggle('oc-active', GAME.recall);
+      $('btn-recall').textContent = GAME.recall ? '⛏ RESUME' : '⚠';
+    };
     $('btn-place-ok').onclick = () => {
       const b = INPUT.confirmPlacing();
       if (b) { $('place-bar').classList.remove('show'); renderBuildBar(); }
@@ -2994,7 +3077,7 @@ const UI = (function () {
   }
   function syncMuteLabel() { $('btn-mute').textContent = 'SOUND: ' + (SAVE.state.muted ? 'OFF' : 'ON'); }
 
-  return { init, onTap, updateHUD, onPhase, banner, toast, hurt, showEnd, clearSel, openLevels };
+  return { init, onTap, updateHUD, onPhase, banner, toast, hurt, showEnd, clearSel, openLevels, tickPrep };
 })();
 </script>
 <script>
