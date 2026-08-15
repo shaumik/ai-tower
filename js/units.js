@@ -102,9 +102,11 @@ const WORKER = (function () {
         const p = this.mesh.position;
         const dx = wp.x - p.x, dz = wp.z - p.z;
         const d = Math.hypot(dx, dz);
-        if (d < 0.25) { this.pathI++; return; }
-        p.x += (dx / d) * speed * dt;
-        p.z += (dz / d) * speed * dt;
+        const step = speed * dt;
+        // snap on arrival OR overshoot — high sim speeds must never oscillate
+        if (d < 0.25 || step >= d) { p.x = wp.x; p.z = wp.z; this.pathI++; return; }
+        p.x += (dx / d) * step;
+        p.z += (dz / d) * step;
         this.mesh.rotation.y = Math.atan2(dx, dz);
         this.mesh.position.y = Math.abs(Math.sin(performance.now() / 130)) * 0.07; // busy little hop
         return;

@@ -81,7 +81,8 @@ const ENEMY = (function () {
       const dx = wp.x - p.x, dz = wp.z - p.z;
       const d = Math.hypot(dx, dz);
       const step = this.speed * this.slowK * dt;
-      if (d < 0.2) return true;
+      // snap on arrival OR overshoot — high sim speeds must never oscillate
+      if (d < 0.2 || step >= d) { p.x = wp.x; p.z = wp.z; return true; }
       p.x += (dx / d) * step;
       p.z += (dz / d) * step;
       this.mesh.rotation.y = Math.atan2(dx, dz);
