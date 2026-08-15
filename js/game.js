@@ -1,33 +1,34 @@
-/* NEURAL SPIRE — run state: economy, waves, win/lose, and the wiring between them */
+/* HARVEST PROTOCOL — run state: the mining economy, waves, win/lose.
+   Income is mined, not killed for. Protect the line that feeds you. */
 'use strict';
 const GAME = (function () {
   const ECO = CONFIG.ECONOMY;
   const g = {
     scene: null,
-    phase: 'title',          // title | build | combat | won | lost
+    phase: 'title',            // title | build | combat | won | lost
     wave: 1,
-    salvage: 0,
+    minerals: 0,
     coreHP: ECO.coreHP,
+    workers: [],
+    buildings: [],
     enemies: [],
-    turrets: [],
-    spawnQueue: [],          // { type, at, hpMult } — combat-time seconds
+    spawnQueue: [],
     combatT: 0,
     time: 0,
     speed: 1,
     paused: false,
     endless: false,
+    level: null,
+    tech: {},
+    permPower: 0,
+    activeDirs: [],
+    dirOffer: null,
+    waveEarn: null,
     stats: null,
-    comboThrows: 0, comboT: 0,
-    level: null,             // the current campaign node (CONFIG.LEVELS entry)
-    tech: {},                // purchased SPIRE OS nodes, by id
-    permPower: 0,            // permanent grid bonuses from directives
-    activeDirs: [],          // [{ def, mods, wavesLeft }]
-    dirOffer: null,          // the 3 directives offered this build phase
-    waveEarn: null,          // per-wave income breakdown for the report
+    stars: 0,
   };
 
-  // combined modifier: level twist mods first, then active directives.
-  // 'Mult' keys multiply, everything else adds.
+  // combined modifier: level twist mods first, then active directives
   function mod(key, base) {
     let v = base === undefined ? (key.endsWith('Mult') ? 1 : 0) : base;
     const lm = g.level && g.level.mods && g.level.mods[key];
@@ -40,36 +41,45 @@ const GAME = (function () {
     return v;
   }
 
-  // economy values, tech-aware
-  function interestRate() { return g.tech.compound ? 0.14 : ECO.interestRate; }
-  function interestCap() { return g.tech.compound ? 90 : ECO.interestCap; }
+  function interestRate() { return g.tech.compound ? 0.12 : ECO.interestRate; }
+  function interestCap() { return g.tech.compound ? 80 : ECO.interestCap; }
   function overclockCost() { return g.tech.cycles ? 15 : ECO.overclockCost; }
   function overclockCooldown() { return g.tech.cycles ? ECO.overclockCooldown - 6 : ECO.overclockCooldown; }
-  function fallBonusMult() { return (g.tech.massdrv ? 1.5 : 1) * mod('fallMult', 1); }
 
   function powerCap() {
     const base = (g.level && g.level.eco && g.level.eco.powerBase !== undefined) ? g.level.eco.powerBase : ECO.powerBase;
     let cap = base + g.permPower + (g.tech.coretap ? 3 : 0);
-    for (const t of g.turrets) cap += t.stat('gen') || 0;
+    for (const b of g.buildings) if (b.alive && b.def.gen) cap += b.stat('gen');
     return Math.round(cap);
-  }
-
-  // turrets available on the current node (unlock chain across the campaign)
-  function availableTurrets() {
-    return (g.level && g.level.turrets) || CONFIG.TURRET_ORDER;
   }
   function powerUsed() {
     let used = 0;
-    for (const t of g.turrets) used += t.def.power;
+    for (const b of g.buildings) if (b.alive) used += b.def.power;
     return used;
   }
+  function workerCap() {
+    let cap = ECO.workerCapBase;
+    for (const b of g.buildings) if (b.alive && b.def.workerCap) cap += b.def.workerCap;
+    return cap;
+  }
+  function availableBuildings() {
+    return (g.level && g.level.buildings) || CONFIG.BUILD_ORDER;
+  }
+  function miningRate() {   // rough ¤/min estimate for the HUD
+    const carry = ECO.workerCarry + (g.tech.drills ? 4 : 0);
+    let rate = 0;
+    for (const w of g.workers) if (w.alive) rate += carry / 14; // ~14s round trip typical
+    return Math.round(rate * 60 * mod('mineMult', 1));
+  }
 
+  // ---------------- lifecycle ----------------
   function reset() {
     for (const e of g.enemies) e.remove();
-    for (const t of g.turrets) t.sell();   // removes their meshes from the scene
-    g.enemies = []; g.turrets = [];
+    for (const w of g.workers) w.remove();
+    for (const b of g.buildings) if (b.alive) b.remove();
+    g.enemies = []; g.workers = []; g.buildings = [];
     g.wave = 1;
-    g.salvage = g.level ? CONFIG.startSalvage(g.level) : ECO.startSalvage;
+    g.minerals = CONFIG.startMinerals(g.level);
     g.coreHP = ECO.coreHP;
     g.spawnQueue = [];
     g.combatT = 0; g.time = 0;
@@ -80,42 +90,140 @@ const GAME = (function () {
     g.permPower = 0;
     g.activeDirs = [];
     g.dirOffer = null;
-    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
-    g.stats = { kills: 0, throws: 0, fallSalvage: 0, interest: 0, leaked: 0, built: 0, bestCombo: 0 };
+    g.waveEarn = { mined: 0, scrap: 0, interest: 0, lossPay: 0 };
+    g.stats = { mined: 0, kills: 0, workersLost: 0, buildingsLost: 0, leaked: 0, interest: 0, peakWorkers: 0 };
   }
 
   function start(levelN) {
-    // each node IS its spire: fixed seed + topology, learnable across attempts
     g.level = CONFIG.LEVELS[UTIL.clamp(levelN, 1, CONFIG.LEVELS.length) - 1];
-    SPIRE.regen(g.level.seed, g.level.spire);
+    MAP.build(g.scene, g.level);
     reset();
+    // two starter workers — the economy begins immediately
+    for (let i = 0; i < 2; i++) spawnWorker(true);
     g.phase = 'build';
     rollDirectives();
     UI.onPhase();
-    UI.banner('NODE ' + g.level.n + ' — ' + g.level.name, false);
+    UI.banner('OP ' + g.level.n + ' — ' + g.level.name, false);
     if (g.level.unlockNote) setTimeout(() => UI.toast(g.level.unlockNote, 'warn'), 1100);
     setTimeout(() => UI.toast(g.level.intro, ''), 2300);
     UI.updateHUD();
   }
 
-  // ---------------- directives ----------------
+  // ---------------- economy actions ----------------
+  function spawnWorker(free) {
+    const pos = MAP.corePos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 0, 2 + Math.random()));
+    const w = new WORKER.Worker(g.scene, pos);
+    g.workers.push(w);
+    g.stats.peakWorkers = Math.max(g.stats.peakWorkers, g.workers.filter(x => x.alive).length);
+    if (!free) FX.ring(pos, 1.2, 0x7fdcff);
+    return w;
+  }
+
+  function buyWorker() {
+    if (g.workers.filter(w => w.alive).length >= workerCap()) { UI.toast('WORKER CAP — BUILD A DEPOT', 'bad'); AUDIO.sfx.error(); return false; }
+    if (g.minerals < ECO.workerCost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= ECO.workerCost;
+    spawnWorker();
+    AUDIO.sfx.build();
+    UI.updateHUD();
+    return true;
+  }
+
+  function canPlace(type, x, z) {
+    if (Math.abs(x) > MAP.W / 2 - 1 || Math.abs(z) > MAP.H / 2 - 1) return false;
+    const c = MAP.worldToCell(x, z);
+    if (MAP.isBlocked(c.cx, c.cz)) return false;
+    // keep the core and gate mouths open
+    if (MAP.corePos.distanceTo(new THREE.Vector3(x, 0, z)) < 3.4) return false;
+    for (const gate of MAP.gates) if (gate.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 3.4) return false;
+    // no stacking on crystals or other buildings
+    for (const f of MAP.fields) if (f.pos.distanceTo(new THREE.Vector3(x, 0, z)) < 2.6) return false;
+    const minGap = type === 'wall' ? MAP.CS * 0.9 : 1.4;
+    for (const b of g.buildings) {
+      if (!b.alive) continue;
+      if (b.mesh.position.distanceTo(new THREE.Vector3(x, 0, z)) < minGap) return false;
+    }
+    return true;
+  }
+
+  function placeBuilding(type, x, z) {
+    const def = CONFIG.BUILDINGS[type];
+    if (!availableBuildings().includes(type)) return null;
+    if (g.minerals < def.cost) { AUDIO.sfx.error(); return null; }
+    if (def.power && powerUsed() + def.power > powerCap()) { UI.toast('⚡ NOT ENOUGH POWER — BUILD A GENERATOR', 'bad'); AUDIO.sfx.error(); return null; }
+    // snap walls to the grid first so validation tests the real position
+    let px = x, pz = z;
+    if (def.blocks) {
+      const c = MAP.worldToCell(x, z);
+      const w = MAP.cellToWorld(c.cx, c.cz);
+      px = w.x; pz = w.z;
+    }
+    if (!canPlace(type, px, pz)) { AUDIO.sfx.error(); return null; }
+    g.minerals -= def.cost;
+    const b = new BUILDING.Building(g.scene, type, new THREE.Vector3(px, 0, pz), g);
+    g.buildings.push(b);
+    AUDIO.sfx.build();
+    FX.ring(b.mesh.position, 1.4, def.color);
+    UI.updateHUD();
+    return b;
+  }
+
+  function upgrade(b) {
+    const cost = b.upgradeCost;
+    if (cost === null || b.type === 'wall' || g.minerals < cost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= cost;
+    b.upgrade();
+    AUDIO.sfx.build();
+    UI.updateHUD();
+    return true;
+  }
+
+  function overclock(b) {
+    if (b.def.kind !== 'turret' || b.type === 'stasis') return false;
+    if (b.ocCooldown > 0 || g.minerals < overclockCost()) { AUDIO.sfx.error(); return false; }
+    g.minerals -= overclockCost();
+    b.overclock(overclockCooldown());
+    UI.updateHUD();
+    return true;
+  }
+
+  function repair(b) {
+    const missing = Math.ceil(b.maxHp - b.hp);
+    if (missing <= 0) return false;
+    const cost = Math.ceil(missing * ECO.repairCostPerHP);
+    if (g.minerals < cost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= cost;
+    b.hp = b.maxHp;
+    FX.ring(b.mesh.position, 1.2, 0x9dffb0);
+    AUDIO.sfx.build();
+    UI.updateHUD();
+    return true;
+  }
+
+  function sell(b) {
+    g.minerals += b.sell();
+    g.buildings.splice(g.buildings.indexOf(b), 1);
+    AUDIO.sfx.sell();
+    UI.updateHUD();
+  }
+
+  // ---------------- directives / tech ----------------
   function rollDirectives() {
     if (g.wave < 2) { g.dirOffer = null; return; }
-    const pool = CONFIG.DIRECTIVES.filter(d => (d.cost || 0) <= g.salvage);
+    const pool = CONFIG.DIRECTIVES.filter(d => (d.cost || 0) <= g.minerals);
     const offer = [];
     while (offer.length < 3 && pool.length) {
       offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
     }
     g.dirOffer = offer;
   }
-
   function pickDirective(def) {
     if (!g.dirOffer || !g.dirOffer.includes(def)) return false;
     if (def.cost) {
-      if (g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
-      g.salvage -= def.cost;
+      if (g.minerals < def.cost) { AUDIO.sfx.error(); return false; }
+      g.minerals -= def.cost;
     }
-    if (def.mods.instant) g.salvage += def.mods.instant;
+    if (def.mods.instant) g.minerals += def.mods.instant;
     if (def.mods.permPower) g.permPower += def.mods.permPower;
     g.activeDirs.push({ def, mods: def.mods, wavesLeft: def.mods.duration || 1 });
     g.dirOffer = null;
@@ -124,82 +232,26 @@ const GAME = (function () {
     UI.onPhase(); UI.updateHUD();
     return true;
   }
-
   function skipDirectives() { g.dirOffer = null; UI.onPhase(); }
-
-  // ---------------- tech ----------------
   function buyTech(def) {
-    if (g.tech[def.id] || g.salvage < def.cost) { AUDIO.sfx.error(); return false; }
-    g.salvage -= def.cost;
+    if (g.tech[def.id] || g.minerals < def.cost) { AUDIO.sfx.error(); return false; }
+    g.minerals -= def.cost;
     g.tech[def.id] = true;
+    if (def.id === 'plating') for (const b of g.buildings) if (b.alive) { b.maxHp *= 1.4; b.hp *= 1.4; }
     AUDIO.sfx.build();
     UI.toast('⚙ ' + def.name + ' INSTALLED', 'warn');
     UI.updateHUD();
     return true;
   }
 
-  // ---------------- economy actions ----------------
-  function canAffordAny() {
-    const cap = powerCap(), used = powerUsed();
-    for (const id of availableTurrets()) {
-      const d = CONFIG.TURRETS[id];
-      if (g.salvage >= d.cost && used + d.power <= cap) return true;
-    }
-    return false;
-  }
-
-  function build(socket, type) {
-    const def = CONFIG.TURRETS[type];
-    if (!availableTurrets().includes(type)) return false;
-    if (socket.turret || g.salvage < def.cost) return false;
-    if (powerUsed() + def.power > powerCap()) { UI.toast('⚡ NOT ENOUGH POWER — BUILD A GENERATOR', 'bad'); AUDIO.sfx.error(); return false; }
-    g.salvage -= def.cost;
-    const t = new TURRET.Turret(g.scene, socket, type);
-    g.turrets.push(t);
-    g.stats.built++;
-    AUDIO.sfx.build();
-    FX.ring(socket.pos, 1.4, def.color);
-    UI.updateHUD();
-    return t;
-  }
-
-  function upgrade(t) {
-    const cost = t.upgradeCost;
-    if (cost === null || g.salvage < cost) { AUDIO.sfx.error(); return false; }
-    g.salvage -= cost;
-    t.upgrade();
-    AUDIO.sfx.build();
-    UI.updateHUD();
-    return true;
-  }
-
-  function overclock(t) {
-    if (t.ocCooldown > 0 || g.salvage < overclockCost()) { AUDIO.sfx.error(); return false; }
-    if (t.type === 'generator' || t.type === 'stasis') return false;
-    g.salvage -= overclockCost();
-    t.overclock(overclockCooldown());
-    UI.updateHUD();
-    return true;
-  }
-
-  function sell(t) {
-    const refund = t.sell();
-    g.salvage += refund;
-    g.turrets.splice(g.turrets.indexOf(t), 1);
-    AUDIO.sfx.sell();
-    UI.toast('+' + refund + ' ¤ RECLAIMED', 'warn');
-    UI.updateHUD();
-  }
-
   // ---------------- waves ----------------
   function startWave() {
     if (g.phase !== 'build') return;
     g.dirOffer = null;
-    g.waveEarn = { kill: 0, fall: 0, leakPay: 0 };
-    // interest on unspent salvage — the invest-or-hoard decision
-    const interest = Math.round(Math.min(interestCap(), g.salvage * interestRate()) * mod('interestMult', 1));
+    g.waveEarn = { mined: 0, scrap: 0, interest: 0, lossPay: 0 };
+    const interest = Math.round(Math.min(interestCap(), g.minerals * interestRate()) * mod('interestMult', 1));
     if (interest > 0) {
-      g.salvage += interest;
+      g.minerals += interest;
       g.stats.interest += interest;
       g.waveEarn.interest = interest;
       UI.toast('+' + interest + ' ¤ INTEREST ON RESERVES', 'warn');
@@ -210,39 +262,33 @@ const GAME = (function () {
     g.spawnQueue = [];
     const hpDirMult = mod('enemyHpMult', 1);
     const spdDirMult = mod('enemySpeedMult', 1);
-    const gnatMult = mod('gnatSpeedMult', 1);
+    const raiderMult = mod('raiderSpeedMult', 1);
     const comp = CONFIG.wave(g.level, g.wave);
     for (const grp of comp) {
       for (let i = 0; i < grp.count; i++) {
-        const flying = CONFIG.ENEMIES[grp.type].flying;
         g.spawnQueue.push({
           type: grp.type, at: grp.delay + i * grp.gap,
           hpMult: grp.hpMult * hpDirMult * (g.endless ? 1 + (g.wave - g.level.waves) * 0.25 : 1),
-          spdMult: spdDirMult * (flying ? gnatMult : 1),
+          spdMult: spdDirMult * (CONFIG.ENEMIES[grp.type].target === 'workers' ? raiderMult : 1),
         });
       }
     }
     g.spawnQueue.sort((a, b) => a.at - b.at);
     AUDIO.sfx.waveStart();
-    if (g.level.teach && g.level.teach.wave === g.wave) {
-      UI.banner(g.level.teach.text, true);
-    } else {
-      UI.banner('WAVE ' + g.wave + (g.wave > g.level.waves ? ' — OVERTIME' : ''), !!(g.level.bosses && g.level.bosses[g.wave]));
-    }
+    if (g.level.teach && g.level.teach.wave === g.wave) UI.banner(g.level.teach.text, true);
+    else UI.banner('WAVE ' + g.wave + (g.wave > g.level.waves ? ' — OVERTIME' : ''), !!(g.level.bosses && g.level.bosses[g.wave]));
     UI.onPhase();
     UI.updateHUD();
   }
 
   function endWave() {
-    // wave report: where the money came from
     const e = g.waveEarn;
     const parts = [];
-    if (e.kill) parts.push('kills ¤' + e.kill);
-    if (e.fall) parts.push('gravity ¤' + e.fall);
+    if (e.mined) parts.push('mined ¤' + e.mined);
+    if (e.scrap) parts.push('scrap ¤' + e.scrap);
     if (e.interest) parts.push('interest ¤' + e.interest);
-    if (e.leakPay) parts.push('insurance ¤' + e.leakPay);
+    if (e.lossPay) parts.push('insurance ¤' + e.lossPay);
     if (parts.length) UI.toast('WAVE ' + g.wave + ' INCOME — ' + parts.join(' · '), 'warn');
-    // expire directives
     for (const d of g.activeDirs) d.wavesLeft--;
     g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
@@ -254,13 +300,11 @@ const GAME = (function () {
     UI.updateHUD();
   }
 
-  // stars: an authored mastery target, not a participation prize
   function starRating() {
-    if (g.stats.leaked === 0) return 3;
-    if (g.stats.leaked <= 3) return 2;
+    if (g.stats.leaked === 0 && g.stats.workersLost === 0) return 3;
+    if (g.coreHP >= ECO.coreHP * 0.6) return 2;
     return 1;
   }
-
   function victoryEnd() {
     g.phase = 'won';
     g.stars = starRating();
@@ -268,7 +312,6 @@ const GAME = (function () {
     AUDIO.sfx.victory();
     UI.showEnd(true);
   }
-
   function defeat() {
     g.phase = 'lost';
     SAVE.recordLevel(g.level.n, 0, false);
@@ -276,38 +319,41 @@ const GAME = (function () {
     UI.showEnd(false);
   }
 
-  // ---------------- combat events ----------------
-  function onKill(e, opts) {
-    g.stats.kills++;
-    let pay = Math.round(e.def.salvage * mod('killMult', 1)) + mod('killFlat', 0);
-    g.waveEarn.kill += pay;
-    if (opts.fallBonus) {
-      const bonus = Math.round(opts.fallBonus * fallBonusMult());
-      pay += bonus;
-      g.stats.throws++;
-      g.stats.fallSalvage += bonus;
-      g.waveEarn.fall += bonus;
-      FX.text(e.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0)), '+' + pay + ' ¤ GRAVITY', '#ffd166', 0.85);
-    }
-    g.salvage += pay;
+  // ---------------- events ----------------
+  function onMined(amount, pos) {
+    g.minerals += amount;
+    g.stats.mined += amount;
+    g.waveEarn.mined += amount;
+    FX.text(pos.clone().add(new THREE.Vector3(0, 1.4, 0)), '+' + amount, '#7fdcff', 0.5);
+    AUDIO.sfx.cash();
     UI.updateHUD();
   }
-
-  function onMultiThrow(n) {
-    g.comboThrows = n;
-    if (n > g.stats.bestCombo) g.stats.bestCombo = n;
-    UI.combo(n + '× LAUNCHED!');
+  function onKill(e) {
+    g.stats.kills++;
+    const pay = Math.round(e.def.scrap * mod('scrapMult', ECO.scrapMult));
+    if (pay > 0) { g.minerals += pay; g.waveEarn.scrap += pay; }
+    UI.updateHUD();
   }
-
-  function onLeak(e) {
+  function onWorkerLost(w) {
+    g.stats.workersLost++;
+    const pay = mod('lossPay', 0);
+    if (pay > 0) { g.minerals += pay; g.waveEarn.lossPay += pay; }
+    UI.toast('⚠ MINER DOWN', 'bad');
+    UI.updateHUD();
+  }
+  function onBuildingLost(b) {
+    g.stats.buildingsLost++;
+    const i = g.buildings.indexOf(b);
+    if (i >= 0) g.buildings.splice(i, 1);
+    const pay = mod('lossPay', 0);
+    if (pay > 0) { g.minerals += pay; g.waveEarn.lossPay += pay; }
+    UI.toast('⚠ ' + b.def.name.toUpperCase() + ' DESTROYED', 'bad');
+    UI.updateHUD();
+  }
+  function onCoreHit(e) {
     g.coreHP -= e.def.dmg;
     g.stats.leaked++;
-    const pay = mod('leakPay', 0);
-    if (pay > 0) {
-      g.salvage += pay;
-      g.waveEarn.leakPay += pay;
-      UI.toast('🛡 INSURANCE PAID ¤' + pay, 'warn');
-    }
+    MAP.coreHitFlash();
     AUDIO.sfx.leak();
     UI.hurt();
     UI.updateHUD();
@@ -320,16 +366,26 @@ const GAME = (function () {
     const dt = Math.min(rawDt, 0.05) * g.speed;
     g.time += dt;
 
-    SPIRE.update(dt, g.phase === 'build' && canAffordAny());
+    MAP.update(dt);
     FX.update(dt);
 
-    for (const t of g.turrets) t.update(dt, g);
+    for (const w of g.workers) w.update(dt, g);
+    g.workers = g.workers.filter(w => w.alive);
+    // mercy rule: never soft-locked out of the economy
+    if (g.workers.length === 0 && g.minerals < ECO.workerCost && MAP.totalReserves() > 0) {
+      UI.toast('EMERGENCY MINER DEPLOYED', 'warn');
+      spawnWorker(true);
+    }
+
+    for (const e of g.enemies) e.slowK = 1;   // stasis wells re-apply during building updates
+    for (const b of g.buildings) b.update(dt, g);
 
     if (g.phase === 'combat') {
       g.combatT += dt;
       while (g.spawnQueue.length && g.spawnQueue[0].at <= g.combatT) {
         const s = g.spawnQueue.shift();
-        const e = new ENEMY.Enemy(g.scene, s.type, s.hpMult);
+        const gate = MAP.gates[Math.floor(Math.random() * MAP.gates.length)];
+        const e = new ENEMY.Enemy(g.scene, s.type, s.hpMult, gate);
         if (s.spdMult) e.speed *= s.spdMult;
         g.enemies.push(e);
       }
@@ -342,17 +398,24 @@ const GAME = (function () {
   // public surface
   g.start = start;
   g.startWave = startWave;
-  g.build = build;
+  g.buyWorker = buyWorker;
+  g.placeBuilding = placeBuilding;
+  g.canPlace = canPlace;
   g.upgrade = upgrade;
   g.overclock = overclock;
+  g.repair = repair;
   g.sell = sell;
   g.update = update;
+  g.onMined = onMined;
   g.onKill = onKill;
-  g.onLeak = onLeak;
-  g.onMultiThrow = onMultiThrow;
+  g.onWorkerLost = onWorkerLost;
+  g.onBuildingLost = onBuildingLost;
+  g.onCoreHit = onCoreHit;
   g.powerCap = powerCap;
   g.powerUsed = powerUsed;
-  g.canAffordAny = canAffordAny;
+  g.workerCap = workerCap;
+  g.miningRate = miningRate;
+  g.availableBuildings = availableBuildings;
   g.pickDirective = pickDirective;
   g.skipDirectives = skipDirectives;
   g.buyTech = buyTech;
@@ -360,6 +423,5 @@ const GAME = (function () {
   g.overclockCost = overclockCost;
   g.interestRate = interestRate;
   g.interestCap = interestCap;
-  g.availableTurrets = availableTurrets;
   return g;
 })();

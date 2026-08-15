@@ -1,148 +1,154 @@
-/* NEURAL SPIRE — DOM HUD: sheets, banners, end screens, wave preview */
+/* HARVEST PROTOCOL — DOM HUD: build bar, selection sheet, directives,
+   tech, operation select, end screens. */
 'use strict';
 const UI = (function () {
   const $ = UTIL.el;
-  let selSocket = null, selTurret = null, selType = null;
-  let rangeRing = null;   // 3D range indicator for the current selection
+  let selected = null;   // { building } | { worker } | { field }
 
-  // ---------------- range ring ----------------
-  function showRange(pos, r, color) {
-    hideRange();
-    rangeRing = new THREE.Mesh(
-      new THREE.TorusGeometry(r, 0.05, 6, 48),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55 })
-    );
-    rangeRing.rotation.x = Math.PI / 2;
-    rangeRing.position.copy(pos);
-    GAME.scene.add(rangeRing);
-  }
-  function hideRange() {
-    if (rangeRing) { GAME.scene.remove(rangeRing); rangeRing.geometry.dispose(); rangeRing.material.dispose(); rangeRing = null; }
-  }
-
-  // ---------------- selection / sheets ----------------
+  // ---------------- tap routing ----------------
   function onTap(hit) {
     AUDIO.unlock();
-    if (hit.turret) { selectTurret(hit.turret); return; }
-    if (hit.socket) { selectSocket(hit.socket); return; }
+    if (hit.building) { select({ building: hit.building }); return; }
+    if (hit.worker) { select({ worker: hit.worker }); return; }
+    if (hit.field) { select({ field: hit.field }); return; }
     clearSel();
   }
 
-  function selectSocket(s) {
-    selSocket = s; selTurret = null;
-    selType = selType || 'blaster';
-    renderBuildSheet();
-    $('sheet-turret').classList.remove('open');
-    $('sheet-build').classList.add('open');
-    INPUT.focusOn(s.pos.y + 2.5); // bring the selection above the sheet
-    AUDIO.sfx.click();
-  }
-
-  function selectTurret(t) {
-    selTurret = t; selSocket = null;
-    renderTurretSheet();
-    $('sheet-build').classList.remove('open');
-    $('sheet-turret').classList.add('open');
-    showRange(t.mesh.position, t.stat('range') || 1.2, t.def.color);
-    INPUT.focusOn(t.mesh.position.y + 2.5);
-    AUDIO.sfx.click();
-  }
-
-  function clearSel() {
-    selSocket = null; selTurret = null;
-    $('sheet-build').classList.remove('open');
-    $('sheet-turret').classList.remove('open');
+  function select(sel) {
+    selected = sel;
+    renderSel();
     $('sheet-tech').classList.remove('open');
-    hideRange();
+    $('sheet-sel').classList.add('open');
+    AUDIO.sfx.click();
+  }
+  function clearSel() {
+    selected = null;
+    $('sheet-sel').classList.remove('open');
+    $('sheet-tech').classList.remove('open');
   }
 
-  function renderBuildSheet() {
-    $('build-socket-n').textContent = '#' + (selSocket.i + 1);
-    const cards = $('build-cards');
-    cards.innerHTML = '';
-    const avail = GAME.availableTurrets();
-    if (!avail.includes(selType)) selType = avail[0];
-    const cap = GAME.powerCap(), used = GAME.powerUsed();
-    for (const id of avail) {
-      const d = CONFIG.TURRETS[id];
-      const afford = GAME.salvage >= d.cost && used + d.power <= cap;
-      const card = UTIL.h('div', 'b-card' + (selType === id ? ' sel' : '') + (afford ? '' : ' cant'),
+  function renderSel() {
+    const body = $('sel-body');
+    if (!selected) return;
+    if (selected.building) {
+      const b = selected.building;
+      if (!b.alive) { clearSel(); return; }
+      const col = '#' + b.def.color.toString(16).padStart(6, '0');
+      let stats = 'Integrity ' + Math.ceil(b.hp) + '/' + Math.round(b.maxHp);
+      if (b.def.kind === 'turret' && b.type !== 'stasis') stats += ' · DMG ' + b.stat('dmg').toFixed(1) + ' · ' + b.stat('rate').toFixed(1) + '/s · range ' + b.stat('range').toFixed(1) + ' · kills ' + b.kills;
+      if (b.type === 'stasis') stats += ' · slows ' + Math.round(b.stat('slow') * 100) + '% · range ' + b.stat('range').toFixed(1);
+      if (b.def.gen) stats += ' · +' + Math.round(b.stat('gen')) + ' ⚡';
+      if (b.def.dropoff) stats += ' · drop-off · +2 ⛏ cap';
+      body.innerHTML =
+        '<div class="t-head"><div class="t-ico" style="color:' + col + '">' + b.def.ico + '</div>' +
+        '<div><div class="t-name">' + b.def.name.toUpperCase() + '</div>' +
+        (b.def.kind === 'turret' ? '<div class="t-lvl">' + '▮'.repeat(b.level) + '▯'.repeat(3 - b.level) + ' LEVEL ' + b.level + '</div>' : '') +
+        '</div></div>' +
+        '<div class="t-stats">' + stats + '</div>';
+      const row = UTIL.h('div', 't-row');
+      if (b.def.kind === 'turret') {
+        const upCost = b.upgradeCost;
+        if (upCost !== null) {
+          const up = UTIL.h('button', 'btn btn-primary', '▲ ¤' + upCost);
+          up.disabled = GAME.minerals < upCost;
+          up.onclick = () => { if (GAME.upgrade(b)) renderSel(); };
+          row.appendChild(up);
+        }
+        if (b.type !== 'stasis') {
+          const ocCost = GAME.overclockCost();
+          const oc = UTIL.h('button', 'btn' + (b.overclockT > 0 ? ' oc-active' : ''),
+            b.overclockT > 0 ? '⚡ ON' : (b.ocCooldown > 0 ? '⚡ ' + Math.ceil(b.ocCooldown) + 's' : '⚡ ¤' + ocCost));
+          oc.disabled = b.ocCooldown > 0 || GAME.minerals < ocCost;
+          oc.onclick = () => { if (GAME.overclock(b)) renderSel(); };
+          row.appendChild(oc);
+        }
+      }
+      if (b.hp < b.maxHp - 1) {
+        const cost = Math.ceil((b.maxHp - b.hp) * CONFIG.ECONOMY.repairCostPerHP);
+        const rp = UTIL.h('button', 'btn', '🔧 ¤' + cost);
+        rp.disabled = GAME.minerals < cost;
+        rp.onclick = () => { if (GAME.repair(b)) renderSel(); };
+        row.appendChild(rp);
+      }
+      const sl = UTIL.h('button', 'btn', '✕ ¤' + b.sellValue());
+      sl.onclick = () => { GAME.sell(b); clearSel(); };
+      row.appendChild(sl);
+      body.appendChild(row);
+      return;
+    }
+    if (selected.worker) {
+      const w = selected.worker;
+      if (!w.alive) { clearSel(); return; }
+      const states = { idle: 'looking for work', toField: 'heading to crystals', mining: 'mining', toDrop: 'hauling a load home' };
+      body.innerHTML =
+        '<div class="t-head"><div class="t-ico" style="color:#7fdcff">⛏</div>' +
+        '<div><div class="t-name">HARVESTER DRONE</div></div></div>' +
+        '<div class="t-stats">Integrity ' + Math.ceil(w.hp) + '/' + w.maxHp + ' · ' + (states[w.state] || w.state) +
+        (w.carry ? ' · carrying ¤' + w.carry : '') + '</div>';
+      return;
+    }
+    if (selected.field) {
+      const f = selected.field;
+      const k = Math.round((f.reserves / f.max) * 100);
+      body.innerHTML =
+        '<div class="t-head"><div class="t-ico" style="color:#7fdcff">◆</div>' +
+        '<div><div class="t-name">CRYSTAL FIELD</div></div></div>' +
+        '<div class="t-stats">Reserves ¤' + Math.round(f.reserves) + ' of ¤' + f.max + ' (' + k + '%)' +
+        ' · ' + f.workers.size + ' miner' + (f.workers.size === 1 ? '' : 's') + ' working' +
+        (f.reserves <= 0 ? ' · <b style="color:#ff5d7a">DEPLETED</b>' : '') + '</div>';
+      return;
+    }
+  }
+
+  // ---------------- build bar ----------------
+  function renderBuildBar() {
+    const bar = $('build-bar');
+    bar.innerHTML = '';
+    // worker card first — the economy button
+    const alive = GAME.workers.filter(w => w.alive).length;
+    const wCard = UTIL.h('div', 'b-card' + (GAME.minerals >= CONFIG.ECONOMY.workerCost && alive < GAME.workerCap() ? '' : ' cant'),
+      '<div class="bc-ico" style="color:#7fdcff">⛏</div>' +
+      '<div class="bc-name">MINER</div>' +
+      '<div class="bc-cost">¤ ' + CONFIG.ECONOMY.workerCost + '</div>' +
+      '<div class="bc-pow">' + alive + '/' + GAME.workerCap() + '</div>');
+    wCard.onclick = () => { AUDIO.unlock(); GAME.buyWorker(); renderBuildBar(); };
+    bar.appendChild(wCard);
+    for (const id of GAME.availableBuildings()) {
+      const d = CONFIG.BUILDINGS[id];
+      const afford = GAME.minerals >= d.cost && (!d.power || GAME.powerUsed() + d.power <= GAME.powerCap());
+      const card = UTIL.h('div', 'b-card' + (afford ? '' : ' cant') + (INPUT.placing && INPUT.placing.type === id ? ' sel' : ''),
         '<div class="bc-ico" style="color:#' + d.color.toString(16).padStart(6, '0') + '">' + d.ico + '</div>' +
         '<div class="bc-name">' + d.name.toUpperCase() + '</div>' +
         '<div class="bc-cost">¤ ' + d.cost + '</div>' +
-        '<div class="bc-pow">' + (d.gen ? '+' + d.gen + ' ⚡' : d.power + ' ⚡') + '</div>');
-      card.onclick = () => { selType = id; renderBuildSheet(); AUDIO.sfx.click(); };
-      cards.appendChild(card);
+        '<div class="bc-pow">' + (d.gen ? '+' + d.gen + ' ⚡' : (d.power ? d.power + ' ⚡' : '&nbsp;')) + '</div>');
+      card.onclick = () => {
+        AUDIO.unlock(); AUDIO.sfx.click();
+        clearSel();
+        INPUT.startPlacing(id);
+        $('place-hint').textContent = d.desc.split('.')[0].toUpperCase();
+        $('place-bar').classList.add('show');
+        renderBuildBar();
+      };
+      bar.appendChild(card);
     }
-    const d = CONFIG.TURRETS[selType];
-    let body = $('sheet-build').querySelector('.b-desc');
-    if (!body) { body = UTIL.h('div', 'b-desc'); $('sheet-build').appendChild(body); }
-    body.innerHTML = d.desc;
-    let btn = $('sheet-build').querySelector('.b-confirm');
-    if (!btn) { btn = UTIL.h('button', 'btn btn-primary b-confirm'); $('sheet-build').appendChild(btn); }
-    const afford = GAME.salvage >= d.cost && GAME.powerUsed() + d.power <= GAME.powerCap();
-    btn.textContent = afford ? '✓ BUILD ' + d.name.toUpperCase() + ' — ¤ ' + d.cost : (GAME.salvage < d.cost ? 'NEED ¤ ' + d.cost : 'NEED ⚡ POWER');
-    btn.disabled = !afford;
-    btn.onclick = () => {
-      const t = GAME.build(selSocket, selType);
-      if (t) { clearSel(); selectTurret(t); }
-    };
-    // preview the range from this socket
-    if (d.range) showRange(selSocket.pos, d.range, d.color); else hideRange();
-  }
-
-  function renderTurretSheet() {
-    const t = selTurret;
-    const body = $('turret-body');
-    const col = '#' + t.def.color.toString(16).padStart(6, '0');
-    let stats = '';
-    if (t.type === 'generator') stats = '+' + Math.round(t.stat('gen')) + ' ⚡ power to the grid';
-    else if (t.type === 'stasis') stats = 'Slows ' + Math.round(t.stat('slow') * 100) + '% · range ' + t.stat('range').toFixed(1);
-    else stats = 'DMG ' + t.stat('dmg').toFixed(1) + ' · ' + t.stat('rate').toFixed(1) + '/s · range ' + t.stat('range').toFixed(1) + (t.def.knock ? ' · knock ' + t.stat('knock').toFixed(1) : '') + ' · kills ' + t.kills;
-    const upCost = t.upgradeCost;
-    body.innerHTML =
-      '<div class="t-head"><div class="t-ico" style="color:' + col + '">' + t.def.ico + '</div>' +
-      '<div><div class="t-name">' + t.def.name.toUpperCase() + '</div>' +
-      '<div class="t-lvl">' + '▮'.repeat(t.level) + '▯'.repeat(3 - t.level) + ' LEVEL ' + t.level + '</div></div></div>' +
-      '<div class="t-stats">' + stats + '</div>';
-    const row = UTIL.h('div', 't-row');
-    if (upCost !== null) {
-      const up = UTIL.h('button', 'btn btn-primary', '▲ UPGRADE ¤ ' + upCost);
-      up.disabled = GAME.salvage < upCost;
-      up.onclick = () => { if (GAME.upgrade(t)) renderTurretSheet(); };
-      row.appendChild(up);
-    } else {
-      row.appendChild(UTIL.h('button', 'btn', '★ MAX LEVEL')).disabled = true;
-    }
-    if (t.type !== 'generator' && t.type !== 'stasis') {
-      const ocCost = GAME.overclockCost();
-      const oc = UTIL.h('button', 'btn' + (t.overclockT > 0 ? ' oc-active' : ''),
-        t.overclockT > 0 ? '⚡ OVERCLOCKED' : (t.ocCooldown > 0 ? '⚡ COOLING ' + Math.ceil(t.ocCooldown) + 's' : '⚡ OVERCLOCK ¤ ' + ocCost));
-      oc.disabled = t.ocCooldown > 0 || GAME.salvage < ocCost;
-      oc.onclick = () => { if (GAME.overclock(t)) renderTurretSheet(); };
-      row.appendChild(oc);
-    }
-    const sl = UTIL.h('button', 'btn', '✕ SELL ¤ ' + Math.round(t.spent * CONFIG.ECONOMY.sellRefund));
-    sl.onclick = () => { GAME.sell(t); clearSel(); };
-    row.appendChild(sl);
-    body.appendChild(row);
-    showRange(t.mesh.position, t.stat('range') || 1.2, t.def.color);
   }
 
   // ---------------- HUD ----------------
   function updateHUD() {
     $('v-core').textContent = GAME.coreHP;
-    $('hud-core').classList.toggle('low', GAME.coreHP <= 3);
-    $('v-salvage').textContent = UTIL.fmt(GAME.salvage);
+    $('hud-core').classList.toggle('low', GAME.coreHP <= CONFIG.ECONOMY.coreHP * 0.3);
+    $('v-minerals').textContent = UTIL.fmt(GAME.minerals);
     const used = GAME.powerUsed(), cap = GAME.powerCap();
     $('v-power').textContent = used + '/' + cap;
     $('hud-power').classList.toggle('full', used >= cap);
+    const alive = GAME.workers.filter(w => w.alive).length;
+    $('v-workers').textContent = alive + '/' + GAME.workerCap();
     const W = GAME.level ? GAME.level.waves : 0;
     $('v-wave').textContent = GAME.level
-      ? ('N' + GAME.level.n + '·W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
+      ? ('W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
       : '';
-    // refresh open sheets so costs stay truthful
-    if (selSocket && $('sheet-build').classList.contains('open')) renderBuildSheet();
+    renderBuildBar();
+    if (selected && $('sheet-sel').classList.contains('open')) renderSel();
     if ($('sheet-tech').classList.contains('open')) renderTech();
   }
 
@@ -150,17 +156,30 @@ const UI = (function () {
     const b = $('btn-wave');
     if (GAME.phase === 'build') {
       b.classList.remove('hidden2');
-      $('btn-tech').classList.remove('hidden2');
-      const interest = Math.round(Math.min(GAME.interestCap(), GAME.salvage * GAME.interestRate()) * GAME.mod('interestMult', 1));
+      const interest = Math.round(Math.min(GAME.interestCap(), GAME.minerals * GAME.interestRate()) * GAME.mod('interestMult', 1));
       b.textContent = '▶ WAVE ' + GAME.wave + (interest > 0 ? ' (+' + interest + ' ¤)' : '');
       renderPreview();
       renderDirectives();
     } else {
       b.classList.add('hidden2');
-      $('btn-tech').classList.add('hidden2');
       $('wave-preview').innerHTML = '';
       $('directive-bar').innerHTML = '';
-      clearSel();
+    }
+    renderBuildBar();
+  }
+
+  function renderPreview() {
+    const box = $('wave-preview');
+    box.innerHTML = '<span style="opacity:.7">NEXT:</span>';
+    const comp = CONFIG.wave(GAME.level, GAME.wave);
+    const totals = {};
+    for (const grp of comp) totals[grp.type] = (totals[grp.type] || 0) + grp.count;
+    for (const type in totals) {
+      const d = CONFIG.ENEMIES[type];
+      const col = '#' + d.color.toString(16).padStart(6, '0');
+      box.appendChild(UTIL.h('span', 'wp-chip',
+        '<span style="color:' + col + '">' + d.ico + '</span> ' + d.name + ' <b>×' + totals[type] + '</b>' +
+        (d.target === 'workers' ? ' ⛏!' : '') + (d.target === 'buildings' ? ' 🏚' : '') + (d.boss ? ' ☠' : '')));
     }
   }
 
@@ -186,7 +205,7 @@ const UI = (function () {
     bar.appendChild(skip);
   }
 
-  // ---------------- SPIRE OS tech sheet ----------------
+  // ---------------- tech ----------------
   function renderTech() {
     const list = $('tech-list');
     list.innerHTML = '';
@@ -197,7 +216,7 @@ const UI = (function () {
         '<div class="th-body"><div class="th-name">' + t.name + '</div>' +
         '<div class="th-desc">' + t.desc + '</div></div>');
       const btn = UTIL.h('button', 'btn' + (owned ? '' : ' btn-primary'), owned ? '✓ OWNED' : '¤ ' + t.cost);
-      btn.disabled = owned || GAME.salvage < t.cost;
+      btn.disabled = owned || GAME.minerals < t.cost;
       btn.onclick = () => { if (GAME.buyTech(t)) renderTech(); };
       row.appendChild(btn);
       list.appendChild(row);
@@ -210,21 +229,6 @@ const UI = (function () {
     AUDIO.sfx.click();
   }
 
-  function renderPreview() {
-    const box = $('wave-preview');
-    box.innerHTML = '<span style="opacity:.7">NEXT:</span>';
-    const comp = CONFIG.wave(GAME.level, GAME.wave);
-    const totals = {};
-    for (const grp of comp) totals[grp.type] = (totals[grp.type] || 0) + grp.count;
-    for (const type in totals) {
-      const d = CONFIG.ENEMIES[type];
-      const col = '#' + d.color.toString(16).padStart(6, '0');
-      box.appendChild(UTIL.h('span', 'wp-chip',
-        '<span style="color:' + col + '">' + d.ico + '</span> ' + d.name + ' <b>×' + totals[type] + '</b>' +
-        (d.flying ? ' ✈' : '') + (d.boss ? ' ☠' : '')));
-    }
-  }
-
   // ---------------- feedback ----------------
   let bannerT = null;
   function banner(msg, warn) {
@@ -233,20 +237,12 @@ const UI = (function () {
     b.classList.toggle('warn', !!warn);
     b.classList.add('show');
     clearTimeout(bannerT);
-    bannerT = setTimeout(() => b.classList.remove('show'), 2200);
+    bannerT = setTimeout(() => b.classList.remove('show'), 2400);
   }
   function toast(msg, kind) {
     const t = UTIL.h('div', 'toast' + (kind ? ' ' + kind : ''), msg);
     $('toast-zone').appendChild(t);
     setTimeout(() => t.remove(), 2400);
-  }
-  let comboT = null;
-  function combo(msg) {
-    const c = $('combo-ind');
-    c.textContent = msg;
-    c.classList.add('show');
-    clearTimeout(comboT);
-    comboT = setTimeout(() => c.classList.remove('show'), 1400);
   }
   function hurt() {
     const h = $('hurt-vignette');
@@ -256,27 +252,30 @@ const UI = (function () {
 
   // ---------------- end screens ----------------
   function showEnd(won) {
+    INPUT.stopPlacing();
+    $('place-bar').classList.remove('show');
+    clearSel();
     const card = $('end-card');
     const s = GAME.stats;
     const lvl = GAME.level;
     card.innerHTML = '';
-    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'NODE SECURED' : 'CORE BREACHED'));
+    card.appendChild(UTIL.h('h2', won ? 'win' : 'lose', won ? 'OPERATION SECURED' : 'CORE BREACHED'));
     if (won) {
       const st = GAME.stars;
       card.appendChild(UTIL.h('div', '', '<span style="font-size:30px;letter-spacing:4px;color:#ffd166">' +
         '★'.repeat(st) + '<span style="opacity:.22">' + '★'.repeat(3 - st) + '</span></span>' +
         '<div style="font-size:9.5px;color:#5f89ad;letter-spacing:1px;margin-top:2px">' +
-        (st === 3 ? 'FLAWLESS — ZERO LEAKS' : st === 2 ? '3 LEAKS OR FEWER' : 'SECURED, BARELY') + '</div>'));
+        (st === 3 ? 'FLAWLESS — NO LEAKS, NO MINERS LOST' : st === 2 ? 'CORE HELD STRONG' : 'SECURED, BARELY') + '</div>'));
     }
     card.appendChild(UTIL.h('div', 'end-line',
-      'NODE ' + lvl.n + ' · ' + lvl.name + ' — ' +
+      'OP ' + lvl.n + ' · ' + lvl.name + ' — ' +
       (won ? 'all ' + lvl.waves + ' waves repelled.' : 'fell on wave ' + GAME.wave + ' of ' + lvl.waves + '.') +
-      '<br><b>' + s.kills + '</b> threats destroyed · <b>' + s.throws + '</b> thrown off the spire' +
-      '<br>gravity paid <b>¤ ' + s.fallSalvage + '</b> · interest paid <b>¤ ' + s.interest + '</b>' +
-      '<br>best launch combo <b>×' + s.bestCombo + '</b> · leaks ' + s.leaked));
+      '<br>mined <b>¤ ' + s.mined + '</b> · interest <b>¤ ' + s.interest + '</b> · ' + s.kills + ' kills' +
+      '<br>peak crew <b>' + s.peakWorkers + '</b> · miners lost ' + s.workersLost + ' · structures lost ' + s.buildingsLost +
+      '<br>core leaks ' + s.leaked));
     if (won && lvl.n < CONFIG.LEVELS.length) {
       const next = CONFIG.LEVELS[lvl.n];
-      const nx = UTIL.h('button', 'btn btn-primary', '▶ NODE ' + next.n + ' — ' + next.name);
+      const nx = UTIL.h('button', 'btn btn-primary', '▶ OP ' + next.n + ' — ' + next.name);
       nx.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(next.n); INPUT.focusBase(); };
       card.appendChild(nx);
     }
@@ -291,16 +290,16 @@ const UI = (function () {
       };
       card.appendChild(cont);
     }
-    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ RETRY NODE ' + lvl.n);
+    const again = UTIL.h('button', 'btn' + (won ? '' : ' btn-primary'), '↻ RETRY OP ' + lvl.n);
     again.onclick = () => { $('end-overlay').classList.remove('show'); GAME.start(lvl.n); INPUT.focusBase(); };
     card.appendChild(again);
-    const sel = UTIL.h('button', 'btn', 'NODE SELECT');
-    sel.onclick = () => { $('end-overlay').classList.remove('show'); openLevels(); };
-    card.appendChild(sel);
+    const sel2 = UTIL.h('button', 'btn', 'OPERATIONS');
+    sel2.onclick = () => { $('end-overlay').classList.remove('show'); openLevels(); };
+    card.appendChild(sel2);
     $('end-overlay').classList.add('show');
   }
 
-  // ---------------- node select ----------------
+  // ---------------- operation select ----------------
   function renderLevels() {
     const list = $('levels-list');
     list.innerHTML = '';
@@ -363,6 +362,16 @@ const UI = (function () {
       AUDIO.unlock();
       if ($('sheet-tech').classList.contains('open')) clearSel(); else openTech();
     };
+    $('btn-place-ok').onclick = () => {
+      const b = INPUT.confirmPlacing();
+      if (b) { $('place-bar').classList.remove('show'); renderBuildBar(); }
+    };
+    $('btn-place-cancel').onclick = () => {
+      INPUT.stopPlacing();
+      $('place-bar').classList.remove('show');
+      AUDIO.sfx.click();
+      renderBuildBar();
+    };
     $('btn-pause').onclick = () => { GAME.paused = true; $('pause-overlay').classList.add('show'); syncMuteLabel(); };
     $('btn-resume').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); };
     $('btn-restart').onclick = () => { GAME.paused = false; $('pause-overlay').classList.remove('show'); GAME.start(GAME.level ? GAME.level.n : 1); INPUT.focusBase(); };
@@ -375,10 +384,10 @@ const UI = (function () {
       AUDIO.sfx.click();
     };
     const cleared = SAVE.clearedCount();
-    $('btn-start').textContent = cleared ? '▶ CONTINUE — NODE ' + SAVE.state.furthest : 'DEFEND THE SPIRE';
-    $('title-best').textContent = cleared ? cleared + '/' + CONFIG.LEVELS.length + ' NODES SECURED' : '';
+    $('btn-start').textContent = cleared ? '▶ CONTINUE — OP ' + SAVE.state.furthest : 'DEPLOY';
+    $('title-best').textContent = cleared ? cleared + '/' + CONFIG.LEVELS.length + ' OPERATIONS SECURED' : '';
   }
   function syncMuteLabel() { $('btn-mute').textContent = 'SOUND: ' + (SAVE.state.muted ? 'OFF' : 'ON'); }
 
-  return { init, onTap, updateHUD, onPhase, banner, toast, combo, hurt, showEnd, clearSel, openLevels };
+  return { init, onTap, updateHUD, onPhase, banner, toast, hurt, showEnd, clearSel, openLevels };
 })();

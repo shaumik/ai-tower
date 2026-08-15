@@ -1,7 +1,7 @@
 /* NEURAL SPIRE — localStorage persistence: campaign progress + sound pref */
 'use strict';
 const SAVE = (function () {
-  const KEY = 'neural-spire-v2';
+  const KEY = 'harvest-protocol-v1';
   let state = { furthest: 1, levels: {}, muted: false };
   function load() {
     try {

@@ -24,7 +24,7 @@ body {
   padding:5px 8px; font-size:11.5px; font-weight:800;
 }
 .hud-stat .ico { font-size:12px; opacity:.9; }
-#hud-core .ico { color:#ff5d7a; } #hud-salvage .ico { color:#ffd166; }
+#hud-core .ico { color:#ff5d7a; } #hud-minerals .ico { color:#ffd166; } #hud-workers .ico { color:#9dffb0; }
 #hud-power .ico { color:#7fdcff; }
 #hud-core.low { animation:blink .6s steps(2) infinite; border-color:#ff5d7a; }
 #hud-power.full { border-color:#ffd166; }
@@ -139,13 +139,13 @@ body {
 .b-desc { font-size:11px; color:#7fa8c9; line-height:1.5; min-height:32px; margin-top:8px; }
 .b-confirm { margin-top:8px; width:100%; }
 
-#turret-body .t-head { display:flex; align-items:center; gap:10px; }
-#turret-body .t-ico { font-size:26px; }
-#turret-body .t-name { font-size:13px; font-weight:800; letter-spacing:1px; }
-#turret-body .t-lvl { font-size:10px; color:#ffd166; letter-spacing:2px; font-weight:800; }
-#turret-body .t-stats { font-size:11px; color:#7fa8c9; margin:7px 0 9px; line-height:1.5; }
-#turret-body .t-row { display:flex; gap:8px; }
-#turret-body .t-row .btn { flex:1; padding:11px 6px; font-size:11.5px; letter-spacing:1px; }
+#sel-body .t-head { display:flex; align-items:center; gap:10px; }
+#sel-body .t-ico { font-size:26px; }
+#sel-body .t-name { font-size:13px; font-weight:800; letter-spacing:1px; }
+#sel-body .t-lvl { font-size:10px; color:#ffd166; letter-spacing:2px; font-weight:800; }
+#sel-body .t-stats { font-size:11px; color:#7fa8c9; margin:7px 0 9px; line-height:1.5; }
+#sel-body .t-row { display:flex; gap:8px; }
+#sel-body .t-row .btn { flex:1; padding:11px 6px; font-size:11.5px; letter-spacing:1px; }
 .oc-active { border-color:#ffd166 !important; color:#ffd166; }
 
 /* ---------------- overlays ---------------- */
@@ -264,3 +264,29 @@ body {
 .lvl-meta .tw { color:#ffd166; }
 .lvl-stars { font-size:13px; color:#ffd166; flex-shrink:0; letter-spacing:1px; }
 .lvl-stars .off { opacity:.22; }
+
+/* ---- build bar (RTS): always available, horizontally scrollable ---- */
+#build-bar {
+  display:flex; gap:6px; overflow-x:auto; max-width:100%;
+  padding:2px 2px 4px; pointer-events:auto;
+}
+#build-bar .b-card { flex:0 0 76px; padding:6px 5px; }
+#build-bar .bc-ico { font-size:18px; }
+#build-bar .bc-name { font-size:8.5px; }
+#build-bar .bc-cost { font-size:10px; }
+#build-bar .bc-pow { font-size:8.5px; }
+
+/* ---- placement confirm bar ---- */
+#place-bar {
+  position:absolute; left:10px; right:10px; bottom:calc(env(safe-area-inset-bottom) + 12px);
+  z-index:30; display:none; gap:8px; align-items:center;
+  background:rgba(8,14,26,.97); border:1px solid #2a78be; border-radius:16px;
+  padding:9px 10px; box-shadow:0 -6px 24px rgba(0,0,0,.5);
+}
+#place-bar.show { display:flex; }
+#place-bar .btn { padding:10px 13px; font-size:11.5px; flex-shrink:0; }
+#place-hint {
+  flex:1; text-align:center; font-size:9px; letter-spacing:1px; color:#5f89ad;
+  font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#btn-tech { padding:12px 15px; }

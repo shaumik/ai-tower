@@ -1,4 +1,4 @@
-/* NEURAL SPIRE — bootstrap: renderer, scene, lights, loop */
+/* HARVEST PROTOCOL — bootstrap: renderer, scene, lights, loop */
 'use strict';
 (function () {
   SAVE.load();
@@ -9,33 +9,33 @@
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x04060c);
-  scene.fog = new THREE.Fog(0x04060c, 30, 75);
+  scene.fog = new THREE.Fog(0x04060c, 45, 95);
 
-  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 200);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 220);
 
-  // lighting: soft sky/ground hemisphere, cool key, blue rim
+  // lighting: soft hemisphere + cool key + blue rim, tuned for top-down
   scene.add(new THREE.HemisphereLight(0x4a6a9a, 0x0a0e1a, 0.95));
   scene.add(new THREE.AmbientLight(0x33455e, 0.55));
-  const key = new THREE.DirectionalLight(0xb8d4f0, 1.25);
-  key.position.set(8, 20, 12);
+  const key = new THREE.DirectionalLight(0xb8d4f0, 1.2);
+  key.position.set(10, 26, 8);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x3366cc, 0.85);
-  rim.position.set(-10, 8, -8);
+  const rim = new THREE.DirectionalLight(0x3366cc, 0.7);
+  rim.position.set(-12, 14, -10);
   scene.add(rim);
 
   GAME.scene = scene;
-  // title backdrop: node 1's spire
-  SPIRE.build(scene, CONFIG.LEVELS[0].seed, CONFIG.LEVELS[0].spire);
+  // title backdrop: operation 1's map
+  MAP.build(scene, CONFIG.LEVELS[0]);
   FX.init(scene);
   UI.init();
   INPUT.init(camera, canvas, UI.onTap);
+  INPUT.focusBase();
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // portrait-first: on narrow screens widen the vertical FOV so the spire fits
-    camera.fov = h > w ? 58 : 48;
+    camera.fov = h > w ? 50 : 42;
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
@@ -53,5 +53,5 @@
   requestAnimationFrame(loop);
 
   // debug/test hooks
-  window.__TD = { GAME, CONFIG, SPIRE, UI, INPUT, SAVE, scene, camera, renderer };
+  window.__TD = { GAME, CONFIG, MAP, UI, INPUT, SAVE, scene, camera, renderer };
 })();
