@@ -15,6 +15,7 @@ const GAME = (function () {
     spawnQueue: [],
     combatT: 0,
     prepT: 0,                  // build-phase countdown — waves launch themselves
+    recall: false,             // miners shelter at the core (greed vs safety)
     time: 0,
     speed: 1,
     paused: false,
@@ -241,6 +242,13 @@ const GAME = (function () {
     return true;
   }
   function skipDirectives() { g.dirOffer = null; UI.onPhase(); }
+
+  function toggleRecall() {
+    g.recall = !g.recall;
+    UI.toast(g.recall ? '⚠ MINERS RECALLED — INCOME PAUSED' : '⛏ MINING RESUMED', g.recall ? 'bad' : 'warn');
+    AUDIO.sfx.click();
+    UI.updateHUD();
+  }
   function buyTech(def) {
     if (g.tech[def.id] || g.minerals < def.cost) { AUDIO.sfx.error(); return false; }
     g.minerals -= def.cost;
@@ -309,6 +317,7 @@ const GAME = (function () {
     for (const d of g.activeDirs) d.wavesLeft--;
     g.activeDirs = g.activeDirs.filter(d => d.wavesLeft > 0);
     g.wave++;
+    g.recall = false;   // all clear — back to work
     if (!g.endless && g.wave > g.level.waves) { victoryEnd(); return; }
     g.phase = 'build';
     g.prepT = prepTime();
@@ -443,6 +452,7 @@ const GAME = (function () {
   g.pickDirective = pickDirective;
   g.skipDirectives = skipDirectives;
   g.buyTech = buyTech;
+  g.toggleRecall = toggleRecall;
   g.mod = mod;
   g.overclockCost = overclockCost;
   g.interestRate = interestRate;

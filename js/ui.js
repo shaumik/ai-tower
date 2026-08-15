@@ -147,6 +147,8 @@ const UI = (function () {
     $('v-wave').textContent = GAME.level
       ? ('W' + Math.min(GAME.wave, GAME.endless ? GAME.wave : W) + (GAME.endless ? '∞' : '/' + W))
       : '';
+    $('btn-recall').classList.toggle('oc-active', GAME.recall);
+    $('btn-recall').textContent = GAME.recall ? '⛏ RESUME' : '⚠';
     renderBuildBar();
     if (selected && $('sheet-sel').classList.contains('open')) renderSel();
     if ($('sheet-tech').classList.contains('open')) renderTech();
@@ -372,6 +374,12 @@ const UI = (function () {
     $('btn-tech').onclick = () => {
       AUDIO.unlock();
       if ($('sheet-tech').classList.contains('open')) clearSel(); else openTech();
+    };
+    $('btn-recall').onclick = () => {
+      AUDIO.unlock();
+      GAME.toggleRecall();
+      $('btn-recall').classList.toggle('oc-active', GAME.recall);
+      $('btn-recall').textContent = GAME.recall ? '⛏ RESUME' : '⚠';
     };
     $('btn-place-ok').onclick = () => {
       const b = INPUT.confirmPlacing();

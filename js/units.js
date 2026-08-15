@@ -82,6 +82,26 @@ const WORKER = (function () {
       const speedK = game.mod('mineSpeedMult', 1) * (game.tech.drills ? 1.12 : 1);
       const speed = 3.1 * speedK;
 
+      // recall: shelter at the core (finish the haul first — it's paid for)
+      if (game.recall && this.state !== 'toDrop' && this.state !== 'refuge') {
+        if (this.field) { this.field.workers.delete(this); this.field = null; }
+        const shelter = MAP.corePos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 4, 0, 2.5));
+        if (this.goTo(shelter)) this.state = 'refuge';
+      }
+      if (this.state === 'refuge') {
+        if (!game.recall) { this.state = 'idle'; return; }
+        if (this.path && this.pathI < this.path.length) {
+          const wp = this.path[this.pathI];
+          const p = this.mesh.position;
+          const dx = wp.x - p.x, dz = wp.z - p.z;
+          const d = Math.hypot(dx, dz);
+          const step = speed * dt;
+          if (d < 0.25 || step >= d) { p.x = wp.x; p.z = wp.z; this.pathI++; }
+          else { p.x += (dx / d) * step; p.z += (dz / d) * step; this.mesh.rotation.y = Math.atan2(dx, dz); }
+        }
+        return;
+      }
+
       if (this.state === 'idle') {
         this.field = this.pickField(game);
         if (this.field) {
