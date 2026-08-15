@@ -215,7 +215,7 @@ const CONFIG = (function () {
     else if (n === W) mult *= 1.4;
     else if (n === W - 1 && W > 5) mult *= 0.58;
     else if (n % 4 === 0) mult *= 1.22;
-    let budget = (8 + level.n * 1.1) * mult * (1 + Math.min(1.3, (0.05 + 0.011 * level.n) * (n - 1)));
+    let budget = (8 + level.n * 1.1) * mult * (1 + Math.min(1.15, (0.05 + 0.011 * level.n) * (n - 1)));
 
     const nBoss = (level.bosses && level.bosses[n]) || 0;
     for (let b = 0; b < nBoss; b++) G('boss', 1, 0, b * 9);
@@ -234,7 +234,7 @@ const CONFIG = (function () {
       let count = Math.min(maxN, def.pts >= 4 ? 2 + Math.floor(R() * 2) : (level.swarm ? 6 : 4) + Math.floor(R() * 4));
       let gap = def.pts >= 4 ? 2.6 : (def.speed > 2.4 ? 1.0 : 0.85);
       if (level.swarm) gap *= 0.85;
-      if (level.hot) gap *= 0.7;
+      if (level.hot) gap *= 0.78;
       gap *= Math.max(0.55, 1 - 0.02 * (level.n + n));
       G(type, count, gap, delay);
       budget -= count * def.pts;
