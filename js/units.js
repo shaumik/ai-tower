@@ -140,7 +140,7 @@ const WORKER = (function () {
         }
         this.mineT -= dt;
         if (this.mineT <= 0) {
-          const carryMax = ECO.workerCarry + (game.tech.drills ? 4 : 0);
+          const carryMax = ECO.workerCarry + (game.tech.drills ? 6 : 0);
           this.carry = MAP.mineFrom(this.field, carryMax);
           this.mesh.userData.load.visible = true;
           this.field.workers.delete(this);

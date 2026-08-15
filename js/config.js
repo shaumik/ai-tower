@@ -10,7 +10,7 @@ const CONFIG = (function () {
     coreHP: 20,
     powerBase: 6,          // power supplied by the core itself
     workerCost: 50,
-    workerCarry: 8,        // minerals per trip
+    workerCarry: 12,       // minerals per trip
     workerCapBase: 4,      // +2 per depot
     workerHP: 24,
     mineTime: 1.6,         // seconds at the crystal per load
@@ -73,11 +73,11 @@ const CONFIG = (function () {
   // ---------------- enemies ----------------
   // target: core | workers | buildings. pts = encounter-budget cost.
   const ENEMIES = {
-    crawler:  { name: 'Crawler', ico: '●', color: 0xff6a4d, hp: 26,  speed: 1.5, scrap: 3, size: 0.42, dmg: 1, pts: 1.0, target: 'core' },
-    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 15,  speed: 2.6, scrap: 4, size: 0.34, dmg: 1, pts: 1.4, target: 'core' },
-    raider:   { name: 'Raider',  ico: '✕', color: 0x9dff5d, hp: 24,  speed: 2.9, scrap: 5, size: 0.36, dmg: 8, pts: 2.0, target: 'workers', atkRate: 0.8 },
-    brute:    { name: 'Brute',   ico: '■', color: 0xff3d6e, hp: 120, speed: 0.9, scrap: 10, size: 0.62, dmg: 8, pts: 4.5, target: 'buildings', armor: 2, atkRate: 0.6 },
-    boss:     { name: 'ARCHON',  ico: '◆', color: 0xff2255, hp: 1100, speed: 0.75, scrap: 60, size: 1.0, dmg: 4, pts: 0, target: 'core', armor: 4, boss: true, wallBreaker: 3 },
+    crawler:  { name: 'Crawler', ico: '●', color: 0xff6a4d, hp: 26,  speed: 1.5, scrap: 3, size: 0.42, dmg: 1, coreDmg: 1, pts: 1.0, target: 'core' },
+    sprinter: { name: 'Sprinter', ico: '▲', color: 0xffd166, hp: 15,  speed: 2.6, scrap: 4, size: 0.34, dmg: 1, coreDmg: 1, pts: 1.4, target: 'core' },
+    raider:   { name: 'Raider',  ico: '✕', color: 0x9dff5d, hp: 24,  speed: 2.9, scrap: 5, size: 0.36, dmg: 8, coreDmg: 1, pts: 2.0, target: 'workers', atkRate: 0.8 },
+    brute:    { name: 'Brute',   ico: '■', color: 0xff3d6e, hp: 120, speed: 0.9, scrap: 10, size: 0.62, dmg: 8, coreDmg: 2, pts: 4.5, target: 'buildings', armor: 2, atkRate: 0.6 },
+    boss:     { name: 'ARCHON',  ico: '◆', color: 0xff2255, hp: 1100, speed: 0.75, scrap: 60, size: 1.0, dmg: 6, coreDmg: 4, pts: 0, target: 'core', armor: 4, boss: true, wallBreaker: 3 },
   };
 
   // ---------------- the campaign: 9 authored operations ----------------
@@ -261,7 +261,7 @@ const CONFIG = (function () {
     { id: 'coretap',  ico: '⚡', name: 'CORE TAP',          cost: 150, desc: '+3 power from the core.' },
     { id: 'compound', ico: '¤',  name: 'COMPOUND PROTOCOL', cost: 200, desc: 'Interest 8% → 12%, cap ¤40 → ¤80.' },
     { id: 'lenses',   ico: '✛',  name: 'FOCUS LENSES',      cost: 180, desc: 'Cannons and Arc Nodes +25% damage.' },
-    { id: 'drills',   ico: '⛏', name: 'PLASMA DRILLS',     cost: 160, desc: 'Miners mine 25% faster and carry +4.' },
+    { id: 'drills',   ico: '⛏', name: 'PLASMA DRILLS',     cost: 160, desc: 'Miners mine 25% faster and carry +6.' },
     { id: 'plating',  ico: '▦',  name: 'HARDENED PLATING',  cost: 140, desc: 'Buildings and walls +40% integrity (new and existing).' },
     { id: 'cycles',   ico: '➤',  name: 'QUICK CYCLES',      cost: 120, desc: 'Overclock costs ¤15 and cools 6s faster.' },
   ];

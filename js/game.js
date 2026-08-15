@@ -74,7 +74,7 @@ const GAME = (function () {
     return (g.level && g.level.buildings) || CONFIG.BUILD_ORDER;
   }
   function miningRate() {   // rough ¤/min estimate for the HUD
-    const carry = ECO.workerCarry + (g.tech.drills ? 4 : 0);
+    const carry = ECO.workerCarry + (g.tech.drills ? 6 : 0);
     let rate = 0;
     for (const w of g.workers) if (w.alive) rate += carry / 14; // ~14s round trip typical
     return Math.round(rate * 60 * mod('mineMult', 1));
@@ -378,7 +378,7 @@ const GAME = (function () {
     UI.updateHUD();
   }
   function onCoreHit(e) {
-    g.coreHP -= e.def.dmg;
+    g.coreHP -= (e.def.coreDmg || 1);
     g.stats.leaked++;
     MAP.coreHitFlash();
     AUDIO.sfx.leak();
