@@ -6,21 +6,30 @@
   const canvas = UTIL.el('gl');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x04060c);
-  scene.fog = new THREE.Fog(0x04060c, 45, 95);
+  scene.background = new THREE.Color(0x070911);
+  scene.fog = new THREE.Fog(0x070911, 50, 100);
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 220);
 
-  // lighting: soft hemisphere + cool key + blue rim, tuned for top-down
-  scene.add(new THREE.HemisphereLight(0x4a6a9a, 0x0a0e1a, 0.95));
-  scene.add(new THREE.AmbientLight(0x33455e, 0.55));
-  const key = new THREE.DirectionalLight(0xb8d4f0, 1.2);
-  key.position.set(10, 26, 8);
+  // low-poly stage lighting: soft sky bounce, one warm shadow-casting key,
+  // cool rim. Shadows are what make simple geometry read as objects.
+  scene.add(new THREE.HemisphereLight(0x5a7ab0, 0x171020, 0.85));
+  scene.add(new THREE.AmbientLight(0x2c3a52, 0.5));
+  const key = new THREE.DirectionalLight(0xffe8cf, 1.5);
+  key.position.set(16, 34, 10);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.camera.left = -34; key.shadow.camera.right = 34;
+  key.shadow.camera.top = 40; key.shadow.camera.bottom = -40;
+  key.shadow.camera.near = 4; key.shadow.camera.far = 90;
+  key.shadow.bias = -0.0012;
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x3366cc, 0.7);
-  rim.position.set(-12, 14, -10);
+  const rim = new THREE.DirectionalLight(0x4d7ddb, 0.55);
+  rim.position.set(-14, 16, -12);
   scene.add(rim);
 
   GAME.scene = scene;

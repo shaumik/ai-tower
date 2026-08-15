@@ -20,34 +20,90 @@ const ENEMY = (function () {
     return glowTex;
   }
 
+  function flat(color, opts) {
+    return new THREE.MeshStandardMaterial(Object.assign({
+      color, flatShading: true, roughness: 0.55, metalness: 0.1,
+    }, opts || {}));
+  }
+
+  // composed creature silhouettes — each threat readable at a glance
   function makeMesh(def) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: def.color, emissive: def.color, emissiveIntensity: 0.85, roughness: 0.4,
-    });
+    const s = def.size;
+    const mat = flat(def.color, { emissive: def.color, emissiveIntensity: 0.55 });
+    const darkMat = flat(0x1a1420, { roughness: 0.8 });
     let body;
+
     if (def.boss) {
-      body = new THREE.Mesh(new THREE.IcosahedronGeometry(def.size, 0), mat);
-      const spikes = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(def.size * 1.35, 0),
-        new THREE.MeshBasicMaterial({ color: def.color, wireframe: true, transparent: true, opacity: 0.6 })
-      );
-      g.add(spikes); g.userData.spin = spikes;
+      body = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), mat);
+      body.position.y = s + 0.35;
+      const shards = new THREE.Group();
+      for (let k = 0; k < 5; k++) {
+        const sh = new THREE.Mesh(new THREE.TetrahedronGeometry(s * 0.28), flat(def.color, { emissive: def.color, emissiveIntensity: 0.9 }));
+        const a = (k / 5) * Math.PI * 2;
+        sh.position.set(Math.sin(a) * s * 1.7, s + 0.35 + Math.sin(a * 2) * 0.3, Math.cos(a) * s * 1.7);
+        sh.castShadow = true;
+        shards.add(sh);
+      }
+      g.add(shards);
+      g.userData.spin = shards;
     } else if (def.target === 'workers') {
-      body = new THREE.Mesh(new THREE.TetrahedronGeometry(def.size * 1.1), mat);
+      // raider: swept dart with wing blades
+      body = new THREE.Mesh(new THREE.ConeGeometry(s * 0.62, s * 2.5, 4), mat);
+      body.rotation.x = Math.PI / 2;
+      body.position.y = s + 0.25;
+      for (const side of [-1, 1]) {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(s * 1.7, 0.05, s * 0.62), darkMat);
+        wing.position.set(side * s * 0.85, s + 0.2, -s * 0.35);
+        wing.rotation.z = side * 0.35;
+        wing.castShadow = true;
+        g.add(wing);
+      }
     } else if (def.armor) {
-      body = new THREE.Mesh(new THREE.DodecahedronGeometry(def.size), mat);
+      // brute: slab torso with shoulder plates and a head nub
+      body = new THREE.Mesh(new THREE.BoxGeometry(s * 1.5, s * 1.7, s * 1.2), mat);
+      body.position.y = s * 1.05;
+      for (const side of [-1, 1]) {
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(s * 0.5, s * 1.1, s * 1.35), darkMat);
+        plate.position.set(side * s * 1.0, s * 1.25, 0);
+        plate.rotation.z = side * -0.16;
+        plate.castShadow = true;
+        g.add(plate);
+      }
+      const head = new THREE.Mesh(new THREE.BoxGeometry(s * 0.55, s * 0.4, s * 0.5), darkMat);
+      head.position.set(0, s * 2.1, s * 0.45);
+      head.castShadow = true;
+      g.add(head);
+    } else if (def.speed > 2) {
+      // sprinter: low dart with a tail fin
+      body = new THREE.Mesh(new THREE.ConeGeometry(s * 0.75, s * 2.6, 5), mat);
+      body.rotation.x = Math.PI / 2;
+      body.position.y = s * 0.8;
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.05, s * 0.95, s * 0.8), darkMat);
+      fin.position.set(0, s * 1.15, -s * 0.85);
+      fin.castShadow = true;
+      g.add(fin);
     } else {
-      body = new THREE.Mesh(new THREE.IcosahedronGeometry(def.size, 1), mat);
+      // crawler: humped shell with leg nubs
+      body = new THREE.Mesh(new THREE.SphereGeometry(s, 8, 6), mat);
+      body.scale.y = 0.72;
+      body.position.y = s * 0.72;
+      for (let k = 0; k < 4; k++) {
+        const leg = new THREE.Mesh(new THREE.SphereGeometry(s * 0.28, 6, 5), darkMat);
+        const a = (k / 4) * Math.PI * 2 + 0.4;
+        leg.position.set(Math.sin(a) * s * 0.85, s * 0.22, Math.cos(a) * s * 0.85);
+        leg.castShadow = true;
+        g.add(leg);
+      }
     }
-    body.position.y = def.size + 0.1;
+    body.castShadow = true;
     g.add(body);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.5,
+      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.32,
       blending: THREE.AdditiveBlending, depthWrite: false,
     }));
-    halo.scale.setScalar(def.size * (def.boss ? 6 : 4.5));
-    halo.position.y = def.size + 0.1;
+    halo.scale.setScalar(s * (def.boss ? 6 : 4.2));
+    halo.position.y = s + 0.1;
     g.add(halo);
     g.userData.body = body;
     g.userData.mat = mat;

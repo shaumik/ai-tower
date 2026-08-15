@@ -1,16 +1,16 @@
-/* HARVEST PROTOCOL — the map: ground, rocks, crystal fields, gates, core,
-   plus the navigation grid (flowfield to the core, A* for point-to-point).
-   Portrait battlefield: gates on the north edge, your core in the south. */
+/* HARVEST PROTOCOL — the map: sculpted low-poly ground, rocks, crystal
+   fields, gates, core, plus the navigation grid (flowfield to the core,
+   A* for point-to-point). Portrait battlefield: gates north, core south. */
 'use strict';
 const MAP = (function () {
-  const CS = 1.6;                 // grid cell size
+  const CS = 1.6;
   let scene = null, group = null;
   let W = 34, H = 52, cols = 0, rows = 0;
-  let blocked = null;             // static blockers: rocks (+ walls via addBlock)
-  let flow = null;                // per-cell step direction toward the core
-  let fields = [];                // { pos, reserves, max, crystals[], workers:Set }
-  let gates = [];                 // { pos }
-  let corePos = null, coreMesh = null, coreLight = null;
+  let blocked = null;
+  let flow = null;
+  let fields = [];
+  let gates = [];
+  let corePos = null, coreMesh = null, coreLight = null, coreRing = null;
 
   // ---------------- grid helpers ----------------
   const idx = (cx, cz) => cz * cols + cx;
@@ -27,7 +27,6 @@ const MAP = (function () {
   function addBlock(x, z) { const c = worldToCell(x, z); blocked[idx(c.cx, c.cz)]++; rebuildFlow(); return c; }
   function removeBlock(cx, cz) { blocked[idx(cx, cz)] = Math.max(0, blocked[idx(cx, cz)] - 1); rebuildFlow(); }
 
-  // BFS flowfield toward the core: each cell stores the next cell to step to
   function rebuildFlow() {
     flow = new Int32Array(cols * rows).fill(-1);
     const cc = worldToCell(corePos.x, corePos.z);
@@ -43,14 +42,13 @@ const MAP = (function () {
         if (nx < 0 || nz < 0 || nx >= cols || nz >= rows) continue;
         const ni = idx(nx, nz);
         if (seen[ni] || blocked[ni]) continue;
-        if (dx && dz && (blocked[idx(cx + dx, cz)] || blocked[idx(cx, cz + dz)])) continue; // no corner cutting
+        if (dx && dz && (blocked[idx(cx + dx, cz)] || blocked[idx(cx, cz + dz)])) continue;
         seen[ni] = 1;
         flow[ni] = cur;
         q.push(ni);
       }
     }
   }
-  // next waypoint toward the core from world pos; null = no path (walled off)
   function flowStep(x, z) {
     const c = worldToCell(x, z);
     const next = flow[idx(c.cx, c.cz)];
@@ -59,11 +57,9 @@ const MAP = (function () {
     return new THREE.Vector3(w.x, 0, w.z);
   }
 
-  // A* for point-to-point (workers, raiders); returns [Vector3] or null
   function findPath(x0, z0, x1, z1) {
     const s = worldToCell(x0, z0), t = worldToCell(x1, z1);
     if (isBlocked(t.cx, t.cz)) {
-      // nudge target to nearest free neighbour
       let found = false;
       for (let r = 1; r <= 3 && !found; r++) {
         for (let dx = -r; dx <= r && !found; dx++) for (let dz = -r; dz <= r && !found; dz++) {
@@ -101,39 +97,16 @@ const MAP = (function () {
         from.set(ni, idx(cx, cz));
         open.push([ng + h(nx, nz), nx, nz]);
       }
-      if (g.size > 2600) return null; // safety valve
+      if (g.size > 2600) return null;
     }
     return null;
   }
 
   // ---------------- visuals ----------------
-  function groundTexture(seedR) {
-    const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 512;
-    const c = cv.getContext('2d');
-    c.fillStyle = '#0a1120';
-    c.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 900; i++) {
-      c.fillStyle = seedR() < 0.5 ? 'rgba(20,32,58,0.5)' : 'rgba(6,10,20,0.6)';
-      const s = 2 + seedR() * 8;
-      c.fillRect(seedR() * 512, seedR() * 512, s, s);
-    }
-    c.strokeStyle = 'rgba(42,120,190,0.13)'; c.lineWidth = 1;
-    for (let p = 0; p <= 512; p += 32) {
-      c.beginPath(); c.moveTo(0, p); c.lineTo(512, p); c.stroke();
-      c.beginPath(); c.moveTo(p, 0); c.lineTo(p, 512); c.stroke();
-    }
-    const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(W / 16, H / 16);
-    return tex;
-  }
-
-  function makeCrystal(scale, mat) {
-    const m = new THREE.Mesh(new THREE.ConeGeometry(0.32 * scale, 1.1 * scale, 5), mat);
-    m.rotation.x = (Math.random() - 0.5) * 0.35;
-    m.rotation.z = (Math.random() - 0.5) * 0.35;
-    return m;
+  function flatMat(color, opts) {
+    return new THREE.MeshStandardMaterial(Object.assign({
+      color, flatShading: true, roughness: 0.85, metalness: 0.08,
+    }, opts || {}));
   }
 
   function dispose() {
@@ -159,71 +132,108 @@ const MAP = (function () {
     cols = Math.ceil(W / CS); rows = Math.ceil(H / CS);
     blocked = new Uint8Array(cols * rows);
     const R = UTIL.rng(level.seed);
+    corePos = new THREE.Vector3(0, 0, H / 2 - 5);
 
-    // ground
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(W, H),
-      new THREE.MeshStandardMaterial({ map: groundTexture(R), roughness: 0.95, metalness: 0.1 })
-    );
-    ground.rotation.x = -Math.PI / 2;
+    // ---- terrain: gently sculpted, vertex-colored, flat-shaded ----
+    const segX = Math.round(W / 1.4), segZ = Math.round(H / 1.4);
+    const gGeo = new THREE.PlaneGeometry(W, H, segX, segZ);
+    gGeo.rotateX(-Math.PI / 2);
+    const pos = gGeo.getAttribute('position');
+    const colors = new Float32Array(pos.count * 3);
+    const base = new THREE.Color(0x141b2f);
+    const soil = new THREE.Color(0x1a2138);
+    const vein = new THREE.Color(0x1c3a4a);
+    const scorch = new THREE.Color(0x241423);
+    const c0 = new THREE.Color();
+    const fieldPts = def.fields.map(f => ({ x: (f.x - 0.5) * W, z: (f.y - 0.5) * H }));
+    const gatePts = def.gates.map(gx => ({ x: (gx - 0.5) * W, z: -H / 2 + 1.2 }));
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i), vz = pos.getZ(i);
+      // soft height noise, flattened near the core and gates
+      let hgt = (R() - 0.5) * 0.34;
+      const dCore = Math.hypot(vx - corePos.x, vz - corePos.z);
+      if (dCore < 7) hgt *= dCore / 7;
+      for (const gp of gatePts) { const d = Math.hypot(vx - gp.x, vz - gp.z); if (d < 6) hgt *= d / 6; }
+      pos.setY(i, hgt - 0.05);
+      // color: mottled soil, teal veins near crystal fields, warm stain at gates
+      c0.copy(base).lerp(soil, R());
+      for (const fp of fieldPts) {
+        const d = Math.hypot(vx - fp.x, vz - fp.z);
+        if (d < 7) c0.lerp(vein, (1 - d / 7) * 0.75);
+      }
+      for (const gp of gatePts) {
+        const d = Math.hypot(vx - gp.x, vz - gp.z);
+        if (d < 7) c0.lerp(scorch, (1 - d / 7) * 0.7);
+      }
+      colors[i * 3] = c0.r; colors[i * 3 + 1] = c0.g; colors[i * 3 + 2] = c0.b;
+    }
+    gGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    gGeo.computeVertexNormals();
+    const ground = new THREE.Mesh(gGeo, new THREE.MeshStandardMaterial({
+      vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0.02,
+    }));
+    ground.receiveShadow = true;
     group.add(ground);
-    // out-of-bounds apron fades to darkness
-    const apron = new THREE.Mesh(
-      new THREE.PlaneGeometry(W * 4, H * 4),
-      new THREE.MeshBasicMaterial({ color: 0x04070e })
-    );
+    // void apron beyond the play area
+    const apron = new THREE.Mesh(new THREE.PlaneGeometry(W * 4, H * 4), new THREE.MeshBasicMaterial({ color: 0x05070d }));
     apron.rotation.x = -Math.PI / 2;
-    apron.position.y = -0.06;
+    apron.position.y = -0.6;
     group.add(apron);
-    // border glow
+    // border light rail
     const border = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-W / 2, 0.05, -H / 2), new THREE.Vector3(W / 2, 0.05, -H / 2),
-        new THREE.Vector3(W / 2, 0.05, H / 2), new THREE.Vector3(-W / 2, 0.05, H / 2),
+        new THREE.Vector3(-W / 2, 0.25, -H / 2), new THREE.Vector3(W / 2, 0.25, -H / 2),
+        new THREE.Vector3(W / 2, 0.25, H / 2), new THREE.Vector3(-W / 2, 0.25, H / 2),
       ]),
-      new THREE.LineBasicMaterial({ color: 0x2a78be, transparent: true, opacity: 0.6 })
+      new THREE.LineBasicMaterial({ color: 0x2a78be, transparent: true, opacity: 0.45 })
     );
     group.add(border);
 
-    // core (south center)
-    corePos = new THREE.Vector3(0, 0, H / 2 - 5);
-    const coreBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.4, 2.9, 0.8, 8),
-      new THREE.MeshStandardMaterial({ color: 0x1c2a45, roughness: 0.6, metalness: 0.5 })
-    );
-    coreBase.position.set(corePos.x, 0.4, corePos.z);
-    group.add(coreBase);
+    // ---- the core: octagon platform, dome, orbit ring, mast ----
+    const plat = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.5, 0.7, 8), flatMat(0x232d47, { metalness: 0.3, roughness: 0.6 }));
+    plat.position.set(corePos.x, 0.35, corePos.z);
+    plat.castShadow = plat.receiveShadow = true;
+    group.add(plat);
+    const step = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.5, 0.5, 8), flatMat(0x2c3a58, { metalness: 0.3, roughness: 0.55 }));
+    step.position.set(corePos.x, 0.95, corePos.z);
+    step.castShadow = true;
+    group.add(step);
     coreMesh = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.35, 1),
-      new THREE.MeshStandardMaterial({ color: 0x66ddff, emissive: 0x2299dd, emissiveIntensity: 1.5, roughness: 0.25 })
+      new THREE.SphereGeometry(1.35, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      new THREE.MeshStandardMaterial({ color: 0x8fe6ff, emissive: 0x2aa8e0, emissiveIntensity: 1.1, roughness: 0.25, metalness: 0.1 })
     );
-    coreMesh.position.set(corePos.x, 2.1, corePos.z);
+    coreMesh.position.set(corePos.x, 1.2, corePos.z);
+    coreMesh.castShadow = true;
     coreMesh.userData.isCore = true;
     group.add(coreMesh);
-    const cage = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.85, 0),
-      new THREE.MeshBasicMaterial({ color: 0x2a78be, wireframe: true, transparent: true, opacity: 0.45 })
-    );
-    cage.position.copy(coreMesh.position);
-    coreMesh.userData.cage = cage;
-    group.add(cage);
-    coreLight = new THREE.PointLight(0x55ccff, 1.6, 24);
+    coreRing = new THREE.Mesh(new THREE.TorusGeometry(1.9, 0.09, 8, 32), flatMat(0x3f9be8, { emissive: 0x1d4a75, emissiveIntensity: 1, metalness: 0.4, roughness: 0.4 }));
+    coreRing.rotation.x = Math.PI / 2.4;
+    coreRing.position.set(corePos.x, 2.2, corePos.z);
+    group.add(coreRing);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 2.4, 6), flatMat(0x36466a));
+    mast.position.set(corePos.x + 1.9, 1.8, corePos.z + 1.4);
+    mast.castShadow = true;
+    group.add(mast);
+    coreLight = new THREE.PointLight(0x55ccff, 1.4, 22);
     coreLight.position.set(corePos.x, 4, corePos.z);
     group.add(coreLight);
 
-    // rocks: blocking clusters, kept off the core/gate approaches' immediate area
-    const rockMat = new THREE.MeshStandardMaterial({ color: 0x18243c, roughness: 0.9, metalness: 0.2 });
+    // ---- rocks: stacked flat-shaded chunks ----
     for (let i = 0; i < def.rocks; i++) {
       const rx = (R() - 0.5) * (W - 8);
       const rz = -H / 2 + 8 + R() * (H - 20);
       if (Math.hypot(rx - corePos.x, rz - corePos.z) < 8) continue;
       const cluster = new THREE.Group();
       const n = 2 + Math.floor(R() * 3);
+      const tone = 0.85 + R() * 0.4;
       for (let k = 0; k < n; k++) {
-        const s = 0.8 + R() * 1.1;
-        const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), rockMat);
-        rock.position.set(rx + (R() - 0.5) * 2.2, s * 0.55, rz + (R() - 0.5) * 2.2);
+        const s = 0.7 + R() * 1.2;
+        const col = new THREE.Color(0x222c46).multiplyScalar(tone * (0.85 + R() * 0.3));
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), flatMat(col.getHex()));
+        rock.position.set(rx + (R() - 0.5) * 2.4, s * 0.5, rz + (R() - 0.5) * 2.4);
         rock.rotation.set(R() * 3, R() * 3, R() * 3);
+        rock.scale.y = 0.7 + R() * 0.5;
+        rock.castShadow = rock.receiveShadow = true;
         cluster.add(rock);
         const c = worldToCell(rock.position.x, rock.position.z);
         blocked[idx(c.cx, c.cz)] = 1;
@@ -231,28 +241,39 @@ const MAP = (function () {
       group.add(cluster);
     }
 
-    // crystal fields
+    // ---- crystal fields: shard clusters with rubble ----
     for (const f of def.fields) {
       const fx = (f.x - 0.5) * W;
-      const fz = (f.y - 0.5) * H;    // def y: 0=north (gates) … 1=south (core)
+      const fz = (f.y - 0.5) * H;
       const field = {
         pos: new THREE.Vector3(fx, 0, fz),
         reserves: f.r, max: f.r,
         crystals: [], workers: new Set(),
         mesh: new THREE.Group(),
       };
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0x7fdcff, emissive: 0x2aa8ff, emissiveIntensity: 0.9,
-        roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.95,
+      const shardMat = new THREE.MeshStandardMaterial({
+        color: 0x9ff0ff, emissive: 0x1e9cd8, emissiveIntensity: 0.85,
+        flatShading: true, roughness: 0.15, metalness: 0.05, transparent: true, opacity: 0.96,
       });
-      const n = 5 + Math.floor(R() * 3);
+      const n = 6 + Math.floor(R() * 4);
       for (let k = 0; k < n; k++) {
-        const cr = makeCrystal(0.9 + R() * 0.9, mat);
-        cr.position.set(fx + (R() - 0.5) * 3.2, 0.5, fz + (R() - 0.5) * 3.2);
-        field.crystals.push(cr);
-        field.mesh.add(cr);
+        const hgt = 0.9 + R() * 1.7;
+        const shard = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.28 + R() * 0.14, hgt, 5), shardMat);
+        const a = R() * Math.PI * 2, rr = R() * 2.6;
+        shard.position.set(fx + Math.sin(a) * rr, hgt * 0.42, fz + Math.cos(a) * rr);
+        shard.rotation.set((R() - 0.5) * 0.55, R() * 3, (R() - 0.5) * 0.55);
+        shard.castShadow = true;
+        field.crystals.push(shard);
+        field.mesh.add(shard);
       }
-      const glow = new THREE.PointLight(0x2aa8ff, 0.8, 9);
+      for (let k = 0; k < 5; k++) {
+        const peb = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16 + R() * 0.14, 0), flatMat(0x24405c));
+        const a = R() * Math.PI * 2, rr = 1 + R() * 3;
+        peb.position.set(fx + Math.sin(a) * rr, 0.1, fz + Math.cos(a) * rr);
+        peb.castShadow = true;
+        field.mesh.add(peb);
+      }
+      const glow = new THREE.PointLight(0x2aa8ff, 0.75, 9);
       glow.position.set(fx, 2, fz);
       field.mesh.add(glow);
       field.light = glow;
@@ -260,16 +281,30 @@ const MAP = (function () {
       fields.push(field);
     }
 
-    // gates on the north edge
-    const gateMat = new THREE.MeshBasicMaterial({ color: 0xff3d6e });
+    // ---- gates: pylon arches with an inner glow ----
     for (const gx of def.gates) {
       const x = (gx - 0.5) * W;
       const z = -H / 2 + 1.2;
-      const arch = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.16, 8, 24, Math.PI), gateMat);
-      arch.position.set(x, 0.1, z);
-      group.add(arch);
-      const gl = new THREE.PointLight(0xff3050, 0.8, 10);
-      gl.position.set(x, 2, z);
+      const pyl = flatMat(0x2c2033, { metalness: 0.3, roughness: 0.6 });
+      for (const side of [-1, 1]) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.55), pyl);
+        p.position.set(x + side * 1.7, 1.3, z);
+        p.rotation.y = 0.4 * side;
+        p.castShadow = true;
+        group.add(p);
+      }
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.45, 0.6), pyl);
+      lintel.position.set(x, 2.75, z);
+      lintel.castShadow = true;
+      group.add(lintel);
+      const maw = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.1, 2.3),
+        new THREE.MeshBasicMaterial({ color: 0xff2f55, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+      );
+      maw.position.set(x, 1.35, z);
+      group.add(maw);
+      const gl = new THREE.PointLight(0xff3050, 0.9, 11);
+      gl.position.set(x, 2, z + 1.5);
       group.add(gl);
       gates.push({ pos: new THREE.Vector3(x, 0, z + 1) });
     }
@@ -277,7 +312,6 @@ const MAP = (function () {
     rebuildFlow();
   }
 
-  // deplete crystals visually as reserves drain
   function mineFrom(field, amount) {
     const got = Math.min(field.reserves, amount);
     field.reserves -= got;
@@ -287,7 +321,7 @@ const MAP = (function () {
       const keep = (i + 1) / field.crystals.length <= k + 0.15;
       cr.scale.setScalar(Math.max(0.18, k * (keep ? 1 : 0.5)));
     }
-    if (field.light) field.light.intensity = 0.15 + k * 0.7;
+    if (field.light) field.light.intensity = 0.15 + k * 0.6;
     return got;
   }
   function richestField() {
@@ -301,15 +335,16 @@ const MAP = (function () {
   function update(dt) {
     t += dt;
     if (coreMesh) {
-      coreMesh.rotation.y += dt * 0.5;
-      coreMesh.userData.cage.rotation.y -= dt * 0.3;
-      coreLight.intensity = 1.5 + Math.sin(t * 2.2) * 0.25;
+      coreMesh.rotation.y += dt * 0.4;
+      coreRing.rotation.z += dt * 0.5;
+      coreLight.intensity = 1.3 + Math.sin(t * 2.2) * 0.2;
+      coreMesh.material.emissiveIntensity = 1.0 + Math.sin(t * 2.2) * 0.15;
     }
   }
   function coreHitFlash() {
     if (!coreMesh) return;
     coreMesh.material.emissive.setHex(0xff2244);
-    setTimeout(() => coreMesh && coreMesh.material.emissive.setHex(0x2299dd), 160);
+    setTimeout(() => coreMesh && coreMesh.material.emissive.setHex(0x2aa8e0), 160);
   }
 
   return {

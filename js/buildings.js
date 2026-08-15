@@ -16,64 +16,147 @@ const BUILDING = (function () {
     return u ? Math.round(def.cost * u.cost) : null;
   }
 
+  function flat(color, opts) {
+    return new THREE.MeshStandardMaterial(Object.assign({
+      color, flatShading: true, roughness: 0.6, metalness: 0.25,
+    }, opts || {}));
+  }
+  function shadowed(m) { m.castShadow = true; m.receiveShadow = true; return m; }
+
+  // composed low-poly models: silhouettes come from parts, not one primitive
   function makeMesh(type, def) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x223350, emissive: def.color, emissiveIntensity: 0.5, roughness: 0.35, metalness: 0.5,
-    });
+    const accent = flat(0x33415f, { emissive: def.color, emissiveIntensity: 0.5, roughness: 0.4 });
+    const hull = flat(0x2a3450, { metalness: 0.35 });
+    const dark = flat(0x1b2338);
+
     if (type === 'wall') {
-      const w = new THREE.Mesh(
-        new THREE.BoxGeometry(MAP.CS * 0.92, 1.5, MAP.CS * 0.92),
-        new THREE.MeshStandardMaterial({ color: 0x2c3c5c, roughness: 0.7, metalness: 0.4, emissive: 0x101b30, emissiveIntensity: 1 })
-      );
-      w.position.y = 0.75;
+      const w = shadowed(new THREE.Mesh(new THREE.BoxGeometry(MAP.CS * 0.94, 1.3, MAP.CS * 0.94),
+        flat(0x323f5e, { emissive: 0x0d1626, emissiveIntensity: 1, metalness: 0.3, roughness: 0.65 })));
+      w.position.y = 0.65;
       g.add(w);
+      for (const sx of [-0.42, 0.42]) {
+        const tooth = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, MAP.CS * 0.94), flat(0x3d4c70)));
+        tooth.position.set(sx, 1.45, 0);
+        g.add(tooth);
+      }
       g.userData.head = w; g.userData.mat = w.material;
       return g;
     }
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.55, 0.68, 0.35, 6),
-      new THREE.MeshStandardMaterial({ color: 0x1c2b47, roughness: 0.5, metalness: 0.6 })
-    );
-    base.position.y = 0.2;
-    g.add(base);
+
+    // shared footing: hex pad + skirt
+    const pad = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.85, 0.3, 6), dark));
+    pad.position.y = 0.15;
+    g.add(pad);
+
     let head;
     if (type === 'cannon') {
-      head = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.95, 8), mat);
-      head.rotation.x = Math.PI / 2;
-    } else if (type === 'tesla') {
-      head = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), mat);
+      head = new THREE.Group();
+      const housing = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.46, 0.5, 8), hull));
+      head.add(housing);
+      const barrel = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 1.15, 6), accent));
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.1, 0.62);
+      head.add(barrel);
+      const muzzle = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.16, 6), dark));
+      muzzle.rotation.x = Math.PI / 2;
+      muzzle.position.set(0, 0.1, 1.16);
+      head.add(muzzle);
+      head.position.y = 0.62;
     } else if (type === 'mortar') {
-      head = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 0.7, 8), mat);
-      head.rotation.x = -0.7;
+      head = new THREE.Group();
+      for (const sx of [-0.36, 0.36]) {
+        const plate = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 0.66), hull));
+        plate.position.set(sx, 0.1, 0);
+        head.add(plate);
+      }
+      const tube = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.0, 8), accent));
+      tube.rotation.x = -0.85;
+      tube.position.set(0, 0.34, -0.05);
+      head.add(tube);
+      head.position.y = 0.5;
+    } else if (type === 'tesla') {
+      head = new THREE.Group();
+      const column = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 0.9, 6), hull));
+      column.position.y = 0.1;
+      head.add(column);
+      const orb = shadowed(new THREE.Mesh(new THREE.OctahedronGeometry(0.34), accent));
+      orb.position.y = 0.75;
+      head.add(orb);
+      for (let k = 0; k < 3; k++) {
+        const prong = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.55, 4), dark));
+        const a = (k / 3) * Math.PI * 2;
+        prong.position.set(Math.sin(a) * 0.3, 0.62, Math.cos(a) * 0.3);
+        prong.rotation.z = Math.sin(a) * 0.5;
+        prong.rotation.x = Math.cos(a) * -0.5;
+        head.add(prong);
+      }
+      head.position.y = 0.45;
     } else if (type === 'stasis') {
-      head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 10), mat);
+      head = new THREE.Group();
+      for (let k = 0; k < 3; k++) {
+        const leg = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.85, 4), hull));
+        const a = (k / 3) * Math.PI * 2;
+        leg.position.set(Math.sin(a) * 0.4, 0.1, Math.cos(a) * 0.4);
+        leg.rotation.z = Math.sin(a) * 0.55;
+        leg.rotation.x = Math.cos(a) * -0.55;
+        head.add(leg);
+      }
+      const orb = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), accent));
+      orb.position.y = 0.85;
+      head.add(orb);
+      head.position.y = 0.35;
       const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 16, 10),
-        new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.07, side: THREE.DoubleSide })
+        new THREE.SphereGeometry(1, 18, 10),
+        new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.06, side: THREE.DoubleSide })
       );
       dome.position.y = 0.6;
       g.add(dome);
       g.userData.dome = dome;
     } else if (type === 'generator') {
-      head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), mat);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), new THREE.MeshBasicMaterial({ color: def.color }));
-      ring.position.y = 0.7;
-      g.add(ring);
+      head = new THREE.Group();
+      const block = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.62), hull));
+      block.position.y = 0.36;
+      head.add(block);
+      for (const sx of [-0.34, 0.34]) {
+        const vent = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.44), accent));
+        vent.position.set(sx, 0.38, 0);
+        head.add(vent);
+      }
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 6, 20), flat(0x5a4d2a, { emissive: def.color, emissiveIntensity: 0.9 }));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.95;
+      head.add(ring);
       g.userData.ring = ring;
+      head.position.y = 0.3;
     } else { // depot
-      head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 1.1), mat);
-      const pad = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.8, 0.8, 0.06, 6),
-        new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.5 })
+      head = new THREE.Group();
+      const deck = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.24, 1.5), hull));
+      deck.position.y = 0.12;
+      head.add(deck);
+      const crate1 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.44, 0.5), accent));
+      crate1.position.set(-0.4, 0.45, -0.35);
+      crate1.rotation.y = 0.3;
+      head.add(crate1);
+      const crate2 = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.42), dark));
+      crate2.position.set(0.35, 0.42, 0.3);
+      crate2.rotation.y = -0.2;
+      head.add(crate2);
+      const mast2 = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 1.1, 4), dark));
+      mast2.position.set(0.55, 0.8, -0.5);
+      head.add(mast2);
+      const padGlow = new THREE.Mesh(
+        new THREE.RingGeometry(0.55, 0.72, 6),
+        new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
       );
-      pad.position.y = 0.56;
-      g.add(pad);
+      padGlow.rotation.x = -Math.PI / 2;
+      padGlow.position.y = 0.26;
+      head.add(padGlow);
+      head.position.y = 0.3;
     }
-    head.position.y = 0.75;
     g.add(head);
     g.userData.head = head;
-    g.userData.mat = mat;
+    g.userData.mat = accent;
     return g;
   }
 
@@ -91,6 +174,7 @@ const BUILDING = (function () {
       this.scene = scene;
       this.mesh = makeMesh(type, this.def);
       if (type !== 'wall') this.mesh.scale.setScalar(1.45);  // readable at RTS camera distance
+      this.baseEmissive = this.mesh.userData.mat.emissive.getHex();
       this.mesh.position.copy(pos);
       this.mesh.userData.building = this;
       scene.add(this.mesh);
@@ -232,7 +316,7 @@ const BUILDING = (function () {
       this.hp -= dmg;
       if (this.mesh.userData.mat) {
         this.mesh.userData.mat.emissive.setHex(0xff4444);
-        setTimeout(() => { if (this.alive && this.mesh.userData.mat) this.mesh.userData.mat.emissive.setHex(this.def.color); }, 110);
+        setTimeout(() => { if (this.alive && this.mesh.userData.mat) this.mesh.userData.mat.emissive.setHex(this.baseEmissive); }, 110);
       }
       if (this.hp <= 0) this.destroyed(game);
     }

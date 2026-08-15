@@ -301,3 +301,28 @@ numbers. Every fix below came from a failed run.
   losses to 4. OPs 7–9 are authored as the hard tail: the bot reaches
   waves 8–10 of 12–13 with four-figure mining economies before folding —
   they demand walls, mazing and tech the bot doesn't use.
+
+## Session 11 — 2026-08-15 — the art pass: from primitives to a style
+
+Direction feedback: "why does it look like geometric shit." Fair — every
+entity was a single raw primitive with flat materials. The fix, within the
+no-external-assets constraint, was committing to a real style rather than
+adding assets: flat-shaded low-poly with cast shadows (the Bad North
+school), where simple geometry reads as deliberate because models are
+composed, light grounds everything, and the palette is disciplined.
+
+- Shadow-mapped key light + hemisphere bounce; PCF soft shadows on every
+  entity; warm key against cool fills.
+- Terrain is sculpted: vertex-displaced, flat-shaded, vertex-colored —
+  mottled slate soil, teal mineral veins around crystal fields, scorched
+  ground at enemy gates, flattened aprons at the core and gates.
+- Every model rebuilt as a composed silhouette: cannons with housings,
+  barrels and muzzles on hex pads; mortars with side plates and an angled
+  tube; tesla columns with prongs; tripod stasis wells; generators with
+  vents and a glowing rotor; depots with decks, crates and an antenna;
+  crenelated walls. Crystal fields are tilted shard clusters with rubble;
+  rocks are stacked flat-shaded chunks; gates are pylon arches with a red
+  maw. Workers are little hover-drones with visors and thrusters; crawlers
+  are humped shells with leg nubs, sprinters low darts with tail fins,
+  raiders swept wedges with wing blades, brutes slab-shouldered hulks, the
+  ARCHON an icosahedron ringed by orbiting shards.

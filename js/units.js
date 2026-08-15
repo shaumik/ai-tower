@@ -7,24 +7,28 @@ const WORKER = (function () {
 
   function makeMesh() {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(
-      new THREE.SphereGeometry(0.32, 10, 8),
-      new THREE.MeshStandardMaterial({ color: 0x2a3a58, emissive: 0x7fdcff, emissiveIntensity: 0.5, roughness: 0.4 })
-    );
+    const flat = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, flatShading: true, roughness: 0.5, metalness: 0.2 }, o || {}));
+    // little hover-drone: rounded chassis, visor, side thrusters
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), flat(0x37507a, { emissive: 0x7fdcff, emissiveIntensity: 0.45 }));
+    body.scale.set(1, 0.8, 1.15);
     body.position.y = 0.55;
+    body.castShadow = true;
     g.add(body);
-    const eye = new THREE.Mesh(
-      new THREE.SphereGeometry(0.1, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffe9a0 })
-    );
-    eye.position.set(0, 0.6, 0.26);
-    g.add(eye);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.1), new THREE.MeshBasicMaterial({ color: 0xffe9a0 }));
+    visor.position.set(0, 0.62, 0.36);
+    g.add(visor);
+    for (const side of [-1, 1]) {
+      const thr = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.22, 6), flat(0x1c2740));
+      thr.position.set(side * 0.38, 0.42, -0.05);
+      thr.castShadow = true;
+      g.add(thr);
+    }
     // carried crystal (visible when hauling)
     const load = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.2),
-      new THREE.MeshStandardMaterial({ color: 0x7fdcff, emissive: 0x2aa8ff, emissiveIntensity: 1.2 })
+      new THREE.OctahedronGeometry(0.22),
+      flat(0x9ff0ff, { emissive: 0x2aa8ff, emissiveIntensity: 1.2, roughness: 0.2 })
     );
-    load.position.set(0, 1.0, 0);
+    load.position.set(0, 1.02, 0);
     load.visible = false;
     g.add(load);
     g.userData.body = body;
