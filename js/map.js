@@ -105,7 +105,7 @@ const MAP = (function () {
   // ---------------- visuals ----------------
   function flatMat(color, opts) {
     return new THREE.MeshStandardMaterial(Object.assign({
-      color, flatShading: true, roughness: 0.85, metalness: 0.08,
+      color, flatShading: true, roughness: 0.85, metalness: 0.08, envMapIntensity: 0.35,
     }, opts || {}));
   }
 
@@ -140,8 +140,8 @@ const MAP = (function () {
     gGeo.rotateX(-Math.PI / 2);
     const pos = gGeo.getAttribute('position');
     const colors = new Float32Array(pos.count * 3);
-    const base = new THREE.Color(0x141b2f);
-    const soil = new THREE.Color(0x1a2138);
+    const base = new THREE.Color(0x0e1424);
+    const soil = new THREE.Color(0x131a2c);
     const vein = new THREE.Color(0x1c3a4a);
     const scorch = new THREE.Color(0x241423);
     const c0 = new THREE.Color();
@@ -170,7 +170,7 @@ const MAP = (function () {
     gGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     gGeo.computeVertexNormals();
     const ground = new THREE.Mesh(gGeo, new THREE.MeshStandardMaterial({
-      vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0.02,
+      vertexColors: true, flatShading: true, roughness: 0.97, metalness: 0.0, envMapIntensity: 0.15,
     }));
     ground.receiveShadow = true;
     group.add(ground);
@@ -200,7 +200,7 @@ const MAP = (function () {
     group.add(step);
     coreMesh = new THREE.Mesh(
       new THREE.SphereGeometry(1.35, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
-      new THREE.MeshStandardMaterial({ color: 0x8fe6ff, emissive: 0x2aa8e0, emissiveIntensity: 1.1, roughness: 0.25, metalness: 0.1 })
+      new THREE.MeshStandardMaterial({ color: 0x5fc4ec, emissive: 0x1d86c0, emissiveIntensity: 0.42, roughness: 0.25, metalness: 0.1 })
     );
     coreMesh.position.set(corePos.x, 1.2, corePos.z);
     coreMesh.castShadow = true;
@@ -214,7 +214,7 @@ const MAP = (function () {
     mast.position.set(corePos.x + 1.9, 1.8, corePos.z + 1.4);
     mast.castShadow = true;
     group.add(mast);
-    coreLight = new THREE.PointLight(0x55ccff, 1.4, 22);
+    coreLight = new THREE.PointLight(0x55ccff, 1.0, 20);
     coreLight.position.set(corePos.x, 4, corePos.z);
     group.add(coreLight);
 
@@ -251,9 +251,10 @@ const MAP = (function () {
         crystals: [], workers: new Set(),
         mesh: new THREE.Group(),
       };
-      const shardMat = new THREE.MeshStandardMaterial({
-        color: 0x9ff0ff, emissive: 0x1e9cd8, emissiveIntensity: 0.85,
-        flatShading: true, roughness: 0.15, metalness: 0.05, transparent: true, opacity: 0.96,
+      const shardMat = new THREE.MeshPhysicalMaterial({
+        color: 0x7adcf2, emissive: 0x1e9cd8, emissiveIntensity: 0.62,
+        flatShading: true, roughness: 0.08, metalness: 0.0, transparent: true, opacity: 0.96,
+        clearcoat: 1.0, clearcoatRoughness: 0.12, envMapIntensity: 1.6,
       });
       const n = 6 + Math.floor(R() * 4);
       for (let k = 0; k < n; k++) {
@@ -337,8 +338,8 @@ const MAP = (function () {
     if (coreMesh) {
       coreMesh.rotation.y += dt * 0.4;
       coreRing.rotation.z += dt * 0.5;
-      coreLight.intensity = 1.3 + Math.sin(t * 2.2) * 0.2;
-      coreMesh.material.emissiveIntensity = 1.0 + Math.sin(t * 2.2) * 0.15;
+      coreLight.intensity = 0.95 + Math.sin(t * 2.2) * 0.15;
+      coreMesh.material.emissiveIntensity = 0.42 + Math.sin(t * 2.2) * 0.08;
     }
   }
   function coreHitFlash() {

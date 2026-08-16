@@ -7,7 +7,14 @@ body {
   touch-action:none;
 }
 #app { position:fixed; inset:0; }
-#gl { position:absolute; inset:0; width:100%; height:100%; display:block; }
+#gl { position:absolute; inset:0; width:100%; height:100%; display:block; filter:saturate(1.1) contrast(1.05); }
+/* photographic grade: vignette + subtle cool-top/warm-bottom cast */
+#grade {
+  position:absolute; inset:0; pointer-events:none; z-index:5;
+  background:
+    radial-gradient(115% 100% at 50% 42%, transparent 58%, rgba(2,4,10,.55) 100%),
+    linear-gradient(180deg, rgba(40,80,160,.06), transparent 30%, transparent 72%, rgba(190,120,60,.05));
+}
 .hidden { display:none !important; }
 
 /* ---------------- HUD ---------------- */

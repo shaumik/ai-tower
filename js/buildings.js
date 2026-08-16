@@ -21,18 +21,24 @@ const BUILDING = (function () {
       color, flatShading: true, roughness: 0.6, metalness: 0.25,
     }, opts || {}));
   }
+  // machined PBR metal: smooth-shaded, picks up the environment reflections
+  function metal(color, opts) {
+    return new THREE.MeshStandardMaterial(Object.assign({
+      color, roughness: 0.32, metalness: 0.85, envMapIntensity: 1.15,
+    }, opts || {}));
+  }
   function shadowed(m) { m.castShadow = true; m.receiveShadow = true; return m; }
 
-  // composed low-poly models: silhouettes come from parts, not one primitive
+  // composed models: machined hulls + glowing accents (bloom picks them up)
   function makeMesh(type, def) {
     const g = new THREE.Group();
-    const accent = flat(0x33415f, { emissive: def.color, emissiveIntensity: 0.5, roughness: 0.4 });
-    const hull = flat(0x2a3450, { metalness: 0.35 });
-    const dark = flat(0x1b2338);
+    const accent = metal(0x3a4a6e, { emissive: def.color, emissiveIntensity: 0.95, roughness: 0.28 });
+    const hull = metal(0x394663);
+    const dark = metal(0x232c44, { roughness: 0.45, metalness: 0.7 });
 
     if (type === 'wall') {
       const w = shadowed(new THREE.Mesh(new THREE.BoxGeometry(MAP.CS * 0.94, 1.3, MAP.CS * 0.94),
-        flat(0x323f5e, { emissive: 0x0d1626, emissiveIntensity: 1, metalness: 0.3, roughness: 0.65 })));
+        flat(0x39476a, { emissive: 0x0d1626, emissiveIntensity: 1, metalness: 0.35, roughness: 0.6 })));
       w.position.y = 0.65;
       g.add(w);
       for (const sx of [-0.42, 0.42]) {
@@ -52,13 +58,13 @@ const BUILDING = (function () {
     let head;
     if (type === 'cannon') {
       head = new THREE.Group();
-      const housing = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.46, 0.5, 8), hull));
+      const housing = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.46, 0.5, 14), hull));
       head.add(housing);
-      const barrel = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 1.15, 6), accent));
+      const barrel = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 1.15, 10), accent));
       barrel.rotation.x = Math.PI / 2;
       barrel.position.set(0, 0.1, 0.62);
       head.add(barrel);
-      const muzzle = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.16, 6), dark));
+      const muzzle = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.16, 10), dark));
       muzzle.rotation.x = Math.PI / 2;
       muzzle.position.set(0, 0.1, 1.16);
       head.add(muzzle);
@@ -70,14 +76,14 @@ const BUILDING = (function () {
         plate.position.set(sx, 0.1, 0);
         head.add(plate);
       }
-      const tube = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.0, 8), accent));
+      const tube = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.0, 12), accent));
       tube.rotation.x = -0.85;
       tube.position.set(0, 0.34, -0.05);
       head.add(tube);
       head.position.y = 0.5;
     } else if (type === 'tesla') {
       head = new THREE.Group();
-      const column = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 0.9, 6), hull));
+      const column = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 0.9, 10), hull));
       column.position.y = 0.1;
       head.add(column);
       const orb = shadowed(new THREE.Mesh(new THREE.OctahedronGeometry(0.34), accent));
@@ -102,7 +108,7 @@ const BUILDING = (function () {
         leg.rotation.x = Math.cos(a) * -0.55;
         head.add(leg);
       }
-      const orb = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), accent));
+      const orb = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), accent));
       orb.position.y = 0.85;
       head.add(orb);
       head.position.y = 0.35;

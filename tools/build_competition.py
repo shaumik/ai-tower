@@ -57,8 +57,8 @@ def main():
     out_zip = DIST / ZIP_NAME
     with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.write(out_html, "index.html")                       # top level, not inside a folder
-        z.write(ROOT / "vendor" / "three.min.js", "vendor/three.min.js")
-        z.write(ROOT / "vendor" / "THREE-LICENSE", "vendor/THREE-LICENSE")
+        for vf in sorted((ROOT / "vendor").iterdir()):        # three.js + postprocessing stack
+            z.write(vf, "vendor/" + vf.name)
 
     mb = out_zip.stat().st_size / (1024 * 1024)
     print(f"built {out_html.relative_to(ROOT)} ({out_html.stat().st_size:,} bytes, {n} scripts inlined)")

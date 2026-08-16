@@ -30,7 +30,7 @@ const ENEMY = (function () {
   function makeMesh(def) {
     const g = new THREE.Group();
     const s = def.size;
-    const mat = flat(def.color, { emissive: def.color, emissiveIntensity: 0.55 });
+    const mat = flat(def.color, { emissive: def.color, emissiveIntensity: 0.85 });
     const darkMat = flat(0x1a1420, { roughness: 0.8 });
     let body;
 
@@ -99,7 +99,7 @@ const ENEMY = (function () {
     body.castShadow = true;
     g.add(body);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.32,
+      map: getGlowTex(), color: def.color, transparent: true, opacity: 0.22,
       blending: THREE.AdditiveBlending, depthWrite: false,
     }));
     halo.scale.setScalar(s * (def.boss ? 6 : 4.2));

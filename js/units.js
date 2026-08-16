@@ -9,7 +9,7 @@ const WORKER = (function () {
     const g = new THREE.Group();
     const flat = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, flatShading: true, roughness: 0.5, metalness: 0.2 }, o || {}));
     // little hover-drone: rounded chassis, visor, side thrusters
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), flat(0x37507a, { emissive: 0x7fdcff, emissiveIntensity: 0.45 }));
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10), new THREE.MeshStandardMaterial({ color: 0x44608c, emissive: 0x7fdcff, emissiveIntensity: 0.5, roughness: 0.3, metalness: 0.8, envMapIntensity: 1.2 }));
     body.scale.set(1, 0.8, 1.15);
     body.position.y = 0.55;
     body.castShadow = true;

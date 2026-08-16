@@ -326,3 +326,26 @@ composed, light grounds everything, and the palette is disciplined.
   are humped shells with leg nubs, sprinters low darts with tail fins,
   raiders swept wedges with wing blades, brutes slab-shouldered hulks, the
   ARCHON an icosahedron ringed by orbiting shards.
+
+## Session 12 — 2026-08-16 — the cinematic pipeline
+
+Direction feedback: low-poly flat shading still read as "polygon" art. The
+answer was the render pipeline, not more polygons — the same things that
+separate a raw viewport from a shipped game frame:
+
+- **Filmic tone mapping** (ACES) with sRGB output and a tuned exposure, so
+  light rolls off like film instead of clipping.
+- **Real bloom** (Unreal-style, half-res) — crystal fields, the core dome,
+  generator rings, turret trim and every threat's emissive body now glow
+  photographically instead of just being bright pixels.
+- **Image-based lighting**: a tiny procedural light-studio baked through
+  PMREM feeds environment reflections, and every structure hull switched to
+  smooth machined PBR metal that picks them up.
+- **FXAA** post-AA, a photographic grade overlay (vignette + cool-top /
+  warm-bottom cast), and a saturation/contrast lift on the canvas.
+- Balanced in two exposure iterations against screenshots (first pass
+  washed the palette out and blew the core to a white blob).
+- Post stack ships as Three.js example modules in vendor/ per the
+  competition's third-party-library rule; the packager now zips the full
+  vendor directory. Gameplay verified unchanged under the composer: zero
+  console errors, zero external requests.
